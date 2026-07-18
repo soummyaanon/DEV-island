@@ -9,6 +9,13 @@ mac:
     - zip
   extendInfo:
     LSUIElement: true
+  # Unsigned build (no Apple account). Set to a Developer ID identity later for
+  # notarized, warning-free distribution + auto-update.
+  identity: null
 files:
   - out/**/*
   - package.json
+# Bundle the self-contained daemon so the packaged app can spawn it.
+extraResources:
+  - from: ../daemon/dist/main.cjs
+    to: daemon/main.cjs
