@@ -1,7 +1,9 @@
 import {
   sessionKey,
   type AgentEvent,
+  type AgentKind,
   type EventType,
+  type PendingApproval,
   type SessionSnapshot,
   type SessionState,
 } from "@agent-island/shared";
@@ -48,6 +50,14 @@ export class SessionRegistry {
     const existing = this.sessions.get(key);
     const state = nextState(existing?.state, event.type, event.requires_action);
 
+    // Persist adapter metadata (e.g. terminal info) across events. Adapters put
+    // it in `detail._meta`; once captured it sticks even when later events omit it.
+    const incomingMeta =
+      event.detail._meta && typeof event.detail._meta === "object"
+        ? (event.detail._meta as Record<string, unknown>)
+        : {};
+    const meta = { ...(existing?.meta ?? {}), ...incomingMeta };
+
     const snapshot: SessionSnapshot = {
       key,
       agent: event.agent,
@@ -60,10 +70,31 @@ export class SessionRegistry {
       updated_at: event.timestamp,
       last_event_type: event.type,
       event_count: (existing?.event_count ?? 0) + 1,
+      meta,
+      pending_approval: existing?.pending_approval ?? null,
     };
 
     this.sessions.set(key, snapshot);
     return snapshot;
+  }
+
+  /** Set or clear the pending approval on a session (used by the approval hold). */
+  setPendingApproval(
+    agent: AgentKind,
+    sessionId: string,
+    approval: PendingApproval | null,
+    nowIso: string,
+  ): SessionSnapshot | undefined {
+    const key = sessionKey(agent, sessionId);
+    const existing = this.sessions.get(key);
+    if (!existing) return undefined;
+    const updated: SessionSnapshot = {
+      ...existing,
+      pending_approval: approval,
+      updated_at: nowIso,
+    };
+    this.sessions.set(key, updated);
+    return updated;
   }
 
   list(): SessionSnapshot[] {

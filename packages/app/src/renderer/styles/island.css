@@ -1,0 +1,457 @@
+:root {
+  --bg: rgba(11, 11, 13, 0.9);
+  --edge: rgba(255, 255, 255, 0.09);
+  --edge-top: rgba(255, 255, 255, 0.16);
+  --text: rgba(255, 255, 255, 0.94);
+  --text-dim: rgba(255, 255, 255, 0.46);
+  --accent: #ff8a5b; /* warm coral — the one brand accent */
+  --working: #5ba8ff;
+  --starting: #8fb8ff;
+  --waiting: #ffb020;
+  --done: #4ecb8d;
+  --failed: #ff5f56;
+  --idle: rgba(255, 255, 255, 0.32);
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: default;
+}
+
+body {
+  font-family: -apple-system, "SF Pro Text", system-ui, sans-serif;
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Anchor everything to the very top-center, over the notch. */
+.app {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 0;
+}
+
+/* ---- The island ---- */
+.island {
+  width: 196px;
+  margin-top: 0;
+  background: var(--bg);
+  border: 1px solid var(--edge);
+  border-top-color: var(--edge-top);
+  border-radius: 0 0 20px 20px;
+  box-shadow:
+    0 12px 34px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(22px) saturate(1.3);
+  -webkit-backdrop-filter: blur(22px) saturate(1.3);
+  overflow: hidden;
+  transition:
+    width 0.34s var(--ease),
+    border-radius 0.34s var(--ease);
+  will-change: width;
+}
+
+.island.expanded {
+  width: 344px;
+  border-radius: 0 0 22px 22px;
+}
+
+/* ---- Collapsed pill ---- */
+.pill {
+  height: 30px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 13px;
+}
+
+.brand {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  background: var(--accent);
+  box-shadow: 0 0 8px rgba(255, 138, 91, 0.6);
+  flex: none;
+}
+
+.pill-dots {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: 1;
+}
+
+.pill-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  min-width: 8px;
+  text-align: right;
+}
+
+.island.attention .pill-count {
+  color: var(--waiting);
+}
+
+/* ---- Status dots ---- */
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+  position: relative;
+  background: var(--idle);
+}
+.dot.state-working {
+  background: var(--working);
+}
+.dot.state-starting {
+  background: var(--starting);
+}
+.dot.state-waiting-for-approval {
+  background: var(--waiting);
+}
+.dot.state-done {
+  background: var(--done);
+}
+.dot.state-failed {
+  background: var(--failed);
+}
+.dot.state-idle {
+  background: var(--idle);
+}
+.dot.offline {
+  background: var(--failed);
+  opacity: 0.6;
+}
+
+/* Pulse for live states via a scaling ring (transform/opacity only). */
+.dot.state-working::after,
+.dot.state-waiting-for-approval::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: inherit;
+  animation: pulse 1.8s var(--ease) infinite;
+}
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  70% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* ---- Expanding panel ---- */
+.panel-wrap {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.34s var(--ease);
+}
+.island.expanded .panel-wrap {
+  grid-template-rows: 1fr;
+}
+.panel {
+  overflow: hidden;
+  min-height: 0;
+}
+
+.panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 4px 15px 9px;
+}
+.wordmark {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.badge {
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.rows {
+  list-style: none;
+  padding: 0 7px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 9px;
+  border-radius: 11px;
+  transition: background 0.15s ease;
+  cursor: pointer;
+}
+.island.expanded .row {
+  animation: rowin 0.4s var(--ease) both;
+}
+@keyframes rowin {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.row:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.row-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.project {
+  font-size: 13px;
+  font-weight: 550;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chips {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+}
+.agent-chip {
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.mode-chip {
+  font-size: 9.5px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-dim);
+}
+.mode-chip.mode-plan {
+  background: rgba(91, 168, 255, 0.16);
+  color: var(--working);
+}
+.mode-chip.mode-acceptEdits {
+  background: rgba(255, 176, 32, 0.16);
+  color: var(--waiting);
+}
+.mode-chip.mode-auto {
+  background: rgba(78, 203, 141, 0.16);
+  color: var(--done);
+}
+.mode-chip.mode-bypassPermissions,
+.mode-chip.mode-dontAsk {
+  background: rgba(255, 95, 86, 0.16);
+  color: var(--failed);
+}
+.activity {
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.row.state-working .activity {
+  color: var(--working);
+}
+.row.state-waiting-for-approval .activity {
+  color: var(--waiting);
+}
+.row.state-done .activity {
+  color: var(--done);
+}
+.row.state-failed .activity {
+  color: var(--failed);
+}
+
+.elapsed {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  min-width: 44px;
+  text-align: right;
+}
+
+.empty {
+  list-style: none;
+  padding: 10px 12px 14px;
+  font-size: 12px;
+  color: var(--text-dim);
+  text-align: center;
+}
+
+/* ---- Approval card ---- */
+.approval {
+  margin: 4px 8px 8px;
+  padding: 10px 12px 11px;
+  border-radius: 14px;
+  background: rgba(255, 176, 32, 0.07);
+  border: 1px solid rgba(255, 176, 32, 0.28);
+  cursor: default;
+}
+.approval-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+.approval-title {
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--waiting);
+}
+.approval-project {
+  font-size: 10.5px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.approval-body {
+  max-height: 156px;
+  overflow-y: auto;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text);
+  margin-bottom: 10px;
+}
+.approval-body h1,
+.approval-body h2,
+.approval-body h3,
+.approval-body h4 {
+  font-size: 12.5px;
+  font-weight: 650;
+  margin: 8px 0 3px;
+}
+.approval-body p {
+  margin: 4px 0;
+}
+.approval-body ul {
+  margin: 4px 0;
+  padding-left: 16px;
+}
+.approval-body li {
+  margin: 2px 0;
+}
+.approval-body code {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 11px;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 1px 4px;
+  border-radius: 4px;
+}
+.approval-body pre {
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  padding: 8px 10px;
+  overflow-x: auto;
+  margin: 5px 0;
+}
+.approval-body pre code {
+  background: none;
+  padding: 0;
+  white-space: pre;
+}
+.approval-body blockquote {
+  border-left: 2px solid rgba(255, 255, 255, 0.18);
+  margin: 4px 0;
+  padding-left: 8px;
+  color: var(--text-dim);
+}
+
+.approval-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.btn {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 15px;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition:
+    transform 0.08s ease,
+    background 0.15s ease;
+}
+.btn:active {
+  transform: scale(0.96);
+}
+.btn.allow {
+  background: var(--done);
+  color: #05130c;
+}
+.btn.allow:hover {
+  background: #5ed99b;
+}
+.btn.deny {
+  background: transparent;
+  color: var(--text);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+.btn.deny:hover {
+  background: rgba(255, 95, 86, 0.16);
+  border-color: rgba(255, 95, 86, 0.4);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .island,
+  .panel-wrap {
+    transition: none;
+  }
+  .dot::after,
+  .island.expanded .row {
+    animation: none;
+  }
+}

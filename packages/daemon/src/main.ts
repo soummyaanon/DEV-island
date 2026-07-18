@@ -9,7 +9,7 @@ import { buildServer } from "./server/http-server";
 async function main(): Promise<void> {
   const config = loadConfig();
   const token = ensureToken(config.tokenPath);
-  const hub = new EventHub(config.ringBufferSize);
+  const hub = new EventHub(config.ringBufferSize, config.approvalHoldMs);
   const app = await buildServer(config, hub, token);
 
   const heartbeat = setInterval(() => {

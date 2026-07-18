@@ -2,6 +2,7 @@ import { z } from "zod";
 import { AgentKindSchema } from "./agent-kind";
 import { EventTypeSchema } from "./agent-event";
 import { SessionStateSchema } from "./session-state";
+import { PendingApprovalSchema } from "./pending-approval";
 
 /**
  * The current state of one session — exactly what the UI renders per row.
@@ -21,6 +22,14 @@ export const SessionSnapshotSchema = z.object({
   updated_at: z.string().datetime(),
   last_event_type: EventTypeSchema,
   event_count: z.number().int().nonnegative(),
+  /**
+   * Adapter-supplied metadata that persists across events — e.g. which terminal
+   * the session runs in, for jump-to-terminal. Accumulated from event
+   * `detail._meta`.
+   */
+  meta: z.record(z.unknown()),
+  /** Set while the daemon is holding a permission hook open for this session. */
+  pending_approval: PendingApprovalSchema.nullable(),
 });
 
 export type SessionSnapshot = z.infer<typeof SessionSnapshotSchema>;
