@@ -132,6 +132,7 @@ export function App() {
   const attention = useMemo(() => sessions.filter((s) => s.requires_action), [sessions]);
   const visible = useMemo(() => sessions.slice(0, MAX_ROWS), [sessions]);
   const dominant = pending[0] ?? active[0] ?? sessions[0] ?? null;
+  const stateCls = dominant ? `state-${dominant.state}` : connected ? "idle" : "offline";
 
   return (
     <div className="app">
@@ -140,12 +141,13 @@ export function App() {
         <i className="ear ear-l" aria-hidden />
         <i className="ear ear-r" aria-hidden />
         <div
-          className={`island${expanded ? " expanded" : ""}${
+          className={`island ${stateCls}${expanded ? " expanded" : ""}${
             attention.length || pending.length ? " attention" : ""
           }`}
         >
-        {/* Collapsed: content lives in the wings BESIDE the notch (iPhone island). */}
-        <div className={`pill ${dominant ? `state-${dominant.state}` : connected ? "idle" : "offline"}`}>
+        {/* Collapsed: nothing but a hairline state-glow hugging the notch edge. */}
+        <i className="glowline" aria-hidden />
+        <div className={`pill ${stateCls}`}>
           <span className="sprite">
             <PixelSprite size={16} />
           </span>
