@@ -48,7 +48,8 @@ body {
 /* ---- The island ---- */
 .island {
   width: 234px;
-  margin-top: 0;
+  /* Pull the flat top up under the notch's bottom edge so it hugs, not floats. */
+  margin-top: -18px;
   background: var(--bg);
   border: 1px solid var(--edge);
   border-top-color: var(--edge-top);
@@ -369,26 +370,44 @@ body {
   text-align: center;
 }
 
-/* ---- Approval card ---- */
+/* ---- Approval / Permission request panel ---- */
 .approval {
-  margin: 4px 8px 8px;
-  padding: 10px 12px 11px;
+  margin: 2px 9px 8px;
+  padding: 11px 13px 12px;
   border-radius: 14px;
-  background: rgba(255, 176, 32, 0.07);
-  border: 1px solid rgba(255, 176, 32, 0.28);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   cursor: default;
 }
-.approval-head {
+.approval-top {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 7px;
+  margin-bottom: 8px;
+}
+.approval-kicker {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.approval-mark {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 7px var(--accent);
 }
 .approval-title {
-  font-size: 12.5px;
+  font-size: 13.5px;
   font-weight: 650;
-  color: var(--waiting);
+  color: var(--text);
+  margin-bottom: 9px;
 }
 .approval-project {
   font-size: 10.5px;
@@ -398,12 +417,56 @@ body {
   text-overflow: ellipsis;
 }
 .approval-body {
-  max-height: 156px;
+  max-height: 150px;
   overflow-y: auto;
   font-size: 12px;
   line-height: 1.5;
   color: var(--text);
-  margin-bottom: 10px;
+  margin-bottom: 11px;
+}
+.diff {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.55;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  padding: 6px 0;
+  overflow-x: auto;
+  white-space: pre;
+}
+.diff-del {
+  color: #ff8f88;
+  background: rgba(255, 95, 86, 0.1);
+  padding: 0 10px;
+}
+.diff-add {
+  color: #7ee0a6;
+  background: rgba(78, 203, 141, 0.1);
+  padding: 0 10px;
+}
+.diff-stat {
+  margin-top: 5px;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+.diff-stat .add {
+  color: var(--done);
+}
+.diff-stat .del {
+  color: var(--failed);
+}
+.cmd {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  padding: 8px 10px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  color: var(--text);
 }
 .approval-body h1,
 .approval-body h2,
@@ -452,39 +515,48 @@ body {
 
 .approval-actions {
   display: flex;
-  justify-content: flex-end;
   gap: 8px;
 }
 .btn {
+  flex: 1;
   font: inherit;
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 600;
-  padding: 5px 15px;
-  border-radius: 9px;
+  padding: 8px 14px;
+  border-radius: 10px;
   border: 1px solid transparent;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
   transition:
     transform 0.08s ease,
     background 0.15s ease;
 }
 .btn:active {
-  transform: scale(0.96);
+  transform: scale(0.98);
+}
+.btn kbd {
+  font: inherit;
+  font-size: 10px;
+  opacity: 0.55;
+  font-variant-numeric: tabular-nums;
 }
 .btn.allow {
-  background: var(--done);
-  color: #05130c;
+  background: #ececec;
+  color: #111214;
 }
 .btn.allow:hover {
-  background: #5ed99b;
+  background: #ffffff;
 }
 .btn.deny {
-  background: transparent;
+  background: rgba(255, 255, 255, 0.06);
   color: var(--text);
-  border-color: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.1);
 }
 .btn.deny:hover {
-  background: rgba(255, 95, 86, 0.16);
-  border-color: rgba(255, 95, 86, 0.4);
+  background: rgba(255, 255, 255, 0.1);
 }
 
 /* ---- Usage footer ---- */

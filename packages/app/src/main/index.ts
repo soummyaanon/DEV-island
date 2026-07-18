@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, type Tray } from "electron";
+import { app, BrowserWindow, globalShortcut, ipcMain, type Tray } from "electron";
 import type { ApprovalDecision, SessionSnapshot } from "@agent-island/shared";
 import { DaemonClient } from "./daemon-client";
 import { ensureDaemon, stopDaemon } from "./daemon-manager";
@@ -19,6 +19,25 @@ if (!app.requestSingleInstanceLock()) {
   let tray: Tray | null = null;
   const daemon = new DaemonClient();
 
+  // ⌘Y / ⌘N resolve a pending approval. The notch window is non-focusable, so we
+  // use global shortcuts — registered only while an approval is actually pending.
+  let pendingApprovalId: string | null = null;
+  function syncApprovalShortcuts(sessions: SessionSnapshot[]): void {
+    const id = sessions.find((s) => s.pending_approval)?.pending_approval?.id ?? null;
+    if (id === pendingApprovalId) return;
+    pendingApprovalId = id;
+    globalShortcut.unregister("CommandOrControl+Y");
+    globalShortcut.unregister("CommandOrControl+N");
+    if (id) {
+      globalShortcut.register("CommandOrControl+Y", () => {
+        if (pendingApprovalId) void daemon.resolveApproval(pendingApprovalId, "allow");
+      });
+      globalShortcut.register("CommandOrControl+N", () => {
+        if (pendingApprovalId) void daemon.resolveApproval(pendingApprovalId, "deny");
+      });
+    }
+  }
+
   app.whenReady().then(async () => {
     app.dock?.hide(); // menu-bar app, no Dock icon
     notch = createNotchWindow();
@@ -33,6 +52,7 @@ if (!app.requestSingleInstanceLock()) {
     daemon.onSessions((sessions: SessionSnapshot[], connected: boolean) => {
       notch?.webContents.send("agent-island:sessions", { sessions, connected });
       if (tray) updateTrayTitle(tray, sessions);
+      syncApprovalShortcuts(sessions);
     });
     daemon.onUsage((usage) => notch?.webContents.send("agent-island:usage", usage));
     daemon.start();
@@ -67,6 +87,7 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   app.on("before-quit", () => {
+    globalShortcut.unregisterAll();
     daemon.stop();
     stopDaemon();
   });
