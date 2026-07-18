@@ -47,7 +47,7 @@ body {
 
 /* ---- The island ---- */
 .island {
-  width: 196px;
+  width: 234px;
   margin-top: 0;
   background: var(--bg);
   border: 1px solid var(--edge);
@@ -70,42 +70,84 @@ body {
   border-radius: 0 0 22px 22px;
 }
 
-/* ---- Collapsed pill ---- */
+/* ---- Collapsed pill: pixel sprite + activity + count ---- */
 .pill {
-  height: 30px;
+  height: 32px;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 13px;
+  gap: 9px;
+  padding: 0 12px;
 }
 
-.brand {
-  width: 7px;
-  height: 7px;
-  border-radius: 2px;
-  background: var(--accent);
-  box-shadow: 0 0 8px rgba(255, 138, 91, 0.6);
+.sprite {
   flex: none;
-}
-
-.pill-dots {
   display: flex;
   align-items: center;
-  gap: 5px;
-  flex: 1;
+  color: var(--idle);
+  animation: sprite-glow 2.4s var(--ease) infinite;
+}
+.sprite .pixel-sprite {
+  display: block;
+}
+.sprite.state-working {
+  color: var(--done);
+}
+.sprite.state-starting {
+  color: var(--starting);
+}
+.sprite.state-waiting-for-approval {
+  color: var(--waiting);
+}
+.sprite.state-done {
+  color: var(--done);
+}
+.sprite.state-failed {
+  color: var(--failed);
+}
+.sprite.idle {
+  color: var(--idle);
+  animation: none;
+}
+.sprite.offline {
+  color: var(--failed);
+  opacity: 0.55;
+  animation: none;
 }
 
-.pill-count {
+/* The "spark": the sprite breathes a soft glow in its state color. */
+@keyframes sprite-glow {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 1px currentColor);
+  }
+  50% {
+    filter: drop-shadow(0 0 5px currentColor);
+  }
+}
+
+.pill-activity {
+  flex: 1;
+  min-width: 0;
   font-size: 12px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pill-badge {
+  flex: none;
+  font-size: 11px;
   font-weight: 600;
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
-  min-width: 8px;
-  text-align: right;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  padding: 1px 7px;
 }
-
-.island.attention .pill-count {
+.island.attention .pill-badge {
   color: var(--waiting);
+  background: rgba(255, 176, 32, 0.16);
 }
 
 /* ---- Status dots ---- */

@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { AgentUsage, SessionSnapshot } from "@agent-island/shared";
-import { SessionRow, StatusDot } from "./SessionRow";
+import { SessionRow } from "./SessionRow";
 import { ApprovalCard } from "./ApprovalCard";
 import { UsageFooter } from "./UsageFooter";
+import { PixelSprite } from "./PixelSprite";
 
 const ACTIVE_STATES = new Set(["working", "starting", "waiting-for-approval"]);
 const MAX_ROWS = 6;
@@ -79,6 +80,7 @@ export function App() {
   const active = useMemo(() => sessions.filter((s) => ACTIVE_STATES.has(s.state)), [sessions]);
   const attention = useMemo(() => sessions.filter((s) => s.requires_action), [sessions]);
   const visible = useMemo(() => sessions.slice(0, MAX_ROWS), [sessions]);
+  const dominant = pending[0] ?? active[0] ?? sessions[0] ?? null;
 
   return (
     <div className="app">
@@ -90,17 +92,15 @@ export function App() {
         onClick={() => setPinned((v) => !v)}
       >
         <div className="pill">
-          <span className="brand" aria-hidden />
-          <div className="pill-dots">
-            {active.length === 0 ? (
-              <span className={`dot ${connected ? "state-idle" : "offline"}`} />
-            ) : (
-              active.slice(0, 4).map((s) => <StatusDot key={s.key} state={s.state} />)
-            )}
-          </div>
-          <span className="pill-count">
-            {attention.length > 0 ? "⚠" : active.length > 0 ? active.length : ""}
+          <span
+            className={`sprite ${dominant ? `state-${dominant.state}` : connected ? "idle" : "offline"}`}
+          >
+            <PixelSprite size={15} />
           </span>
+          <span className="pill-activity">
+            {dominant ? dominant.title : connected ? "no sessions" : "waiting for daemon"}
+          </span>
+          {active.length > 0 && <span className="pill-badge">{active.length}</span>}
         </div>
 
         <div className="panel-wrap">
