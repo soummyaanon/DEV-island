@@ -1,0 +1,77 @@
+{
+  "SessionStart": [
+    {
+      "hooks": [
+        {
+          "type": "http",
+          "url": "{{DAEMON_URL}}/events/claude/session-start",
+          "headers": { "X-Agent-Island-Token": "{{TOKEN}}" },
+          "timeout": 5
+        }
+      ]
+    }
+  ],
+  "PreToolUse": [
+    {
+      "matcher": "*",
+      "hooks": [
+        {
+          "type": "http",
+          "url": "{{DAEMON_URL}}/events/claude/pre-tool",
+          "headers": { "X-Agent-Island-Token": "{{TOKEN}}" },
+          "timeout": 5
+        }
+      ]
+    }
+  ],
+  "PostToolUse": [
+    {
+      "matcher": "*",
+      "hooks": [
+        {
+          "type": "http",
+          "url": "{{DAEMON_URL}}/events/claude/post-tool",
+          "headers": { "X-Agent-Island-Token": "{{TOKEN}}" },
+          "timeout": 5
+        }
+      ]
+    }
+  ],
+  "PermissionRequest": [
+    {
+      "matcher": "*",
+      "hooks": [
+        {
+          "type": "http",
+          "url": "{{DAEMON_URL}}/events/claude/permission-request",
+          "headers": { "X-Agent-Island-Token": "{{TOKEN}}" },
+          "timeout": 5
+        }
+      ]
+    }
+  ],
+  "Notification": [
+    {
+      "hooks": [
+        {
+          "type": "http",
+          "url": "{{DAEMON_URL}}/events/claude/notification",
+          "headers": { "X-Agent-Island-Token": "{{TOKEN}}" },
+          "timeout": 5
+        }
+      ]
+    }
+  ],
+  "Stop": [
+    {
+      "hooks": [
+        {
+          "type": "http",
+          "url": "{{DAEMON_URL}}/events/claude/stop",
+          "headers": { "X-Agent-Island-Token": "{{TOKEN}}" },
+          "timeout": 5
+        }
+      ]
+    }
+  ]
+}

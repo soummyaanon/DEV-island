@@ -1,9 +1,11 @@
 import { randomUUID } from "node:crypto";
-import type {
-  AgentEvent,
-  EventInput,
-  SessionSnapshot,
-  WireMessage,
+import {
+  sessionKey,
+  type AgentEvent,
+  type AgentKind,
+  type EventInput,
+  type SessionSnapshot,
+  type WireMessage,
 } from "@agent-island/shared";
 import { SessionRegistry } from "./session-registry";
 import { EventLog } from "./event-log";
@@ -66,6 +68,11 @@ export class EventHub {
 
   sessions(): SessionSnapshot[] {
     return this.registry.list();
+  }
+
+  /** Look up one session's current snapshot (e.g. to enrich a partial event). */
+  getSession(agent: AgentKind, sessionId: string): SessionSnapshot | undefined {
+    return this.registry.get(sessionKey(agent, sessionId));
   }
 
   recentEvents(limit?: number): AgentEvent[] {

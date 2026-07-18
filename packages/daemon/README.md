@@ -17,13 +17,19 @@ pnpm --filter @agent-island/daemon start:dist
 
 ## HTTP / WS surface
 
-| Method | Path        | Purpose                                                       |
-| ------ | ----------- | ------------------------------------------------------------ |
-| POST   | `/events`   | Ingest one canonical event (`EventInput`); daemon mints id + timestamp |
-| GET    | `/stream`   | WebSocket: `snapshot` on connect, then `event` + `ping`      |
-| GET    | `/sessions` | Current `SessionSnapshot[]`                                  |
-| GET    | `/events`   | Recent events from the ring buffer (`?limit=N`)             |
-| GET    | `/health`   | Liveness + session/subscriber counts                        |
+| Method | Path                         | Purpose                                                       |
+| ------ | ---------------------------- | ------------------------------------------------------------ |
+| POST   | `/events`                    | Ingest one canonical event (`EventInput`); daemon mints id + timestamp |
+| POST   | `/events/claude/:hookEvent`  | Claude Code HTTP-hook ingest (adapter); always replies empty `204` |
+| GET    | `/stream`                    | WebSocket: `snapshot` on connect, then `event` + `ping`      |
+| GET    | `/sessions`                  | Current `SessionSnapshot[]`                                  |
+| GET    | `/events`                    | Recent events from the ring buffer (`?limit=N`)             |
+| GET    | `/health`                    | Liveness + session/subscriber counts                        |
+
+The Claude route accepts hook slugs `session-start`, `pre-tool`, `post-tool`,
+`permission-request`, `notification`, `stop`. It returns an **empty 204** on
+purpose: Claude parses any 2xx JSON body as a decision that could alter the live
+session, so a monitoring endpoint must never send one.
 
 `POST /events` example:
 
@@ -60,9 +66,26 @@ posts so `curl` stays a one-liner.
 ./installers/uninstall-daemon.sh   # remove
 ```
 
+## Claude Code adapter (Milestone 2)
+
+Register HTTP hooks in `~/.claude/settings.json` (safe, backed-up, idempotent
+merge that never clobbers your existing config):
+
+```bash
+./installers/install-claude-hooks.sh              # add hooks (backs up first)
+./installers/install-claude-hooks.sh --dry-run    # preview only
+./installers/uninstall-claude-hooks.sh            # remove only our hooks
+```
+
+Hooks are snapshotted at session start, so restart `claude` to pick up changes.
+If the daemon is down, hooks fail fast (connection refused) and never disrupt
+the session.
+
 ## Verify
 
 ```bash
 # with the daemon running:
-pnpm smoke
+pnpm smoke                     # generic pipeline
+node scripts/claude-smoke.mjs  # Claude adapter mapping + states
+node scripts/ws-tail.mjs       # live tail of the event stream
 ```
