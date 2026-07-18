@@ -3,6 +3,7 @@ import type { SessionSnapshot } from "@agent-island/shared";
 import { DaemonClient } from "./daemon-client";
 import { createNotchWindow } from "./windows/notch-window";
 import { createTray, updateTrayTitle } from "./tray";
+import { jumpToTerminal } from "./jump-back";
 
 // One instance only — two overlays fighting over the notch would be chaos.
 if (!app.requestSingleInstanceLock()) {
@@ -36,6 +37,8 @@ if (!app.requestSingleInstanceLock()) {
     ipcMain.on("agent-island:set-interactive", (_e, interactive: boolean) => {
       notch?.setIgnoreMouseEvents(!interactive, { forward: true });
     });
+
+    ipcMain.on("agent-island:jump", (_e, session: SessionSnapshot) => jumpToTerminal(session));
 
     ipcMain.on("agent-island:quit", () => app.quit());
   });

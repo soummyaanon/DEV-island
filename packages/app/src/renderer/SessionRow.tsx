@@ -37,13 +37,24 @@ export function SessionRow({
   session,
   now,
   index,
+  onJump,
 }: {
   session: SessionSnapshot;
   now: number;
   index: number;
+  onJump: (session: SessionSnapshot) => void;
 }) {
+  const term = typeof session.meta?.term_program === "string" ? session.meta.term_program : "";
   return (
-    <li className={`row state-${session.state}`} style={{ animationDelay: `${index * 34}ms` }}>
+    <li
+      className={`row state-${session.state}`}
+      style={{ animationDelay: `${index * 34}ms` }}
+      title={term ? `Jump to ${projectName(session.cwd)} in ${term}` : "Jump to terminal"}
+      onClick={(e) => {
+        e.stopPropagation();
+        onJump(session);
+      }}
+    >
       <StatusDot state={session.state} />
       <div className="row-main">
         <span className="project">{projectName(session.cwd)}</span>

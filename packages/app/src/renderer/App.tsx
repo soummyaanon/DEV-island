@@ -103,7 +103,13 @@ export function App() {
             </header>
             <ul className="rows">
               {visible.map((s, i) => (
-                <SessionRow key={s.key} session={s} now={now} index={i} />
+                <SessionRow
+                  key={s.key}
+                  session={s}
+                  now={now}
+                  index={i}
+                  onJump={(sess) => window.agentIsland.jump(sess)}
+                />
               ))}
               {visible.length === 0 && (
                 <li className="empty">{connected ? "no sessions yet" : "waiting for daemon…"}</li>

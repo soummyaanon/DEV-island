@@ -21,6 +21,12 @@ export const SessionSnapshotSchema = z.object({
   updated_at: z.string().datetime(),
   last_event_type: EventTypeSchema,
   event_count: z.number().int().nonnegative(),
+  /**
+   * Adapter-supplied metadata that persists across events — e.g. which terminal
+   * the session runs in, for jump-to-terminal. Accumulated from event
+   * `detail._meta`.
+   */
+  meta: z.record(z.unknown()),
 });
 
 export type SessionSnapshot = z.infer<typeof SessionSnapshotSchema>;

@@ -1,9 +1,31 @@
 import type { FastifyInstance } from "fastify";
+import type { IncomingHttpHeaders } from "node:http";
 import type { EventHub } from "../hub/event-hub";
 import type { DaemonConfig } from "../config";
 import { makeAuthGuard } from "./auth-guard";
 import { ClaudeHookPayloadSchema } from "../adapters/claude/hook-payload";
 import { mapClaudeHook, resolveHookEventName } from "../adapters/claude/event-mapper";
+
+function header(headers: IncomingHttpHeaders, name: string): string | undefined {
+  const raw = headers[name];
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  const trimmed = value?.trim();
+  // Drop empty or uninterpolated ("$VAR" when the env var was unset) values.
+  if (!trimmed || trimmed.startsWith("$")) return undefined;
+  return trimmed;
+}
+
+/** Terminal identity forwarded by the hook (via allowedEnvVars), for jump-to-terminal. */
+function terminalMeta(headers: IncomingHttpHeaders): Record<string, string> {
+  const meta: Record<string, string> = {};
+  const term = header(headers, "x-term-program");
+  const iterm = header(headers, "x-iterm-session-id");
+  const termSession = header(headers, "x-term-session-id");
+  if (term) meta.term_program = term;
+  if (iterm) meta.iterm_session_id = iterm;
+  if (termSession) meta.term_session_id = termSession;
+  return meta;
+}
 
 /**
  * `POST /events/claude/:hookEvent` — receives raw Claude Code hook payloads.
@@ -40,6 +62,11 @@ export function registerClaudeRoutes(
       if (!mapped) {
         request.log.info(`ignoring unmapped claude hook: ${eventName}`);
         return reply.code(204).send();
+      }
+
+      const meta = terminalMeta(request.headers);
+      if (Object.keys(meta).length > 0) {
+        mapped.detail = { ...(mapped.detail ?? {}), _meta: meta };
       }
 
       hub.ingest(mapped);

@@ -26,6 +26,9 @@ const api = {
   setInteractive: (interactive: boolean): void =>
     ipcRenderer.send("agent-island:set-interactive", interactive),
 
+  /** Bring the session's terminal to the front. */
+  jump: (session: SessionSnapshot): void => ipcRenderer.send("agent-island:jump", session),
+
   quit: (): void => ipcRenderer.send("agent-island:quit"),
 };
 

@@ -213,6 +213,7 @@ body {
   padding: 7px 9px;
   border-radius: 11px;
   transition: background 0.15s ease;
+  cursor: pointer;
 }
 .island.expanded .row {
   animation: rowin 0.4s var(--ease) both;
