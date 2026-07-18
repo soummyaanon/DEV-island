@@ -97,38 +97,33 @@ export function App() {
   const visible = useMemo(() => sessions.slice(0, MAX_ROWS), [sessions]);
   const dominant = pending[0] ?? active[0] ?? sessions[0] ?? null;
 
-  const stateCls = dominant ? `state-${dominant.state}` : connected ? "idle" : "offline";
-
   return (
     <div className="app">
-      <div
-        ref={islandRef}
-        className={`island-wrap ${stateCls}${expanded ? " expanded" : ""}${
-          attention.length || pending.length ? " attention" : ""
-        }`}
-      >
-        {/* Collapsed: the island hides "behind" the notch — only two glowing
-            chips peek out at its bottom corners. Camera zone stays empty. */}
-        <div className="chip chip-l" aria-hidden>
+      <div ref={islandRef} className="island-wrap">
+        {/* Concave "ears" that blend the shape into the hardware notch. */}
+        <i className="ear ear-l" aria-hidden />
+        <i className="ear ear-r" aria-hidden />
+        <div
+          className={`island${expanded ? " expanded" : ""}${
+            attention.length || pending.length ? " attention" : ""
+          }`}
+        >
+        {/* Collapsed: content lives in the wings BESIDE the notch (iPhone island). */}
+        <div className={`pill ${dominant ? `state-${dominant.state}` : connected ? "idle" : "offline"}`}>
           <span className="sprite">
-            <PixelSprite size={14} />
+            <PixelSprite size={16} />
           </span>
-        </div>
-        <div className="chip chip-r" aria-hidden>
-          {attention.length > 0 && <span className="pill-alert">{attention.length}</span>}
-          <span className={`eq${active.length > 0 ? " live" : ""}`}>
-            <i />
-            <i />
-            <i />
-            <i />
+          <span className="pill-right">
+            {attention.length > 0 && <span className="pill-alert">{attention.length}</span>}
+            <span className={`eq${active.length > 0 ? " live" : ""}`}>
+              <i />
+              <i />
+              <i />
+              <i />
+            </span>
           </span>
         </div>
 
-        {/* Expanded: the full island springs out from under the notch. */}
-        <div className={`body${expanded ? " open" : ""}`}>
-          <i className="ear ear-l" aria-hidden />
-          <i className="ear ear-r" aria-hidden />
-          <div className="island">
         <div className="panel-wrap">
           <div className="panel">
             {pending.map((s) => (
@@ -161,7 +156,6 @@ export function App() {
             <UsageFooter usage={usage} now={now} />
           </div>
         </div>
-          </div>
         </div>
       </div>
     </div>
