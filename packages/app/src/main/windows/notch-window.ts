@@ -21,16 +21,18 @@ const WIN_HEIGHT = 400;
 export function createNotchWindow(): BrowserWindow {
   const primary = screen.getPrimaryDisplay();
   const x = Math.round(primary.bounds.x + (primary.bounds.width - WIN_WIDTH) / 2);
-  // Deterministic: sit EXACTLY at the menu bar's bottom edge — the notch's
-  // bottom line. (Covering the menu-bar band itself is unreliable in Electron:
-  // AppKit clamps overlay windows inconsistently, which caused floating gaps.)
-  const y = primary.workArea.y;
+  // Full screen frame, NOT workArea: the shape must cover the menu-bar band so
+  // it merges with the hardware notch. A normal NSWindow gets clamped below
+  // the menu bar (the source of our floating gaps) — an NSPanel does not,
+  // which is why `type: "panel"` below is load-bearing.
+  const y = primary.bounds.y;
 
   const win = new BrowserWindow({
     width: WIN_WIDTH,
     height: WIN_HEIGHT,
     x,
     y,
+    type: "panel",
     frame: false,
     transparent: true,
     backgroundColor: "#00000000",
@@ -55,9 +57,11 @@ export function createNotchWindow(): BrowserWindow {
     },
   });
 
-  // Float above full-screen apps and on every Space.
+  // Float above full-screen apps and on every Space; keep it out of Mission
+  // Control (mirrors NSPanel collectionBehavior in the reference).
   win.setAlwaysOnTop(true, "screen-saver");
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  win.setHiddenInMissionControl?.(true);
   // Start click-through; renderer toggles this when the pointer is over the pill.
   win.setIgnoreMouseEvents(true, { forward: true });
 
@@ -74,7 +78,11 @@ export function createNotchWindow(): BrowserWindow {
     // Re-assert the requested position (macOS can shift it on show), then tell
     // the renderer the real geometry.
     win.setPosition(x, y);
-    win.webContents.send("agent-island:layout", layout());
+    const l = layout();
+    console.log(
+      `[notch] windowY=${win.getBounds().y} menuBarBottom=${primary.workArea.y} inset=${l.inset}`,
+    );
+    win.webContents.send("agent-island:layout", l);
   };
 
   ipcMain.handle("agent-island:get-layout", () => layout());

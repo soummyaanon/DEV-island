@@ -55,6 +55,15 @@ export function App() {
     return window.agentIsland.onCursorLeft(() => setHovering(false));
   }, []);
 
+  // Notch band height, measured by main: the black body spans it so the shape
+  // merges with the hardware notch; content renders below it.
+  useEffect(() => {
+    const apply = (l: { inset: number }) =>
+      document.documentElement.style.setProperty("--notch-inset", `${l.inset}px`);
+    void window.agentIsland.getLayout().then(apply);
+    return window.agentIsland.onLayout(apply);
+  }, []);
+
   // The window is click-through with forwarded mouse-move; detect when the
   // pointer is over the island and expand. Leaving collapses (unless pinned).
   useEffect(() => {
@@ -90,12 +99,15 @@ export function App() {
 
   return (
     <div className="app">
-      <div
-        ref={islandRef}
-        className={`island${expanded ? " expanded" : ""}${
-          attention.length || pending.length ? " attention" : ""
-        }`}
-      >
+      <div ref={islandRef} className="island-wrap">
+        {/* Concave "ears" that blend the shape into the hardware notch. */}
+        <i className="ear ear-l" aria-hidden />
+        <i className="ear ear-r" aria-hidden />
+        <div
+          className={`island${expanded ? " expanded" : ""}${
+            attention.length || pending.length ? " attention" : ""
+          }`}
+        >
         {/* Collapsed: content lives in the wings BESIDE the notch (iPhone island). */}
         <div className={`pill ${dominant ? `state-${dominant.state}` : connected ? "idle" : "offline"}`}>
           <span className="sprite">
@@ -143,6 +155,7 @@ export function App() {
             </ul>
             <UsageFooter usage={usage} now={now} />
           </div>
+        </div>
         </div>
       </div>
     </div>
