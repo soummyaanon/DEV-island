@@ -1,0 +1,26 @@
+{
+  "name": "agent-island",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Agent Island — menu bar / Dynamic Island for Claude Code and Codex sessions",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=9"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter @agent-island/daemon --filter @agent-island/app dev",
+    "build": "pnpm -r run build",
+    "typecheck": "pnpm -r run typecheck",
+    "test": "pnpm --filter @agent-island/daemon test"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron",
+      "esbuild"
+    ]
+  }
+}

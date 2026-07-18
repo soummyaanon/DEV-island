@@ -1,0 +1,14 @@
+appId: com.agentisland.app
+productName: Agent Island
+directories:
+  output: release
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - dmg
+    - zip
+  extendInfo:
+    LSUIElement: true
+files:
+  - out/**/*
+  - package.json

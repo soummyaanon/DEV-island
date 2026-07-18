@@ -1,0 +1,17 @@
+node_modules/
+dist/
+out/
+*.local
+.DS_Store
+*.log
+.env
+.env.*
+!.env.example
+coverage/
+.vite/
+.turbo/
+*.tsbuildinfo
+release/
+packages/app/dist/
+packages/daemon/dist/
+packages/shared/dist/
