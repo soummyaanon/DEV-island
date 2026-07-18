@@ -68,15 +68,55 @@ body {
   background: #000;
   border-radius: 0 0 18px 18px;
   overflow: hidden;
+  /* Downward-biased ambient glow: fuses the chin into the notch so the seam
+     reads as the island emanating light, not a misaligned window. */
+  box-shadow:
+    0 4px 14px rgba(0, 0, 0, 0.55),
+    0 6px 22px -4px rgba(255, 255, 255, 0.07);
   transition:
     width 0.34s var(--spring),
-    border-radius 0.34s var(--spring);
+    border-radius 0.34s var(--spring),
+    box-shadow 0.5s ease;
   will-change: width;
 }
 
 .island.expanded {
   width: 400px;
   border-radius: 0 0 26px 26px;
+}
+
+/* State-colored edge glow. */
+.island:has(.pill.state-working) {
+  box-shadow:
+    0 4px 14px rgba(0, 0, 0, 0.5),
+    0 7px 26px -3px rgba(91, 168, 255, 0.35);
+}
+.island:has(.pill.state-done) {
+  box-shadow:
+    0 4px 14px rgba(0, 0, 0, 0.5),
+    0 7px 26px -3px rgba(78, 203, 141, 0.3);
+}
+.island:has(.pill.state-failed) {
+  box-shadow:
+    0 4px 14px rgba(0, 0, 0, 0.5),
+    0 7px 26px -3px rgba(255, 95, 86, 0.35);
+}
+/* Needs-you: the whole island breathes amber. */
+.island.attention {
+  animation: glow-breathe 1.7s var(--ease) infinite;
+}
+@keyframes glow-breathe {
+  0%,
+  100% {
+    box-shadow:
+      0 4px 14px rgba(0, 0, 0, 0.5),
+      0 6px 22px -3px rgba(255, 176, 32, 0.28);
+  }
+  50% {
+    box-shadow:
+      0 4px 14px rgba(0, 0, 0, 0.5),
+      0 10px 38px 0 rgba(255, 176, 32, 0.55);
+  }
 }
 
 /* Concave top "ears" (quad-Bezier r=10 in the reference — a radial-gradient
