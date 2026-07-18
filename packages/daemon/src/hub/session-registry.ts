@@ -4,6 +4,7 @@ import {
   type AgentKind,
   type EventType,
   type PendingApproval,
+  type PendingQuestion,
   type SessionSnapshot,
   type SessionState,
 } from "@agent-island/shared";
@@ -72,10 +73,31 @@ export class SessionRegistry {
       event_count: (existing?.event_count ?? 0) + 1,
       meta,
       pending_approval: existing?.pending_approval ?? null,
+      pending_question: existing?.pending_question ?? null,
     };
 
     this.sessions.set(key, snapshot);
     return snapshot;
+  }
+
+  /** Set or clear the pending question on a session. */
+  setPendingQuestion(
+    agent: AgentKind,
+    sessionId: string,
+    question: PendingQuestion | null,
+    nowIso: string,
+  ): SessionSnapshot | undefined {
+    const key = sessionKey(agent, sessionId);
+    const existing = this.sessions.get(key);
+    if (!existing) return undefined;
+    if (existing.pending_question === null && question === null) return existing;
+    const updated: SessionSnapshot = {
+      ...existing,
+      pending_question: question,
+      updated_at: nowIso,
+    };
+    this.sessions.set(key, updated);
+    return updated;
   }
 
   /** Set or clear the pending approval on a session (used by the approval hold). */

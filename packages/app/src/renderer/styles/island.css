@@ -45,73 +45,134 @@ body {
   padding-top: 0;
 }
 
-/* ---- The island ---- */
+/* The collapsed body adds two tiny status wings around the hardware notch. */
+.island-wrap {
+  position: relative;
+  min-height: 26px;
+}
+
+:root {
+  --motion: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
 .island {
-  width: 196px;
-  margin-top: 0;
-  background: var(--bg);
-  border: 1px solid var(--edge);
-  border-top-color: var(--edge-top);
-  border-radius: 0 0 20px 20px;
-  box-shadow:
-    0 12px 34px rgba(0, 0, 0, 0.55),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  backdrop-filter: blur(22px) saturate(1.3);
-  -webkit-backdrop-filter: blur(22px) saturate(1.3);
+  width: 248px;
+  background: #000;
+  border-radius: 0 0 12px 12px;
   overflow: hidden;
   transition:
-    width 0.34s var(--ease),
-    border-radius 0.34s var(--ease);
-  will-change: width;
+    width 0.12s var(--motion),
+    border-radius 0.12s var(--motion);
 }
 
 .island.expanded {
-  width: 344px;
-  border-radius: 0 0 22px 22px;
+  width: 360px;
+  border-radius: 0 0 16px 16px;
+  transition-duration: 0.17s;
 }
 
-/* ---- Collapsed pill ---- */
-.pill {
-  height: 30px;
+.island.bare:not(.expanded) {
+  width: 196px;
+  border-radius: 0;
+}
+
+/* Concave top "ears" (quad-Bezier r=10 in the reference — a radial-gradient
+   inverse corner is the CSS equivalent). They flare the top edge outward so
+   the shape blends into the notch instead of butting against it. */
+.ear {
+  position: absolute;
+  top: 0;
+  width: 10px;
+  height: 10px;
+  pointer-events: none;
+}
+.ear-l {
+  left: -10px;
+  background: radial-gradient(circle 10px at 0px 10px, transparent 9.5px, #000 10px);
+}
+.ear-r {
+  right: -10px;
+  background: radial-gradient(circle 10px at 10px 10px, transparent 9.5px, #000 10px);
+}
+
+.notch-spacer {
+  height: calc(var(--notch-inset, 33px) - 1px);
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 13px;
+  justify-content: space-between;
+  padding: 0 11px 3px;
+  color: var(--idle);
+}
+.notch-spacer.state-working {
+  color: var(--working);
+}
+.notch-spacer.state-starting {
+  color: var(--starting);
+}
+.notch-spacer.state-waiting-for-approval {
+  color: var(--waiting);
+}
+.notch-spacer.state-done {
+  color: var(--done);
+}
+.notch-spacer.state-failed,
+.notch-spacer.offline {
+  color: var(--failed);
+}
+.island.bare:not(.expanded) .notch-spacer {
+  opacity: 0;
 }
 
-.brand {
-  width: 7px;
-  height: 7px;
-  border-radius: 2px;
-  background: var(--accent);
-  box-shadow: 0 0 8px rgba(255, 138, 91, 0.6);
+.pixel-sprite {
+  display: block;
   flex: none;
 }
 
-.pill-dots {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  flex: 1;
+/* The crab animates like the arcade original: two frames, hard steps. */
+.pixel-sprite g.f2 {
+  opacity: 0;
+}
+.pixel-sprite.live g.f1 {
+  animation: crab-f1 0.7s steps(1, end) infinite;
+}
+.pixel-sprite.live g.f2 {
+  animation: crab-f2 0.7s steps(1, end) infinite;
+}
+@keyframes crab-f1 {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes crab-f2 {
+  0%,
+  49% {
+    opacity: 0;
+  }
+  50%,
+  100% {
+    opacity: 1;
+  }
 }
 
-.pill-count {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-dim);
+/* Right wing: compact status count ("2" active, "1!" needs you). */
+.spacer-info {
+  font-size: 10.5px;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
-  min-width: 8px;
+  min-width: 12px;
   text-align: right;
-}
-
-.island.attention .pill-count {
-  color: var(--waiting);
+  color: currentColor;
 }
 
 /* ---- Status dots ---- */
 .dot {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   flex: none;
   position: relative;
@@ -140,35 +201,11 @@ body {
   opacity: 0.6;
 }
 
-/* Pulse for live states via a scaling ring (transform/opacity only). */
-.dot.state-working::after,
-.dot.state-waiting-for-approval::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  background: inherit;
-  animation: pulse 1.8s var(--ease) infinite;
-}
-@keyframes pulse {
-  0% {
-    transform: scale(1);
-    opacity: 0.55;
-  }
-  70% {
-    transform: scale(2.6);
-    opacity: 0;
-  }
-  100% {
-    opacity: 0;
-  }
-}
-
 /* ---- Expanding panel ---- */
 .panel-wrap {
   display: grid;
   grid-template-rows: 0fr;
-  transition: grid-template-rows 0.34s var(--ease);
+  transition: grid-template-rows 0.15s var(--motion);
 }
 .island.expanded .panel-wrap {
   grid-template-rows: 1fr;
@@ -176,31 +213,21 @@ body {
 .panel {
   overflow: hidden;
   min-height: 0;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition:
+    opacity 0.08s ease-out,
+    transform 0.1s var(--motion);
 }
-
-.panel-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  padding: 4px 15px 9px;
-}
-.wordmark {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--accent);
-}
-.badge {
-  font-size: 10.5px;
-  font-weight: 500;
-  color: var(--text-dim);
-  font-variant-numeric: tabular-nums;
+.island.expanded .panel {
+  opacity: 1;
+  transform: translateY(0);
+  transition-delay: 0.035s;
 }
 
 .rows {
   list-style: none;
-  padding: 0 7px 8px;
+  padding: 3px 6px 7px;
   display: flex;
   flex-direction: column;
   gap: 1px;
@@ -208,25 +235,15 @@ body {
 
 .row {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 7px 9px;
-  border-radius: 11px;
-  transition: background 0.15s ease;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 9px;
+  transition: background 0.1s ease;
   cursor: pointer;
 }
-.island.expanded .row {
-  animation: rowin 0.4s var(--ease) both;
-}
-@keyframes rowin {
-  from {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.row > .dot {
+  margin-top: 5px;
 }
 .row:hover {
   background: rgba(255, 255, 255, 0.06);
@@ -239,84 +256,43 @@ body {
   flex-direction: column;
   gap: 2px;
 }
-.row-top {
+.row-heading,
+.row-detail {
+  min-width: 0;
   display: flex;
-  align-items: center;
+  align-items: baseline;
   justify-content: space-between;
   gap: 8px;
 }
 .project {
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 550;
   color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.chips {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  flex: none;
-}
-.agent-chip {
-  font-size: 9.5px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text-dim);
-}
-.mode-chip {
-  font-size: 9.5px;
-  font-weight: 600;
-  padding: 1px 6px;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--text-dim);
-}
-.mode-chip.mode-plan {
-  background: rgba(91, 168, 255, 0.16);
-  color: var(--working);
-}
-.mode-chip.mode-acceptEdits {
-  background: rgba(255, 176, 32, 0.16);
-  color: var(--waiting);
-}
-.mode-chip.mode-auto {
-  background: rgba(78, 203, 141, 0.16);
-  color: var(--done);
-}
-.mode-chip.mode-bypassPermissions,
-.mode-chip.mode-dontAsk {
-  background: rgba(255, 95, 86, 0.16);
-  color: var(--failed);
-}
 .activity {
+  min-width: 0;
+  flex: 1;
   font-size: 11px;
   color: var(--text-dim);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
-.row.state-working .activity {
-  color: var(--working);
-}
-.row.state-waiting-for-approval .activity {
-  color: var(--waiting);
-}
-.row.state-done .activity {
-  color: var(--done);
-}
-.row.state-failed .activity {
-  color: var(--failed);
-}
-
-.elapsed {
-  font-size: 11px;
+.elapsed,
+.row-context {
+  flex: none;
+  font-size: 9.5px;
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
-  min-width: 44px;
-  text-align: right;
+}
+.row-context {
+  max-width: 98px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .empty {
@@ -327,26 +303,68 @@ body {
   text-align: center;
 }
 
-/* ---- Approval card ---- */
-.approval {
-  margin: 4px 8px 8px;
-  padding: 10px 12px 11px;
-  border-radius: 14px;
-  background: rgba(255, 176, 32, 0.07);
-  border: 1px solid rgba(255, 176, 32, 0.28);
-  cursor: default;
+.usage-compact {
+  min-height: 25px;
+  margin: 0 8px;
+  padding: 6px 6px 7px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
 }
-.approval-head {
+.usage-item {
+  min-width: 0;
   display: flex;
   align-items: baseline;
+  gap: 5px;
+  font-size: 9.5px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.usage-item b {
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* ---- Approval / Permission request panel ---- */
+.approval {
+  margin: 2px 9px 8px;
+  padding: 11px 13px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  cursor: default;
+}
+.approval-top {
+  display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 7px;
+  margin-bottom: 8px;
+}
+.approval-kicker {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.approval-mark {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 7px var(--accent);
 }
 .approval-title {
-  font-size: 12.5px;
+  font-size: 13.5px;
   font-weight: 650;
-  color: var(--waiting);
+  color: var(--text);
+  margin-bottom: 9px;
 }
 .approval-project {
   font-size: 10.5px;
@@ -356,12 +374,56 @@ body {
   text-overflow: ellipsis;
 }
 .approval-body {
-  max-height: 156px;
+  max-height: 150px;
   overflow-y: auto;
   font-size: 12px;
   line-height: 1.5;
   color: var(--text);
-  margin-bottom: 10px;
+  margin-bottom: 11px;
+}
+.diff {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.55;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  padding: 6px 0;
+  overflow-x: auto;
+  white-space: pre;
+}
+.diff-del {
+  color: #ff8f88;
+  background: rgba(255, 95, 86, 0.1);
+  padding: 0 10px;
+}
+.diff-add {
+  color: #7ee0a6;
+  background: rgba(78, 203, 141, 0.1);
+  padding: 0 10px;
+}
+.diff-stat {
+  margin-top: 5px;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+.diff-stat .add {
+  color: var(--done);
+}
+.diff-stat .del {
+  color: var(--failed);
+}
+.cmd {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  padding: 8px 10px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  color: var(--text);
 }
 .approval-body h1,
 .approval-body h2,
@@ -410,48 +472,114 @@ body {
 
 .approval-actions {
   display: flex;
-  justify-content: flex-end;
   gap: 8px;
 }
 .btn {
+  flex: 1;
   font: inherit;
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 600;
-  padding: 5px 15px;
-  border-radius: 9px;
+  padding: 8px 14px;
+  border-radius: 10px;
   border: 1px solid transparent;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
   transition:
     transform 0.08s ease,
     background 0.15s ease;
 }
 .btn:active {
-  transform: scale(0.96);
+  transform: scale(0.98);
+}
+.btn kbd {
+  font: inherit;
+  font-size: 10px;
+  opacity: 0.55;
+  font-variant-numeric: tabular-nums;
 }
 .btn.allow {
-  background: var(--done);
-  color: #05130c;
+  background: #ececec;
+  color: #111214;
 }
 .btn.allow:hover {
-  background: #5ed99b;
+  background: #ffffff;
 }
 .btn.deny {
-  background: transparent;
+  background: rgba(255, 255, 255, 0.06);
   color: var(--text);
-  border-color: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.1);
 }
 .btn.deny:hover {
-  background: rgba(255, 95, 86, 0.16);
-  border-color: rgba(255, 95, 86, 0.4);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* ---- "Claude asks" question card ---- */
+.question {
+  margin: 2px 9px 8px;
+  padding: 11px 13px 10px;
+  border-radius: 14px;
+  background: rgba(91, 168, 255, 0.06);
+  border: 1px solid rgba(91, 168, 255, 0.22);
+  cursor: pointer;
+}
+.question:hover {
+  background: rgba(91, 168, 255, 0.1);
+}
+.approval-mark.ask {
+  background: var(--working);
+  box-shadow: 0 0 7px var(--working);
+}
+.question-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+.q-options {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.q-options li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 5px 9px;
+}
+.q-options kbd {
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--working);
+  background: rgba(91, 168, 255, 0.14);
+  border-radius: 5px;
+  padding: 0 5px;
+  flex: none;
+}
+.q-hint {
+  font-size: 10px;
+  color: var(--text-dim);
+  text-align: right;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .island,
-  .panel-wrap {
+  .panel-wrap,
+  .panel {
     transition: none;
   }
-  .dot::after,
-  .island.expanded .row {
+  .pixel-sprite.live g.f1,
+  .pixel-sprite.live g.f2 {
     animation: none;
   }
 }

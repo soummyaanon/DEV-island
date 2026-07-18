@@ -12,7 +12,7 @@
   <key>ProgramArguments</key>
   <array>
     <string>{{NODE_BIN}}</string>
-    <string>{{DAEMON_DIR}}/dist/main.js</string>
+    <string>{{DAEMON_DIR}}/dist/main.cjs</string>
   </array>
   <key>WorkingDirectory</key>
   <string>{{DAEMON_DIR}}</string>

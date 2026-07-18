@@ -1,7 +1,13 @@
 import WebSocket from "ws";
-import type { ApprovalDecision, SessionSnapshot, WireMessage } from "@agent-island/shared";
+import type {
+  AgentUsage,
+  ApprovalDecision,
+  SessionSnapshot,
+  WireMessage,
+} from "@agent-island/shared";
 
 export type SessionsListener = (sessions: SessionSnapshot[], connected: boolean) => void;
+export type UsageListener = (usage: AgentUsage[]) => void;
 
 const STATE_ORDER: Record<string, number> = {
   "waiting-for-approval": 0,
@@ -22,7 +28,9 @@ export class DaemonClient {
   private readonly httpBase: string;
   private ws: WebSocket | null = null;
   private sessions = new Map<string, SessionSnapshot>();
+  private usage: AgentUsage[] = [];
   private readonly listeners = new Set<SessionsListener>();
+  private readonly usageListeners = new Set<UsageListener>();
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private connected = false;
   private stopped = false;
@@ -67,6 +75,18 @@ export class DaemonClient {
     };
   }
 
+  onUsage(fn: UsageListener): () => void {
+    this.usageListeners.add(fn);
+    fn(this.usage);
+    return () => {
+      this.usageListeners.delete(fn);
+    };
+  }
+
+  getUsage(): AgentUsage[] {
+    return this.usage;
+  }
+
   /** Attention first, then most-active, then most-recently updated. */
   list(): SessionSnapshot[] {
     return [...this.sessions.values()].sort((a, b) => {
@@ -109,6 +129,9 @@ export class DaemonClient {
     } else if (msg.type === "event") {
       this.sessions.set(msg.session.key, msg.session);
       this.emit();
+    } else if (msg.type === "usage") {
+      this.usage = msg.usage;
+      for (const fn of this.usageListeners) fn(this.usage);
     }
     // 'ping' is ignored
   }

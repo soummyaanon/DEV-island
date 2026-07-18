@@ -9,6 +9,14 @@ mac:
     - zip
   extendInfo:
     LSUIElement: true
+  # No Developer ID yet — but do NOT set identity:null: that skips even the
+  # free ad-hoc signature, and unsigned+quarantined apps show "damaged" on
+  # Apple Silicon. Leaving identity unset lets electron-builder ad-hoc sign,
+  # so other Macs get the normal one-time Gatekeeper prompt instead.
 files:
   - out/**/*
   - package.json
+# Bundle the self-contained daemon so the packaged app can spawn it.
+extraResources:
+  - from: ../daemon/dist/main.cjs
+    to: daemon/main.cjs

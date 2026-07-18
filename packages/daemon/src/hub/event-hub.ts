@@ -3,9 +3,11 @@ import {
   sessionKey,
   type AgentEvent,
   type AgentKind,
+  type AgentUsage,
   type ApprovalDecision,
   type EventInput,
   type PendingApproval,
+  type PendingQuestion,
   type SessionSnapshot,
   type WireMessage,
 } from "@agent-island/shared";
@@ -25,6 +27,7 @@ export class EventHub {
   private readonly log: EventLog;
   private readonly subscribers = new Set<Subscriber>();
   private readonly approvals = new ApprovalRegistry();
+  private usage: AgentUsage[] = [];
 
   constructor(
     ringBufferSize: number,
@@ -53,13 +56,24 @@ export class EventHub {
     return { event, session };
   }
 
-  /** Register a subscriber; immediately sends the current snapshot. */
+  /** Register a subscriber; immediately sends the current snapshot + usage. */
   subscribe(fn: Subscriber): () => void {
     this.subscribers.add(fn);
     fn({ type: "snapshot", sessions: this.registry.list() });
+    if (this.usage.length > 0) fn({ type: "usage", usage: this.usage });
     return () => {
       this.subscribers.delete(fn);
     };
+  }
+
+  /** Update account usage/quota and fan it out. */
+  setUsage(usage: AgentUsage[]): void {
+    this.usage = usage;
+    this.broadcast({ type: "usage", usage });
+  }
+
+  getUsage(): AgentUsage[] {
+    return this.usage;
   }
 
   /** Push a message to every subscriber; a throwing subscriber is dropped. */
@@ -117,6 +131,17 @@ export class EventHub {
   /** Resolve a held approval from the UI. Returns false if unknown/expired. */
   resolveApproval(id: string, decision: ApprovalDecision): boolean {
     return this.approvals.resolve(id, decision);
+  }
+
+  /** Surface (or clear) an AskUserQuestion the agent is waiting on. */
+  setPendingQuestion(agent: AgentKind, sessionId: string, question: PendingQuestion | null): void {
+    const updated = this.registry.setPendingQuestion(
+      agent,
+      sessionId,
+      question,
+      new Date().toISOString(),
+    );
+    if (updated) this.broadcastSnapshot();
   }
 
   private broadcastSnapshot(): void {

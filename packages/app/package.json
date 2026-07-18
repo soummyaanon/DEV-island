@@ -2,6 +2,8 @@
   "name": "@agent-island/app",
   "version": "0.1.0",
   "private": true,
+  "description": "Agent Island — menu bar / Dynamic Island for Claude Code and Codex sessions",
+  "author": "Agent Island",
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",

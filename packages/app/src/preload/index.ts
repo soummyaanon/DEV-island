@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { ApprovalDecision, SessionSnapshot } from "@agent-island/shared";
+import type { AgentUsage, ApprovalDecision, SessionSnapshot } from "@agent-island/shared";
 
 export interface SessionsPayload {
   sessions: SessionSnapshot[];
@@ -20,6 +20,38 @@ const api = {
     const listener = () => cb();
     ipcRenderer.on("agent-island:toggle", listener);
     return () => ipcRenderer.removeListener("agent-island:toggle", listener);
+  },
+
+  getUsage: (): Promise<AgentUsage[]> => ipcRenderer.invoke("agent-island:get-usage"),
+
+  /** Window geometry: `inset` = px between window top and the notch's bottom line. */
+  getLayout: (): Promise<{ inset: number }> => ipcRenderer.invoke("agent-island:get-layout"),
+
+  onLayout: (cb: (layout: { inset: number }) => void): (() => void) => {
+    const listener = (_e: unknown, layout: { inset: number }) => cb(layout);
+    ipcRenderer.on("agent-island:layout", listener);
+    return () => ipcRenderer.removeListener("agent-island:layout", listener);
+  },
+
+  /** Fired by main when the cursor leaves the window while it's interactive. */
+  onCursorLeft: (cb: () => void): (() => void) => {
+    const listener = () => cb();
+    ipcRenderer.on("agent-island:cursor-left", listener);
+    return () => ipcRenderer.removeListener("agent-island:cursor-left", listener);
+  },
+
+  getSounds: (): Promise<boolean> => ipcRenderer.invoke("agent-island:get-sounds"),
+
+  onSounds: (cb: (on: boolean) => void): (() => void) => {
+    const listener = (_e: unknown, on: boolean) => cb(on);
+    ipcRenderer.on("agent-island:sounds", listener);
+    return () => ipcRenderer.removeListener("agent-island:sounds", listener);
+  },
+
+  onUsage: (cb: (usage: AgentUsage[]) => void): (() => void) => {
+    const listener = (_e: unknown, usage: AgentUsage[]) => cb(usage);
+    ipcRenderer.on("agent-island:usage", listener);
+    return () => ipcRenderer.removeListener("agent-island:usage", listener);
   },
 
   /** Flip window click-through: true = capture mouse, false = pass through. */

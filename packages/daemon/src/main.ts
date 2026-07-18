@@ -5,6 +5,7 @@ import { loadConfig } from "./config";
 import { ensureToken } from "./auth-token";
 import { EventHub } from "./hub/event-hub";
 import { buildServer } from "./server/http-server";
+import { readCodexUsage } from "./adapters/codex/usage-reader";
 
 async function main(): Promise<void> {
   const config = loadConfig();
@@ -15,6 +16,18 @@ async function main(): Promise<void> {
   const heartbeat = setInterval(() => {
     hub.broadcast({ type: "ping", t: new Date().toISOString() });
   }, config.heartbeatMs);
+
+  // Poll Codex account usage from local rollout logs (no network).
+  const refreshUsage = async (): Promise<void> => {
+    try {
+      const usage = await readCodexUsage(config.codexHome, config.codexActiveMs);
+      hub.setUsage(usage ? [usage] : []);
+    } catch (err) {
+      app.log.warn(`usage refresh failed: ${String(err)}`);
+    }
+  };
+  void refreshUsage();
+  const usageTimer = setInterval(() => void refreshUsage(), config.usagePollMs);
 
   await app.listen({ host: config.host, port: config.port });
   app.log.info(
@@ -27,6 +40,7 @@ async function main(): Promise<void> {
     shuttingDown = true;
     app.log.info(`received ${signal}, shutting down`);
     clearInterval(heartbeat);
+    clearInterval(usageTimer);
     await app.close();
     process.exit(0);
   };

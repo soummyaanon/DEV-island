@@ -100,6 +100,16 @@ export function mapClaudeHook(
       };
 
     case "PreToolUse":
+      // AskUserQuestion means Claude is blocked on the human — attention state.
+      if (payload.tool_name === "AskUserQuestion") {
+        return {
+          ...base,
+          type: "notification",
+          title: "Claude asks a question",
+          detail: prune({ tool_name: payload.tool_name, tool_input: payload.tool_input }),
+          requires_action: true,
+        };
+      }
       return {
         ...base,
         type: "tool_use",
