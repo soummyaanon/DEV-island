@@ -24,6 +24,15 @@ const api = {
 
   getUsage: (): Promise<AgentUsage[]> => ipcRenderer.invoke("agent-island:get-usage"),
 
+  /** Window geometry: `inset` = px between window top and the notch's bottom line. */
+  getLayout: (): Promise<{ inset: number }> => ipcRenderer.invoke("agent-island:get-layout"),
+
+  onLayout: (cb: (layout: { inset: number }) => void): (() => void) => {
+    const listener = (_e: unknown, layout: { inset: number }) => cb(layout);
+    ipcRenderer.on("agent-island:layout", listener);
+    return () => ipcRenderer.removeListener("agent-island:layout", listener);
+  },
+
   onUsage: (cb: (usage: AgentUsage[]) => void): (() => void) => {
     const listener = (_e: unknown, usage: AgentUsage[]) => cb(usage);
     ipcRenderer.on("agent-island:usage", listener);

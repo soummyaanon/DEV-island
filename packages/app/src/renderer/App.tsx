@@ -49,6 +49,15 @@ export function App() {
     return () => window.clearInterval(id);
   }, []);
 
+  // Hug geometry: main measures where the window really sits and tells us how
+  // many px separate the window top from the notch's bottom line.
+  useEffect(() => {
+    const apply = (l: { inset: number }) =>
+      document.documentElement.style.setProperty("--notch-inset", `${l.inset}px`);
+    void window.agentIsland.getLayout().then(apply);
+    return window.agentIsland.onLayout(apply);
+  }, []);
+
   // The window is click-through with forwarded mouse-move; detect when the
   // pointer is over the island and expand. Leaving collapses (unless pinned).
   useEffect(() => {
@@ -91,16 +100,20 @@ export function App() {
         }`}
         onClick={() => setPinned((v) => !v)}
       >
-        <div className="pill">
-          <span
-            className={`sprite ${dominant ? `state-${dominant.state}` : connected ? "idle" : "offline"}`}
-          >
-            <PixelSprite size={15} />
+        {/* Collapsed: content lives in the wings BESIDE the notch (iPhone island). */}
+        <div className={`pill ${dominant ? `state-${dominant.state}` : connected ? "idle" : "offline"}`}>
+          <span className="sprite">
+            <PixelSprite size={16} />
           </span>
-          <span className="pill-activity">
-            {dominant ? dominant.title : connected ? "no sessions" : "waiting for daemon"}
+          <span className="pill-right">
+            {attention.length > 0 && <span className="pill-alert">{attention.length}</span>}
+            <span className={`eq${active.length > 0 ? " live" : ""}`}>
+              <i />
+              <i />
+              <i />
+              <i />
+            </span>
           </span>
-          {active.length > 0 && <span className="pill-badge">{active.length}</span>}
         </div>
 
         <div className="panel-wrap">

@@ -1,9 +1,9 @@
-import { BrowserWindow, screen } from "electron";
+import { BrowserWindow, ipcMain, screen } from "electron";
 import { join } from "node:path";
 
 /** Overlay window size (logical px). Wide/tall enough for the expanded panel. */
 const WIN_WIDTH = 460;
-const WIN_HEIGHT = 360;
+const WIN_HEIGHT = 400;
 
 /**
  * The Dynamic Island overlay: a transparent, always-on-top, click-through window
@@ -11,6 +11,12 @@ const WIN_HEIGHT = 360;
  * draws the pill/panel; everything else is transparent. Mouse events are ignored
  * (but forwarded) so the desktop stays clickable — the renderer flips
  * interactivity on when the pointer is over the pill.
+ *
+ * Hug geometry: we ask for y = screen top, then MEASURE where macOS actually
+ * placed the window. The renderer receives `inset` = distance from the window's
+ * top to the menu bar's bottom edge (the notch's bottom line) and pads the
+ * capsule by exactly that much — so the black body merges with the notch and
+ * the content starts flush under it, on any display, no magic numbers.
  */
 export function createNotchWindow(): BrowserWindow {
   const primary = screen.getPrimaryDisplay();
@@ -51,6 +57,29 @@ export function createNotchWindow(): BrowserWindow {
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   // Start click-through; renderer toggles this when the pointer is over the pill.
   win.setIgnoreMouseEvents(true, { forward: true });
+
+  const layout = () => {
+    // Menu bar bottom (= the notch's bottom line) relative to where the window
+    // actually ended up. macOS sometimes nudges non-focusable overlay windows,
+    // so measure rather than assume.
+    const actualY = win.getBounds().y;
+    const menuBarBottom = primary.workArea.y;
+    return { inset: Math.max(0, menuBarBottom - actualY) };
+  };
+
+  const pushLayout = () => {
+    // Re-assert the requested position (macOS can shift it on show), then tell
+    // the renderer the real geometry.
+    win.setPosition(x, y);
+    win.webContents.send("agent-island:layout", layout());
+  };
+
+  ipcMain.handle("agent-island:get-layout", () => layout());
+  win.webContents.on("did-finish-load", () => {
+    pushLayout();
+    // Once more after the window settles — the first show can reposition it.
+    setTimeout(pushLayout, 400);
+  });
 
   if (process.env.ELECTRON_RENDERER_URL) {
     win.loadURL(process.env.ELECTRON_RENDERER_URL);

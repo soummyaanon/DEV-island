@@ -45,74 +45,74 @@ body {
   padding-top: 0;
 }
 
-/* ---- The island ---- */
+/* ---- The island: wraps AROUND the notch (iPhone Dynamic Island) ----
+   Solid black shape, wider than the notch, flush with the screen top, dipping
+   just below the notch line with large rounded corners. Content sits in the
+   wings beside the notch — never under it. */
 .island {
-  width: 234px;
-  /* Pull the flat top up under the notch's bottom edge so it hugs, not floats. */
-  margin-top: -18px;
-  background: var(--bg);
-  border: 1px solid var(--edge);
-  border-top-color: var(--edge-top);
-  border-radius: 0 0 20px 20px;
-  box-shadow:
-    0 12px 34px rgba(0, 0, 0, 0.55),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  backdrop-filter: blur(22px) saturate(1.3);
-  -webkit-backdrop-filter: blur(22px) saturate(1.3);
+  width: 404px;
+  background: rgb(6, 6, 8);
+  border-radius: 0 0 24px 24px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
   overflow: hidden;
   transition:
-    width 0.34s var(--ease),
-    border-radius 0.34s var(--ease);
+    width 0.32s var(--ease),
+    border-radius 0.32s var(--ease);
   will-change: width;
 }
 
 .island.expanded {
-  width: 344px;
-  border-radius: 0 0 22px 22px;
+  width: 440px;
+  border-radius: 0 0 28px 28px;
 }
 
-/* ---- Collapsed pill: pixel sprite + activity + count ---- */
+/* ---- Collapsed: wings beside the notch ----
+   The row spans the notch band (measured at runtime) plus a small chin below
+   it; space-between pushes the sprite into the left wing and the equalizer
+   into the right wing, leaving the notch's center untouched. */
 .pill {
-  height: 32px;
+  height: calc(var(--notch-inset, 38px) + 10px);
+  min-height: 34px;
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 0 12px;
+  justify-content: space-between;
+  padding: 0 20px 5px;
+  color: var(--idle);
+}
+.pill.state-working {
+  color: var(--working);
+}
+.pill.state-starting {
+  color: var(--starting);
+}
+.pill.state-waiting-for-approval {
+  color: var(--waiting);
+}
+.pill.state-done {
+  color: var(--done);
+}
+.pill.state-failed {
+  color: var(--failed);
+}
+.pill.offline {
+  color: var(--failed);
+}
+.pill.offline .sprite {
+  opacity: 0.5;
+  animation: none;
+}
+.pill.idle .sprite {
+  animation: none;
 }
 
 .sprite {
   flex: none;
   display: flex;
   align-items: center;
-  color: var(--idle);
   animation: sprite-glow 2.4s var(--ease) infinite;
 }
 .sprite .pixel-sprite {
   display: block;
-}
-.sprite.state-working {
-  color: var(--done);
-}
-.sprite.state-starting {
-  color: var(--starting);
-}
-.sprite.state-waiting-for-approval {
-  color: var(--waiting);
-}
-.sprite.state-done {
-  color: var(--done);
-}
-.sprite.state-failed {
-  color: var(--failed);
-}
-.sprite.idle {
-  color: var(--idle);
-  animation: none;
-}
-.sprite.offline {
-  color: var(--failed);
-  opacity: 0.55;
-  animation: none;
 }
 
 /* The "spark": the sprite breathes a soft glow in its state color. */
@@ -122,33 +122,64 @@ body {
     filter: drop-shadow(0 0 1px currentColor);
   }
   50% {
-    filter: drop-shadow(0 0 5px currentColor);
+    filter: drop-shadow(0 0 6px currentColor);
   }
 }
 
-.pill-activity {
-  flex: 1;
-  min-width: 0;
-  font-size: 12px;
-  color: var(--text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.pill-right {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 9px;
 }
 
-.pill-badge {
-  flex: none;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-dim);
+.pill-alert {
+  font-size: 10.5px;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 6px;
-  padding: 1px 7px;
-}
-.island.attention .pill-badge {
   color: var(--waiting);
-  background: rgba(255, 176, 32, 0.16);
+  background: rgba(255, 176, 32, 0.18);
+  border-radius: 7px;
+  padding: 1px 6px;
+}
+
+/* 8-bit equalizer in the right wing — dances while an agent is working. */
+.eq {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 13px;
+}
+.eq i {
+  width: 3px;
+  height: 13px;
+  border-radius: 1px;
+  background: currentColor;
+  transform: scaleY(0.22);
+  transform-origin: bottom;
+}
+.eq.live i {
+  animation: eq-dance 0.9s ease-in-out infinite alternate;
+}
+.eq.live i:nth-child(1) {
+  animation-delay: 0s;
+}
+.eq.live i:nth-child(2) {
+  animation-delay: 0.22s;
+}
+.eq.live i:nth-child(3) {
+  animation-delay: 0.09s;
+}
+.eq.live i:nth-child(4) {
+  animation-delay: 0.31s;
+}
+@keyframes eq-dance {
+  from {
+    transform: scaleY(0.2);
+  }
+  to {
+    transform: scaleY(1);
+  }
 }
 
 /* ---- Status dots ---- */
