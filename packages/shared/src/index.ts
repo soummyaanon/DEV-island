@@ -7,4 +7,5 @@ export * from "./session-state";
 export * from "./agent-event";
 export * from "./pending-approval";
 export * from "./session-snapshot";
+export * from "./usage";
 export * from "./wire-protocol";

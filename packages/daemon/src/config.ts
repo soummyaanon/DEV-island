@@ -16,6 +16,10 @@ export interface DaemonConfig {
   heartbeatMs: number;
   /** How long to hold a permission hook waiting for a notch decision. */
   approvalHoldMs: number;
+  /** Codex home dir (for reading rollout usage). */
+  codexHome: string;
+  /** How often to refresh account usage/quota. */
+  usagePollMs: number;
 }
 
 function intFromEnv(name: string, fallback: number): number {
@@ -38,5 +42,7 @@ export function loadConfig(): DaemonConfig {
     ringBufferSize: intFromEnv("AGENT_ISLAND_RING_SIZE", 500),
     heartbeatMs: intFromEnv("AGENT_ISLAND_HEARTBEAT_MS", 30_000),
     approvalHoldMs: intFromEnv("AGENT_ISLAND_APPROVAL_HOLD_MS", 110_000),
+    codexHome: process.env.CODEX_HOME ?? join(homedir(), ".codex"),
+    usagePollMs: intFromEnv("AGENT_ISLAND_USAGE_POLL_MS", 45_000),
   };
 }

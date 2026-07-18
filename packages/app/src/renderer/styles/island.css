@@ -445,6 +445,83 @@ body {
   border-color: rgba(255, 95, 86, 0.4);
 }
 
+/* ---- Usage footer ---- */
+.usage {
+  margin: 2px 9px 4px;
+  padding: 9px 10px 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+.usage-agent {
+  margin-bottom: 6px;
+}
+.usage-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.usage-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.usage-credits {
+  font-size: 10px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.usage-window {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 3px 0;
+}
+.usage-wlabel {
+  font-size: 10px;
+  color: var(--text-dim);
+  width: 42px;
+  flex: none;
+}
+.usage-bar {
+  flex: 1;
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+.usage-fill {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.4s var(--ease);
+}
+.usage-fill.ok {
+  background: var(--done);
+}
+.usage-fill.warn {
+  background: var(--waiting);
+}
+.usage-fill.low {
+  background: var(--failed);
+}
+.usage-pct {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  width: 30px;
+  text-align: right;
+}
+.usage-reset {
+  font-size: 9.5px;
+  color: var(--text-dim);
+  width: 62px;
+  text-align: right;
+  flex: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .island,
   .panel-wrap {

@@ -12,6 +12,8 @@ export function registerUiRoutes(app: FastifyInstance, hub: EventHub): void {
 
   app.get("/sessions", () => ({ sessions: hub.sessions() }));
 
+  app.get("/usage", () => ({ usage: hub.getUsage() }));
+
   app.get<{ Querystring: { limit?: string } }>("/events", (request) => {
     const raw = request.query.limit;
     const parsed = raw === undefined ? undefined : Number(raw);

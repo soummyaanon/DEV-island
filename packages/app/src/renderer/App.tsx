@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { SessionSnapshot } from "@agent-island/shared";
+import type { AgentUsage, SessionSnapshot } from "@agent-island/shared";
 import { SessionRow, StatusDot } from "./SessionRow";
 import { ApprovalCard } from "./ApprovalCard";
+import { UsageFooter } from "./UsageFooter";
 
 const ACTIVE_STATES = new Set(["working", "starting", "waiting-for-approval"]);
 const MAX_ROWS = 6;
 
 export function App() {
   const [sessions, setSessions] = useState<SessionSnapshot[]>([]);
+  const [usage, setUsage] = useState<AgentUsage[]>([]);
   const [connected, setConnected] = useState(false);
   const [hovering, setHovering] = useState(false);
   const [pinned, setPinned] = useState(false);
@@ -31,9 +33,12 @@ export function App() {
       setConnected(p.connected);
     });
     const offToggle = window.agentIsland.onToggle(() => setPinned((v) => !v));
+    void window.agentIsland.getUsage().then(setUsage);
+    const offUsage = window.agentIsland.onUsage(setUsage);
     return () => {
       offSessions();
       offToggle();
+      offUsage();
     };
   }, []);
 
@@ -127,6 +132,7 @@ export function App() {
                 <li className="empty">{connected ? "no sessions yet" : "waiting for daemon…"}</li>
               )}
             </ul>
+            <UsageFooter usage={usage} now={now} />
           </div>
         </div>
       </div>

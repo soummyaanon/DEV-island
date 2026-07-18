@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { ApprovalDecision, SessionSnapshot } from "@agent-island/shared";
+import type { AgentUsage, ApprovalDecision, SessionSnapshot } from "@agent-island/shared";
 
 export interface SessionsPayload {
   sessions: SessionSnapshot[];
@@ -20,6 +20,14 @@ const api = {
     const listener = () => cb();
     ipcRenderer.on("agent-island:toggle", listener);
     return () => ipcRenderer.removeListener("agent-island:toggle", listener);
+  },
+
+  getUsage: (): Promise<AgentUsage[]> => ipcRenderer.invoke("agent-island:get-usage"),
+
+  onUsage: (cb: (usage: AgentUsage[]) => void): (() => void) => {
+    const listener = (_e: unknown, usage: AgentUsage[]) => cb(usage);
+    ipcRenderer.on("agent-island:usage", listener);
+    return () => ipcRenderer.removeListener("agent-island:usage", listener);
   },
 
   /** Flip window click-through: true = capture mouse, false = pass through. */

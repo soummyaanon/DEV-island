@@ -29,6 +29,7 @@ if (!app.requestSingleInstanceLock()) {
       notch?.webContents.send("agent-island:sessions", { sessions, connected });
       if (tray) updateTrayTitle(tray, sessions);
     });
+    daemon.onUsage((usage) => notch?.webContents.send("agent-island:usage", usage));
     daemon.start();
 
     // Renderer pulls initial state on mount (it may load after the first push).
@@ -36,6 +37,7 @@ if (!app.requestSingleInstanceLock()) {
       sessions: daemon.list(),
       connected: daemon.isConnected(),
     }));
+    ipcMain.handle("agent-island:get-usage", () => daemon.getUsage());
 
     // Renderer toggles click-through as the pointer enters/leaves the pill.
     ipcMain.on("agent-island:set-interactive", (_e, interactive: boolean) => {

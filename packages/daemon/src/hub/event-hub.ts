@@ -3,6 +3,7 @@ import {
   sessionKey,
   type AgentEvent,
   type AgentKind,
+  type AgentUsage,
   type ApprovalDecision,
   type EventInput,
   type PendingApproval,
@@ -25,6 +26,7 @@ export class EventHub {
   private readonly log: EventLog;
   private readonly subscribers = new Set<Subscriber>();
   private readonly approvals = new ApprovalRegistry();
+  private usage: AgentUsage[] = [];
 
   constructor(
     ringBufferSize: number,
@@ -53,13 +55,24 @@ export class EventHub {
     return { event, session };
   }
 
-  /** Register a subscriber; immediately sends the current snapshot. */
+  /** Register a subscriber; immediately sends the current snapshot + usage. */
   subscribe(fn: Subscriber): () => void {
     this.subscribers.add(fn);
     fn({ type: "snapshot", sessions: this.registry.list() });
+    if (this.usage.length > 0) fn({ type: "usage", usage: this.usage });
     return () => {
       this.subscribers.delete(fn);
     };
+  }
+
+  /** Update account usage/quota and fan it out. */
+  setUsage(usage: AgentUsage[]): void {
+    this.usage = usage;
+    this.broadcast({ type: "usage", usage });
+  }
+
+  getUsage(): AgentUsage[] {
+    return this.usage;
   }
 
   /** Push a message to every subscriber; a throwing subscriber is dropped. */
