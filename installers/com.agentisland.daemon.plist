@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Reference template. install-daemon.sh writes a resolved copy (with real
+  absolute paths) to ~/Library/LaunchAgents/com.agentisland.daemon.plist.
+  Placeholders: {{NODE_BIN}}, {{DAEMON_DIR}}, {{LOG_DIR}}.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.agentisland.daemon</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>{{NODE_BIN}}</string>
+    <string>{{DAEMON_DIR}}/dist/main.js</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>{{DAEMON_DIR}}</string>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>{{LOG_DIR}}/daemon.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>{{LOG_DIR}}/daemon.err.log</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>NODE_ENV</key>
+    <string>production</string>
+  </dict>
+</dict>
+</plist>

@@ -1,2 +1,9 @@
-// @agent-island/shared — event schemas and wire types (stub; implement later)
-export {};
+// @agent-island/shared — canonical event schemas and wire types.
+// Single source of truth: the daemon validates against these at its edges and
+// the app trusts the decoded types. Keep this the only place the contract lives.
+
+export * from "./agent-kind";
+export * from "./session-state";
+export * from "./agent-event";
+export * from "./session-snapshot";
+export * from "./wire-protocol";
