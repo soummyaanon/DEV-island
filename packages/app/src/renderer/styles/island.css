@@ -45,78 +45,131 @@ body {
   padding-top: 0;
 }
 
-/* ---- The island: wraps AROUND the notch (iPhone Dynamic Island) ----
-   Solid black shape, wider than the notch, flush with the screen top, dipping
-   just below the notch line with large rounded corners. Content sits in the
-   wings beside the notch — never under it. */
-/* Wrapper so the concave ears can live OUTSIDE the clipped body. */
-.island-wrap {
-  position: relative;
-}
+/* ---- The island ----
+   Collapsed: invisible — only two black chips peek out at the notch's bottom
+   corners (the island is "hidden behind" the notch; the camera zone stays
+   clear). Expanded: the full black panel springs out from under the notch. */
 
 /* Spring-ish width easing (approximates spring(response .35, damping .75)). */
 :root {
   --spring: cubic-bezier(0.34, 1.2, 0.64, 1);
 }
 
-.island {
-  /* Exactly the notch's width, flush under it: macOS clamps every Electron
-     window (even panels — measured windowY == menuBarBottom) below the menu
-     bar, so the seamless look is a chin growing straight out of the notch,
-     with the ears flaring at the notch's own bottom corners. PURE black. */
-  width: 196px;
-  background: #000;
-  border-radius: 0 0 18px 18px;
-  overflow: hidden;
-  /* Downward-biased ambient glow: fuses the chin into the notch so the seam
-     reads as the island emanating light, not a misaligned window. */
-  box-shadow:
-    0 4px 14px rgba(0, 0, 0, 0.55),
-    0 6px 22px -4px rgba(255, 255, 255, 0.07);
-  transition:
-    width 0.34s var(--spring),
-    border-radius 0.34s var(--spring),
-    box-shadow 0.5s ease;
+.island-wrap {
+  position: relative;
+  width: 196px; /* the notch's width — also the collapsed hover zone */
+  min-height: 30px;
+  color: var(--idle);
+  transition: width 0.34s var(--spring);
   will-change: width;
 }
-
-.island.expanded {
+.island-wrap.expanded {
   width: 400px;
-  border-radius: 0 0 26px 26px;
 }
 
-/* State-colored edge glow. */
-.island:has(.pill.state-working) {
+/* State color: chips, sprite and equalizer all inherit it. */
+.island-wrap.state-working {
+  color: var(--working);
+}
+.island-wrap.state-starting {
+  color: var(--starting);
+}
+.island-wrap.state-waiting-for-approval {
+  color: var(--waiting);
+}
+.island-wrap.state-done {
+  color: var(--done);
+}
+.island-wrap.state-failed {
+  color: var(--failed);
+}
+.island-wrap.offline {
+  color: var(--failed);
+}
+.island-wrap.offline .sprite,
+.island-wrap.idle .sprite {
+  animation: none;
+}
+.island-wrap.offline .sprite {
+  opacity: 0.5;
+}
+
+/* ---- Corner chips (collapsed state) ----
+   Little black tabs at the notch's bottom corners, glowing their state color —
+   light leaking out from behind the notch. */
+.chip {
+  position: absolute;
+  top: 0;
+  z-index: 2;
+  height: 25px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 9px 2px;
+  background: #000;
+  border-radius: 0 0 11px 11px;
   box-shadow:
-    0 4px 14px rgba(0, 0, 0, 0.5),
-    0 7px 26px -3px rgba(91, 168, 255, 0.35);
+    0 3px 10px rgba(0, 0, 0, 0.5),
+    0 4px 14px -2px currentColor;
+  transition:
+    opacity 0.16s ease,
+    transform 0.28s var(--spring);
 }
-.island:has(.pill.state-done) {
-  box-shadow:
-    0 4px 14px rgba(0, 0, 0, 0.5),
-    0 7px 26px -3px rgba(78, 203, 141, 0.3);
+.chip-l {
+  left: 0;
 }
-.island:has(.pill.state-failed) {
-  box-shadow:
-    0 4px 14px rgba(0, 0, 0, 0.5),
-    0 7px 26px -3px rgba(255, 95, 86, 0.35);
+.chip-r {
+  right: 0;
 }
-/* Needs-you: the whole island breathes amber. */
-.island.attention {
-  animation: glow-breathe 1.7s var(--ease) infinite;
+.island-wrap.expanded .chip {
+  opacity: 0;
+  transform: translateY(-12px);
+  pointer-events: none;
 }
-@keyframes glow-breathe {
+/* Needs-you: the chips breathe amber. */
+.island-wrap.attention:not(.expanded) .chip {
+  animation: chip-breathe 1.6s var(--ease) infinite;
+}
+@keyframes chip-breathe {
   0%,
   100% {
     box-shadow:
-      0 4px 14px rgba(0, 0, 0, 0.5),
-      0 6px 22px -3px rgba(255, 176, 32, 0.28);
+      0 3px 10px rgba(0, 0, 0, 0.5),
+      0 4px 12px -2px rgba(255, 176, 32, 0.45);
   }
   50% {
     box-shadow:
-      0 4px 14px rgba(0, 0, 0, 0.5),
-      0 10px 38px 0 rgba(255, 176, 32, 0.55);
+      0 3px 10px rgba(0, 0, 0, 0.5),
+      0 7px 24px 0 rgba(255, 176, 32, 0.75);
   }
+}
+
+/* ---- Expanded body ---- */
+.body {
+  position: relative;
+  opacity: 0;
+  transform: translateY(-10px);
+  pointer-events: none;
+  transition:
+    opacity 0.18s ease,
+    transform 0.3s var(--spring);
+}
+.body.open {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+
+.island {
+  width: 100%;
+  background: #000;
+  border-radius: 0 0 26px 26px;
+  overflow: hidden;
+  padding-top: 8px;
+  /* Downward-biased ambient glow, fusing the panel into the notch. */
+  box-shadow:
+    0 4px 14px rgba(0, 0, 0, 0.55),
+    0 8px 28px -4px rgba(255, 255, 255, 0.08);
 }
 
 /* Concave top "ears" (quad-Bezier r=10 in the reference — a radial-gradient
@@ -136,47 +189,6 @@ body {
 .ear-r {
   right: -10px;
   background: radial-gradient(circle 10px at 10px 10px, transparent 9.5px, #000 10px);
-}
-
-/* ---- Collapsed: wings beside the notch ----
-   The row spans the notch band (measured at runtime) plus a small chin below
-   it; space-between pushes the sprite into the left wing and the equalizer
-   into the right wing, leaving the notch's center untouched. */
-.pill {
-  /* Spans the notch band (measured at runtime) + a 10px chin. Content sits in
-     the wings BESIDE the notch; the center stays empty for the camera. */
-  height: calc(var(--notch-inset, 38px) + 10px);
-  min-height: 34px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 13px 4px;
-  color: var(--idle);
-}
-.pill.state-working {
-  color: var(--working);
-}
-.pill.state-starting {
-  color: var(--starting);
-}
-.pill.state-waiting-for-approval {
-  color: var(--waiting);
-}
-.pill.state-done {
-  color: var(--done);
-}
-.pill.state-failed {
-  color: var(--failed);
-}
-.pill.offline {
-  color: var(--failed);
-}
-.pill.offline .sprite {
-  opacity: 0.5;
-  animation: none;
-}
-.pill.idle .sprite {
-  animation: none;
 }
 
 .sprite {
@@ -318,7 +330,7 @@ body {
   grid-template-rows: 0fr;
   transition: grid-template-rows 0.34s var(--ease);
 }
-.island.expanded .panel-wrap {
+.body.open .panel-wrap {
   grid-template-rows: 1fr;
 }
 .panel {
@@ -363,7 +375,7 @@ body {
   transition: background 0.15s ease;
   cursor: pointer;
 }
-.island.expanded .row {
+.body.open .row {
   animation: rowin 0.4s var(--ease) both;
 }
 @keyframes rowin {
@@ -747,7 +759,7 @@ body {
     transition: none;
   }
   .dot::after,
-  .island.expanded .row {
+  .body.open .row {
     animation: none;
   }
 }
