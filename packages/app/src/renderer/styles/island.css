@@ -82,6 +82,14 @@ body {
   border-radius: 0 0 26px 26px;
 }
 
+/* Naturally minimal: with no sessions at all, shrink to exactly the notch's
+   width — black-on-black, fully hidden behind the hardware. The wings (and
+   the sprite/equalizer in them) slide out only when agents exist. Hovering
+   the notch still expands the panel. */
+.island.bare:not(.expanded) {
+  width: 196px;
+}
+
 /* Concave top "ears" (quad-Bezier r=10 in the reference — a radial-gradient
    inverse corner is the CSS equivalent). They flare the top edge outward so
    the shape blends into the notch instead of butting against it. */

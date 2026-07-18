@@ -143,7 +143,7 @@ export function App() {
         <div
           className={`island ${stateCls}${expanded ? " expanded" : ""}${
             attention.length || pending.length ? " attention" : ""
-          }`}
+          }${sessions.length === 0 ? " bare" : ""}`}
         >
         {/* The row spans the notch band: sprite + equalizer live in the wings
             BESIDE the physical notch (true Dynamic Island). */}
