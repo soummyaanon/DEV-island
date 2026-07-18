@@ -20,6 +20,8 @@ export interface DaemonConfig {
   codexHome: string;
   /** How often to refresh account usage/quota. */
   usagePollMs: number;
+  /** Only show Codex usage if its rollout was written within this window ("in use"). */
+  codexActiveMs: number;
 }
 
 function intFromEnv(name: string, fallback: number): number {
@@ -44,5 +46,6 @@ export function loadConfig(): DaemonConfig {
     approvalHoldMs: intFromEnv("AGENT_ISLAND_APPROVAL_HOLD_MS", 110_000),
     codexHome: process.env.CODEX_HOME ?? join(homedir(), ".codex"),
     usagePollMs: intFromEnv("AGENT_ISLAND_USAGE_POLL_MS", 45_000),
+    codexActiveMs: intFromEnv("AGENT_ISLAND_CODEX_ACTIVE_MS", 600_000), // 10 min
   };
 }

@@ -20,7 +20,7 @@ async function main(): Promise<void> {
   // Poll Codex account usage from local rollout logs (no network).
   const refreshUsage = async (): Promise<void> => {
     try {
-      const usage = await readCodexUsage(config.codexHome);
+      const usage = await readCodexUsage(config.codexHome, config.codexActiveMs);
       hub.setUsage(usage ? [usage] : []);
     } catch (err) {
       app.log.warn(`usage refresh failed: ${String(err)}`);

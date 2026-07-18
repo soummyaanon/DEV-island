@@ -20,25 +20,21 @@ async function collectRollouts(dir: string, out: string[]): Promise<void> {
 }
 
 /** Most-recently-modified rollout file under $CODEX_HOME/sessions (the active one). */
-async function newestRollout(sessionsDir: string): Promise<string | null> {
+async function newestRollout(sessionsDir: string): Promise<{ path: string; mtimeMs: number } | null> {
   const files: string[] = [];
   await collectRollouts(sessionsDir, files);
   if (files.length === 0) return null;
 
-  let bestPath: string | null = null;
-  let bestMtime = -1;
+  let best: { path: string; mtimeMs: number } | null = null;
   for (const f of files) {
     try {
       const s = await stat(f);
-      if (s.mtimeMs > bestMtime) {
-        bestMtime = s.mtimeMs;
-        bestPath = f;
-      }
+      if (!best || s.mtimeMs > best.mtimeMs) best = { path: f, mtimeMs: s.mtimeMs };
     } catch {
       /* ignore unreadable file */
     }
   }
-  return bestPath;
+  return best;
 }
 
 function labelForWindow(minutes: unknown): string {
@@ -66,11 +62,15 @@ function toWindow(w: RawWindow | null | undefined): UsageWindow | null {
 
 /**
  * Read Codex's account quota from the newest rollout log's last `token_count`
- * event. Fully local — no network, no auth. Returns null if nothing is found.
+ * event. Fully local — no network, no auth. Returns null when nothing is found,
+ * or when Codex hasn't been used within `activeMs` (so we only surface usage
+ * while it's actually in use rather than showing stale quota indefinitely).
  */
-export async function readCodexUsage(codexHome: string): Promise<AgentUsage | null> {
-  const file = await newestRollout(join(codexHome, "sessions"));
-  if (!file) return null;
+export async function readCodexUsage(codexHome: string, activeMs: number): Promise<AgentUsage | null> {
+  const newest = await newestRollout(join(codexHome, "sessions"));
+  if (!newest) return null;
+  if (Date.now() - newest.mtimeMs > activeMs) return null; // not in use recently
+  const file = newest.path;
 
   let content: string;
   try {
