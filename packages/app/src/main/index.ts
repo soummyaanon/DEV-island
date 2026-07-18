@@ -10,6 +10,11 @@ import { jumpToTerminal } from "./jump-back";
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
+  // Memory: drop the GPU process — macOS software-composites the transparent
+  // overlay fine — and cap V8 heap growth across the app.
+  app.disableHardwareAcceleration();
+  app.commandLine.appendSwitch("js-flags", "--max-old-space-size=96");
+
   let notch: BrowserWindow | null = null;
   let tray: Tray | null = null;
   const daemon = new DaemonClient();

@@ -35,7 +35,8 @@ export async function ensureDaemon(): Promise<void> {
     return;
   }
   const path = daemonPath();
-  proc = utilityProcess.fork(path);
+  // Cap the daemon's V8 heap — it only holds recent events + session state.
+  proc = utilityProcess.fork(path, [], { execArgv: ["--max-old-space-size=48"] });
   proc.on("exit", (code) => {
     console.log(`[daemon-manager] daemon exited (code ${code})`);
     proc = null;

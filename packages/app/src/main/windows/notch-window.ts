@@ -39,6 +39,10 @@ export function createNotchWindow(): BrowserWindow {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      // Trim renderer features this overlay never uses.
+      spellcheck: false,
+      webgl: false,
+      backgroundThrottling: true,
     },
   });
 
