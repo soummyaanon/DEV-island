@@ -16,6 +16,54 @@ const SLUG_TO_EVENT: Record<string, string> = {
 /** Notification types that mean "the human needs to act". */
 const ATTENTION_NOTIFICATIONS = new Set(["permission_prompt", "idle_prompt"]);
 
+function truncate(s: string, max: number): string {
+  const clean = s.replace(/\s+/g, " ").trim();
+  return clean.length > max ? `${clean.slice(0, max - 1)}…` : clean;
+}
+
+function basename(p: string): string {
+  return p.split("/").filter(Boolean).pop() ?? p;
+}
+
+/** A human "what it's doing right now" line, derived from the tool + its input. */
+function describeAction(tool: string | undefined, input: Record<string, unknown> | undefined): string {
+  const t = tool ?? "tool";
+  const str = (k: string): string | undefined =>
+    typeof input?.[k] === "string" ? (input[k] as string) : undefined;
+
+  switch (t) {
+    case "Bash": {
+      const cmd = str("command");
+      return cmd ? `Running ${truncate(cmd, 44)}` : "Running command";
+    }
+    case "Read": {
+      const f = str("file_path");
+      return f ? `Reading ${basename(f)}` : "Reading";
+    }
+    case "Edit":
+    case "MultiEdit":
+    case "Write": {
+      const f = str("file_path");
+      return f ? `Editing ${basename(f)}` : "Editing";
+    }
+    case "Grep": {
+      const p = str("pattern");
+      return p ? `Searching for ${truncate(p, 22)}` : "Searching";
+    }
+    case "Glob":
+      return "Finding files";
+    case "Task":
+      return "Delegating to a subagent";
+    case "WebFetch":
+    case "WebSearch":
+      return "Searching the web";
+    case "TodoWrite":
+      return "Updating the plan";
+    default:
+      return t;
+  }
+}
+
 /** Prefer the payload's own event name; fall back to the URL slug. */
 export function resolveHookEventName(slug: string, payload: ClaudeHookPayload): string {
   const fromBody = payload.hook_event_name?.trim();
@@ -55,7 +103,7 @@ export function mapClaudeHook(
       return {
         ...base,
         type: "tool_use",
-        title: payload.tool_name ?? "tool call",
+        title: describeAction(payload.tool_name, payload.tool_input),
         detail: prune({ tool_name: payload.tool_name, tool_input: payload.tool_input }),
         requires_action: false,
       };
@@ -64,7 +112,7 @@ export function mapClaudeHook(
       return {
         ...base,
         type: "task_progress",
-        title: `${payload.tool_name ?? "tool"} finished`,
+        title: "working…",
         detail: prune({ tool_name: payload.tool_name, tool_response: payload.tool_response }),
         requires_action: false,
       };

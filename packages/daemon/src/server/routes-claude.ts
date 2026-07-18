@@ -71,6 +71,7 @@ export function registerClaudeRoutes(
       }
 
       const meta = terminalMeta(request.headers);
+      if (payload.permission_mode) meta.permission_mode = payload.permission_mode;
       if (Object.keys(meta).length > 0) {
         mapped.detail = { ...(mapped.detail ?? {}), _meta: meta };
       }
