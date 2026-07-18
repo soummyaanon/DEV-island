@@ -63,10 +63,11 @@ body {
 }
 
 .island {
-  /* COLLAPSED = a hairline glow hugging the notch's bottom edge — nothing
-     extends the notch. The black body exists only while expanded (hover or
-     needs-attention). Width = the notch's width. */
-  width: 196px;
+  /* COLLAPSED = a hairline glow hugging the notch's bottom edge, with the
+     sprite + equalizer floating just beneath it on pure transparency — no
+     black body until expanded (hover or needs-attention). Slightly wider than
+     the notch so the status is visible beside its corners. */
+  width: 244px;
   background: transparent;
   border-radius: 0 0 18px 18px;
   overflow: hidden;
@@ -166,23 +167,28 @@ body {
    it; space-between pushes the sprite into the left wing and the equalizer
    into the right wing, leaving the notch's center untouched. */
 .pill {
-  /* Hidden while collapsed (the glow line is the whole collapsed UI); appears
-     as the top row of the expanded panel: sprite left, equalizer right. */
-  height: 0;
-  opacity: 0;
+  /* Collapsed: a compact 20px strip right under the glow line — sprite left,
+     equalizer right, floating on transparency (no box). Expanded: grows into
+     the panel's 34px top row. */
+  height: 20px;
   overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 15px;
+  padding: 0 8px;
   color: var(--idle);
   transition:
     height 0.26s var(--spring),
-    opacity 0.2s ease;
+    padding 0.26s var(--spring);
 }
 .island.expanded .pill {
   height: 34px;
-  opacity: 1;
+  padding: 0 15px;
+}
+/* Contrast on bright wallpapers while floating on transparency. */
+.island:not(.expanded) .pill .sprite,
+.island:not(.expanded) .pill .eq {
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.85));
 }
 .pill.state-working {
   color: var(--working);
