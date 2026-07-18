@@ -1,5 +1,5 @@
 import WebSocket from "ws";
-import type { SessionSnapshot, WireMessage } from "@agent-island/shared";
+import type { ApprovalDecision, SessionSnapshot, WireMessage } from "@agent-island/shared";
 
 export type SessionsListener = (sessions: SessionSnapshot[], connected: boolean) => void;
 
@@ -19,6 +19,7 @@ const STATE_ORDER: Record<string, number> = {
  */
 export class DaemonClient {
   private readonly wsUrl: string;
+  private readonly httpBase: string;
   private ws: WebSocket | null = null;
   private sessions = new Map<string, SessionSnapshot>();
   private readonly listeners = new Set<SessionsListener>();
@@ -28,6 +29,20 @@ export class DaemonClient {
 
   constructor(host = "127.0.0.1", port = 7433) {
     this.wsUrl = `ws://${host}:${port}/stream`;
+    this.httpBase = `http://${host}:${port}`;
+  }
+
+  /** Resolve a held approval by POSTing the decision to the daemon. */
+  async resolveApproval(id: string, decision: ApprovalDecision): Promise<void> {
+    try {
+      await fetch(`${this.httpBase}/approvals/${id}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ decision }),
+      });
+    } catch (err) {
+      console.error("[approve] failed to send decision:", err);
+    }
   }
 
   start(): void {

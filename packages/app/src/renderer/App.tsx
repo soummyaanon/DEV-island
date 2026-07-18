@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { SessionSnapshot } from "@agent-island/shared";
 import { SessionRow, StatusDot } from "./SessionRow";
+import { ApprovalCard } from "./ApprovalCard";
 
 const ACTIVE_STATES = new Set(["working", "starting", "waiting-for-approval"]);
 const MAX_ROWS = 6;
@@ -15,7 +16,9 @@ export function App() {
   const islandRef = useRef<HTMLDivElement>(null);
   const interactiveRef = useRef(false);
 
-  const expanded = hovering || pinned;
+  const pending = useMemo(() => sessions.filter((s) => s.pending_approval), [sessions]);
+  // A pending approval demands attention: force the panel open and interactive.
+  const expanded = hovering || pinned || pending.length > 0;
 
   // Subscribe to session state from the main process.
   useEffect(() => {
@@ -76,7 +79,9 @@ export function App() {
     <div className="app">
       <div
         ref={islandRef}
-        className={`island${expanded ? " expanded" : ""}${attention.length ? " attention" : ""}`}
+        className={`island${expanded ? " expanded" : ""}${
+          attention.length || pending.length ? " attention" : ""
+        }`}
         onClick={() => setPinned((v) => !v)}
       >
         <div className="pill">
@@ -95,6 +100,13 @@ export function App() {
 
         <div className="panel-wrap">
           <div className="panel">
+            {pending.map((s) => (
+              <ApprovalCard
+                key={`ap-${s.key}`}
+                session={s}
+                onDecide={(id, decision) => window.agentIsland.approve(id, decision)}
+              />
+            ))}
             <header className="panel-head">
               <span className="wordmark">Agent Island</span>
               <span className="badge">

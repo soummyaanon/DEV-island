@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { SessionSnapshot } from "@agent-island/shared";
+import type { ApprovalDecision, SessionSnapshot } from "@agent-island/shared";
 
 export interface SessionsPayload {
   sessions: SessionSnapshot[];
@@ -28,6 +28,10 @@ const api = {
 
   /** Bring the session's terminal to the front. */
   jump: (session: SessionSnapshot): void => ipcRenderer.send("agent-island:jump", session),
+
+  /** Resolve a pending approval from the notch. */
+  approve: (id: string, decision: ApprovalDecision): void =>
+    ipcRenderer.send("agent-island:approve", { id, decision }),
 
   quit: (): void => ipcRenderer.send("agent-island:quit"),
 };

@@ -69,7 +69,7 @@
             "X-Term-Session-Id": "$TERM_SESSION_ID"
           },
           "allowedEnvVars": ["TERM_PROGRAM", "ITERM_SESSION_ID", "TERM_SESSION_ID"],
-          "timeout": 5
+          "timeout": 120
         }
       ]
     }

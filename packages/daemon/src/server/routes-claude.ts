@@ -15,6 +15,12 @@ function header(headers: IncomingHttpHeaders, name: string): string | undefined 
   return trimmed;
 }
 
+/** ExitPlanMode carries the plan text in tool_input.plan; surface it for review. */
+function extractPlan(input: Record<string, unknown> | undefined): string | undefined {
+  const plan = input?.plan;
+  return typeof plan === "string" && plan.trim() ? plan : undefined;
+}
+
 /** Terminal identity forwarded by the hook (via allowedEnvVars), for jump-to-terminal. */
 function terminalMeta(headers: IncomingHttpHeaders): Record<string, string> {
   const meta: Record<string, string> = {};
@@ -47,7 +53,7 @@ export function registerClaudeRoutes(
   app.post<{ Params: { hookEvent: string } }>(
     "/events/claude/:hookEvent",
     { preHandler: authGuard },
-    (request, reply) => {
+    async (request, reply) => {
       const parsed = ClaudeHookPayloadSchema.safeParse(request.body);
       if (!parsed.success) {
         request.log.warn({ issues: parsed.error.issues }, "unparseable claude hook payload");
@@ -70,6 +76,30 @@ export function registerClaudeRoutes(
       }
 
       hub.ingest(mapped);
+
+      // Interactive approval: hold the PermissionRequest open so the user can
+      // decide from the notch. Only when a UI is connected — otherwise fall back
+      // to Claude's own prompt immediately, so the session never hangs.
+      if (eventName === "PermissionRequest" && hub.subscriberCount() > 0) {
+        const outcome = await hub.requestApproval(
+          "claude-code",
+          payload.session_id,
+          payload.tool_name ?? "tool",
+          payload.tool_input ?? {},
+          extractPlan(payload.tool_input),
+        );
+        if (outcome === "allow" || outcome === "deny") {
+          return reply.code(200).send({
+            hookSpecificOutput: {
+              hookEventName: "PermissionRequest",
+              decision: { behavior: outcome },
+            },
+          });
+        }
+        // timeout → let Claude's normal permission flow take over
+        return reply.code(204).send();
+      }
+
       return reply.code(204).send();
     },
   );

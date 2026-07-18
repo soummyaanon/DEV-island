@@ -1,5 +1,5 @@
 import { app, BrowserWindow, ipcMain, type Tray } from "electron";
-import type { SessionSnapshot } from "@agent-island/shared";
+import type { ApprovalDecision, SessionSnapshot } from "@agent-island/shared";
 import { DaemonClient } from "./daemon-client";
 import { createNotchWindow } from "./windows/notch-window";
 import { createTray, updateTrayTitle } from "./tray";
@@ -39,6 +39,13 @@ if (!app.requestSingleInstanceLock()) {
     });
 
     ipcMain.on("agent-island:jump", (_e, session: SessionSnapshot) => jumpToTerminal(session));
+
+    ipcMain.on(
+      "agent-island:approve",
+      (_e, { id, decision }: { id: string; decision: ApprovalDecision }) => {
+        void daemon.resolveApproval(id, decision);
+      },
+    );
 
     ipcMain.on("agent-island:quit", () => app.quit());
   });

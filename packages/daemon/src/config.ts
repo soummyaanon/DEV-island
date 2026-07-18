@@ -14,6 +14,8 @@ export interface DaemonConfig {
   ringBufferSize: number;
   /** WebSocket keep-alive interval in milliseconds. */
   heartbeatMs: number;
+  /** How long to hold a permission hook waiting for a notch decision. */
+  approvalHoldMs: number;
 }
 
 function intFromEnv(name: string, fallback: number): number {
@@ -35,5 +37,6 @@ export function loadConfig(): DaemonConfig {
     strictAuth,
     ringBufferSize: intFromEnv("AGENT_ISLAND_RING_SIZE", 500),
     heartbeatMs: intFromEnv("AGENT_ISLAND_HEARTBEAT_MS", 30_000),
+    approvalHoldMs: intFromEnv("AGENT_ISLAND_APPROVAL_HOLD_MS", 110_000),
   };
 }
