@@ -33,6 +33,7 @@ export function createNotchWindow(): BrowserWindow {
     x,
     y,
     type: "panel",
+    enableLargerThanScreen: true,
     frame: false,
     transparent: true,
     backgroundColor: "#00000000",

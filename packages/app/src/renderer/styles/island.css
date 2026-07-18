@@ -63,79 +63,23 @@ body {
 }
 
 .island {
-  /* COLLAPSED = a hairline glow hugging the notch's bottom edge, with the
-     sprite + equalizer floating just beneath it on pure transparency — no
-     black body until expanded (hover or needs-attention). Slightly wider than
-     the notch so the status is visible beside its corners. */
-  width: 244px;
-  background: transparent;
-  border-radius: 0 0 18px 18px;
+  /* TRUE hug: the window sits at the very top of the screen
+     (enableLargerThanScreen), so this black shape starts BEHIND the physical
+     notch and merges with it. Wider than the notch — the wings beside it hold
+     the sprite and equalizer, iPhone Dynamic Island style. */
+  width: 284px;
+  background: #000;
+  border-radius: 0 0 20px 20px;
   overflow: hidden;
-  --line: rgba(255, 255, 255, 0.28);
   transition:
     width 0.34s var(--spring),
-    border-radius 0.34s var(--spring),
-    background-color 0.22s ease,
-    box-shadow 0.4s ease;
+    border-radius 0.34s var(--spring);
   will-change: width;
 }
 
 .island.expanded {
   width: 400px;
   border-radius: 0 0 26px 26px;
-  background: #000;
-  /* Downward-biased ambient glow, fusing the panel into the notch. */
-  box-shadow:
-    0 4px 14px rgba(0, 0, 0, 0.55),
-    0 7px 26px -3px var(--line);
-}
-
-/* State color for the glow line + expanded halo. */
-.island.state-working {
-  --line: rgba(91, 168, 255, 0.55);
-}
-.island.state-starting {
-  --line: rgba(143, 184, 255, 0.5);
-}
-.island.state-waiting-for-approval {
-  --line: rgba(255, 176, 32, 0.65);
-}
-.island.state-done {
-  --line: rgba(78, 203, 141, 0.55);
-}
-.island.state-failed,
-.island.offline {
-  --line: rgba(255, 95, 86, 0.55);
-}
-
-/* The hairline: a soft state-colored light along the notch's bottom edge. */
-.glowline {
-  display: block;
-  height: 3px;
-  width: 100%;
-  border-radius: 0 0 3px 3px;
-  background: linear-gradient(90deg, transparent 2%, var(--line) 22%, var(--line) 78%, transparent 98%);
-  box-shadow: 0 1px 8px var(--line);
-  transition: opacity 0.2s ease;
-}
-.island.expanded .glowline {
-  opacity: 0;
-  height: 0;
-}
-/* Needs-you: the line breathes amber while collapsed. */
-.island.attention:not(.expanded) .glowline {
-  animation: line-breathe 1.5s var(--ease) infinite;
-}
-@keyframes line-breathe {
-  0%,
-  100% {
-    box-shadow: 0 1px 6px var(--line);
-    opacity: 0.75;
-  }
-  50% {
-    box-shadow: 0 2px 16px 2px var(--line);
-    opacity: 1;
-  }
 }
 
 /* Concave top "ears" (quad-Bezier r=10 in the reference — a radial-gradient
@@ -147,11 +91,6 @@ body {
   width: 10px;
   height: 10px;
   pointer-events: none;
-  opacity: 0; /* ears belong to the expanded black shape only */
-  transition: opacity 0.2s ease;
-}
-.island-wrap:has(.island.expanded) .ear {
-  opacity: 1;
 }
 .ear-l {
   left: -10px;
@@ -167,28 +106,16 @@ body {
    it; space-between pushes the sprite into the left wing and the equalizer
    into the right wing, leaving the notch's center untouched. */
 .pill {
-  /* Collapsed: a compact 20px strip right under the glow line — sprite left,
-     equalizer right, floating on transparency (no box). Expanded: grows into
-     the panel's 34px top row. */
-  height: 20px;
-  overflow: hidden;
+  /* Spans the notch band (measured at runtime) + a small chin. Content sits
+     in the wings BESIDE the physical notch, vertically centered on the band;
+     the center stays under the camera. */
+  height: calc(var(--notch-inset, 33px) + 8px);
+  min-height: 34px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 8px;
+  padding: 0 17px 6px;
   color: var(--idle);
-  transition:
-    height 0.26s var(--spring),
-    padding 0.26s var(--spring);
-}
-.island.expanded .pill {
-  height: 34px;
-  padding: 0 15px;
-}
-/* Contrast on bright wallpapers while floating on transparency. */
-.island:not(.expanded) .pill .sprite,
-.island:not(.expanded) .pill .eq {
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.85));
 }
 .pill.state-working {
   color: var(--working);

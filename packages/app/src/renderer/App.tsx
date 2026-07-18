@@ -145,8 +145,8 @@ export function App() {
             attention.length || pending.length ? " attention" : ""
           }`}
         >
-        {/* Collapsed: nothing but a hairline state-glow hugging the notch edge. */}
-        <i className="glowline" aria-hidden />
+        {/* The row spans the notch band: sprite + equalizer live in the wings
+            BESIDE the physical notch (true Dynamic Island). */}
         <div className={`pill ${stateCls}`}>
           <span className="sprite">
             <PixelSprite size={16} />
