@@ -128,35 +128,45 @@ body {
   flex: none;
 }
 
-.pixel-viz {
-  width: 13px;
-  height: 9px;
-  display: flex;
-  align-items: flex-end;
-  gap: 2px;
+/* The crab animates like the arcade original: two frames, hard steps. */
+.pixel-sprite g.f2 {
+  opacity: 0;
 }
-.pixel-viz i {
-  width: 3px;
-  height: 3px;
-  background: currentColor;
-  transform-origin: bottom;
+.pixel-sprite.live g.f1 {
+  animation: crab-f1 0.7s steps(1, end) infinite;
 }
-.pixel-viz.live i {
-  animation: pixel-level 0.55s steps(3, end) infinite alternate;
+.pixel-sprite.live g.f2 {
+  animation: crab-f2 0.7s steps(1, end) infinite;
 }
-.pixel-viz.live i:nth-child(2) {
-  animation-delay: 0.18s;
-}
-.pixel-viz.live i:nth-child(3) {
-  animation-delay: 0.36s;
-}
-@keyframes pixel-level {
-  from {
-    transform: scaleY(1);
+@keyframes crab-f1 {
+  0%,
+  49% {
+    opacity: 1;
   }
-  to {
-    transform: scaleY(3);
+  50%,
+  100% {
+    opacity: 0;
   }
+}
+@keyframes crab-f2 {
+  0%,
+  49% {
+    opacity: 0;
+  }
+  50%,
+  100% {
+    opacity: 1;
+  }
+}
+
+/* Right wing: compact status count ("2" active, "1!" needs you). */
+.spacer-info {
+  font-size: 10.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  min-width: 12px;
+  text-align: right;
+  color: currentColor;
 }
 
 /* ---- Status dots ---- */
@@ -568,7 +578,8 @@ body {
   .panel {
     transition: none;
   }
-  .pixel-viz.live i {
+  .pixel-sprite.live g.f1,
+  .pixel-sprite.live g.f2 {
     animation: none;
   }
 }

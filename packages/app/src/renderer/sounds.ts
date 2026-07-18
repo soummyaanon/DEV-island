@@ -27,16 +27,16 @@ function note(freq: number, at: number, dur: number, volume = 0.045): void {
 
 /** Task finished: quick rising arpeggio (C5 E5 G5 C6). */
 export function playSuccess(): void {
-  note(523.25, 0, 0.09);
-  note(659.25, 0.07, 0.09);
-  note(783.99, 0.14, 0.09);
-  note(1046.5, 0.21, 0.16, 0.05);
+  note(523.25, 0, 0.09, 0.06);
+  note(659.25, 0.07, 0.09, 0.06);
+  note(783.99, 0.14, 0.09, 0.06);
+  note(1046.5, 0.21, 0.16, 0.08);
 }
 
-/** Needs you (approval/question): insistent double ping. */
+/** Needs you (approval/question): insistent double ping — deliberately loud. */
 export function playAttention(): void {
-  note(1318.5, 0, 0.07, 0.05);
-  note(1318.5, 0.12, 0.1, 0.05);
+  note(1318.5, 0, 0.08, 0.14);
+  note(1318.5, 0.13, 0.12, 0.16);
 }
 
 /** Failure: short descending buzz. */

@@ -25,8 +25,13 @@ export function App() {
 
   const pending = useMemo(() => sessions.filter((s) => s.pending_approval), [sessions]);
   const asking = useMemo(() => sessions.filter((s) => s.pending_question), [sessions]);
-  // A pending approval or question demands attention: force the panel open.
-  const expanded = hovering || pinned || pending.length > 0 || asking.length > 0;
+  const needsYou = useMemo(
+    () => sessions.filter((s) => s.state === "waiting-for-approval"),
+    [sessions],
+  );
+  // Anything waiting on the human forces the panel open automatically.
+  const expanded =
+    hovering || pinned || pending.length > 0 || asking.length > 0 || needsYou.length > 0;
 
   // Subscribe to session state from the main process.
   useEffect(() => {
@@ -149,11 +154,9 @@ export function App() {
           }`}
         >
           <div className={`notch-spacer ${stateCls}`} aria-hidden>
-            <PixelSprite />
-            <span className={`pixel-viz${active.length > 0 ? " live" : ""}`}>
-              <i />
-              <i />
-              <i />
+            <PixelSprite live={active.length > 0} />
+            <span className="spacer-info">
+              {needsYou.length > 0 ? `${needsYou.length}!` : active.length > 0 ? active.length : ""}
             </span>
           </div>
 
