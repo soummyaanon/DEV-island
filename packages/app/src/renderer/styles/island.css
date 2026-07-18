@@ -52,7 +52,7 @@ body {
 }
 
 :root {
-  --motion: cubic-bezier(0.22, 1, 0.36, 1);
+  --motion: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .island {
@@ -61,13 +61,14 @@ body {
   border-radius: 0 0 12px 12px;
   overflow: hidden;
   transition:
-    width 0.14s var(--motion),
-    border-radius 0.14s var(--motion);
+    width 0.12s var(--motion),
+    border-radius 0.12s var(--motion);
 }
 
 .island.expanded {
-  width: 340px;
+  width: 360px;
   border-radius: 0 0 16px 16px;
+  transition-duration: 0.17s;
 }
 
 .island.bare:not(.expanded) {
@@ -141,7 +142,7 @@ body {
   transform-origin: bottom;
 }
 .pixel-viz.live i {
-  animation: pixel-level 0.7s steps(2, end) infinite alternate;
+  animation: pixel-level 0.55s steps(3, end) infinite alternate;
 }
 .pixel-viz.live i:nth-child(2) {
   animation-delay: 0.18s;
@@ -194,7 +195,7 @@ body {
 .panel-wrap {
   display: grid;
   grid-template-rows: 0fr;
-  transition: grid-template-rows 0.14s var(--motion);
+  transition: grid-template-rows 0.15s var(--motion);
 }
 .island.expanded .panel-wrap {
   grid-template-rows: 1fr;
@@ -202,6 +203,16 @@ body {
 .panel {
   overflow: hidden;
   min-height: 0;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition:
+    opacity 0.08s ease-out,
+    transform 0.1s var(--motion);
+}
+.island.expanded .panel {
+  opacity: 1;
+  transform: translateY(0);
+  transition-delay: 0.035s;
 }
 
 .rows {
@@ -214,12 +225,15 @@ body {
 
 .row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   padding: 6px 8px;
   border-radius: 9px;
   transition: background 0.1s ease;
   cursor: pointer;
+}
+.row > .dot {
+  margin-top: 5px;
 }
 .row:hover {
   background: rgba(255, 255, 255, 0.06);
@@ -232,6 +246,14 @@ body {
   flex-direction: column;
   gap: 2px;
 }
+.row-heading,
+.row-detail {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
 .project {
   font-size: 12.5px;
   font-weight: 550;
@@ -241,10 +263,25 @@ body {
   text-overflow: ellipsis;
 }
 .activity {
+  min-width: 0;
+  flex: 1;
   font-size: 11px;
   color: var(--text-dim);
   white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
+}
+.elapsed,
+.row-context {
+  flex: none;
+  font-size: 9.5px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.row-context {
+  max-width: 98px;
+  overflow: hidden;
+  white-space: nowrap;
   text-overflow: ellipsis;
 }
 
@@ -254,6 +291,30 @@ body {
   font-size: 12px;
   color: var(--text-dim);
   text-align: center;
+}
+
+.usage-compact {
+  min-height: 25px;
+  margin: 0 8px;
+  padding: 6px 6px 7px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.usage-item {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  font-size: 9.5px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.usage-item b {
+  font-weight: 600;
+  color: var(--text);
 }
 
 /* ---- Approval / Permission request panel ---- */
@@ -503,7 +564,8 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .island,
-  .panel-wrap {
+  .panel-wrap,
+  .panel {
     transition: none;
   }
   .pixel-viz.live i {

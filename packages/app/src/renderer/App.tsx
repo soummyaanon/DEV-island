@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { SessionSnapshot } from "@agent-island/shared";
+import type { AgentUsage, SessionSnapshot } from "@agent-island/shared";
 import { SessionRow } from "./SessionRow";
 import { ApprovalCard } from "./ApprovalCard";
 import { QuestionCard } from "./QuestionCard";
 import { PixelSprite } from "./PixelSprite";
+import { UsageFooter } from "./UsageFooter";
 import { playAttention, playFail, playSuccess } from "./sounds";
 
 const ACTIVE_STATES = new Set(["working", "starting", "waiting-for-approval"]);
@@ -11,9 +12,11 @@ const MAX_ROWS = 5;
 
 export function App() {
   const [sessions, setSessions] = useState<SessionSnapshot[]>([]);
+  const [usage, setUsage] = useState<AgentUsage[]>([]);
   const [connected, setConnected] = useState(false);
   const [hovering, setHovering] = useState(false);
   const [pinned, setPinned] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
 
   const islandRef = useRef<HTMLDivElement>(null);
   const interactiveRef = useRef(false);
@@ -36,11 +39,21 @@ export function App() {
       setConnected(p.connected);
     });
     const offToggle = window.agentIsland.onToggle(() => setPinned((v) => !v));
+    void window.agentIsland.getUsage().then(setUsage);
+    const offUsage = window.agentIsland.onUsage(setUsage);
     return () => {
       offSessions();
       offToggle();
+      offUsage();
     };
   }, []);
+
+  useEffect(() => {
+    if (!expanded) return;
+    setNow(Date.now());
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [expanded]);
 
   // Bulletproof auto-collapse: main watches the real cursor while we're
   // interactive and tells us the moment it leaves the window.
@@ -165,6 +178,7 @@ export function App() {
                   <SessionRow
                     key={s.key}
                     session={s}
+                    now={now}
                     onJump={(sess) => window.agentIsland.jump(sess)}
                   />
                 ))}
@@ -172,6 +186,7 @@ export function App() {
                   <li className="empty">{connected ? "no sessions" : "offline"}</li>
                 )}
               </ul>
+              <UsageFooter usage={usage} />
             </div>
           </div>
         </div>
