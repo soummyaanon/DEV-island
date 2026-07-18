@@ -33,6 +33,13 @@ const api = {
     return () => ipcRenderer.removeListener("agent-island:layout", listener);
   },
 
+  /** Fired by main when the cursor leaves the window while it's interactive. */
+  onCursorLeft: (cb: () => void): (() => void) => {
+    const listener = () => cb();
+    ipcRenderer.on("agent-island:cursor-left", listener);
+    return () => ipcRenderer.removeListener("agent-island:cursor-left", listener);
+  },
+
   onUsage: (cb: (usage: AgentUsage[]) => void): (() => void) => {
     const listener = (_e: unknown, usage: AgentUsage[]) => cb(usage);
     ipcRenderer.on("agent-island:usage", listener);

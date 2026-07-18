@@ -50,10 +50,10 @@ body {
    just below the notch line with large rounded corners. Content sits in the
    wings beside the notch — never under it. */
 .island {
-  width: 404px;
-  background: rgb(6, 6, 8);
-  border-radius: 0 0 24px 24px;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+  width: 242px; /* just wider than the ~195px notch — a slim chin, not a slab */
+  background: rgb(4, 4, 6);
+  border-radius: 0 0 16px 16px;
+  box-shadow: 0 5px 18px rgba(0, 0, 0, 0.4);
   overflow: hidden;
   transition:
     width 0.32s var(--ease),
@@ -62,8 +62,8 @@ body {
 }
 
 .island.expanded {
-  width: 440px;
-  border-radius: 0 0 28px 28px;
+  width: 400px;
+  border-radius: 0 0 24px 24px;
 }
 
 /* ---- Collapsed: wings beside the notch ----
@@ -71,12 +71,11 @@ body {
    it; space-between pushes the sprite into the left wing and the equalizer
    into the right wing, leaving the notch's center untouched. */
 .pill {
-  height: calc(var(--notch-inset, 38px) + 10px);
-  min-height: 34px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 20px 5px;
+  padding: 0 14px;
   color: var(--idle);
 }
 .pill.state-working {

@@ -21,7 +21,10 @@ const WIN_HEIGHT = 400;
 export function createNotchWindow(): BrowserWindow {
   const primary = screen.getPrimaryDisplay();
   const x = Math.round(primary.bounds.x + (primary.bounds.width - WIN_WIDTH) / 2);
-  const y = primary.bounds.y; // flush to the very top, over the notch
+  // Deterministic: sit EXACTLY at the menu bar's bottom edge — the notch's
+  // bottom line. (Covering the menu-bar band itself is unreliable in Electron:
+  // AppKit clamps overlay windows inconsistently, which caused floating gaps.)
+  const y = primary.workArea.y;
 
   const win = new BrowserWindow({
     width: WIN_WIDTH,

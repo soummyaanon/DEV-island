@@ -49,13 +49,10 @@ export function App() {
     return () => window.clearInterval(id);
   }, []);
 
-  // Hug geometry: main measures where the window really sits and tells us how
-  // many px separate the window top from the notch's bottom line.
+  // Bulletproof auto-collapse: main watches the real cursor while we're
+  // interactive and tells us the moment it leaves the window.
   useEffect(() => {
-    const apply = (l: { inset: number }) =>
-      document.documentElement.style.setProperty("--notch-inset", `${l.inset}px`);
-    void window.agentIsland.getLayout().then(apply);
-    return window.agentIsland.onLayout(apply);
+    return window.agentIsland.onCursorLeft(() => setHovering(false));
   }, []);
 
   // The window is click-through with forwarded mouse-move; detect when the
@@ -98,7 +95,6 @@ export function App() {
         className={`island${expanded ? " expanded" : ""}${
           attention.length || pending.length ? " attention" : ""
         }`}
-        onClick={() => setPinned((v) => !v)}
       >
         {/* Collapsed: content lives in the wings BESIDE the notch (iPhone island). */}
         <div className={`pill ${dominant ? `state-${dominant.state}` : connected ? "idle" : "offline"}`}>

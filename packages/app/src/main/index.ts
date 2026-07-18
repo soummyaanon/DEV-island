@@ -1,4 +1,4 @@
-import { app, BrowserWindow, globalShortcut, ipcMain, type Tray } from "electron";
+import { app, BrowserWindow, globalShortcut, ipcMain, screen, type Tray } from "electron";
 import type { ApprovalDecision, SessionSnapshot } from "@agent-island/shared";
 import { DaemonClient } from "./daemon-client";
 import { ensureDaemon, stopDaemon } from "./daemon-manager";
@@ -65,8 +65,30 @@ if (!app.requestSingleInstanceLock()) {
     ipcMain.handle("agent-island:get-usage", () => daemon.getUsage());
 
     // Renderer toggles click-through as the pointer enters/leaves the pill.
+    // While interactive, poll the real cursor so the island reliably collapses
+    // the moment the pointer leaves the window (renderer-side mouse events
+    // alone proved flaky and left it stuck open).
+    let cursorWatch: ReturnType<typeof setInterval> | null = null;
     ipcMain.on("agent-island:set-interactive", (_e, interactive: boolean) => {
       notch?.setIgnoreMouseEvents(!interactive, { forward: true });
+      if (cursorWatch) {
+        clearInterval(cursorWatch);
+        cursorWatch = null;
+      }
+      if (interactive) {
+        cursorWatch = setInterval(() => {
+          if (!notch) return;
+          const p = screen.getCursorScreenPoint();
+          const b = notch.getBounds();
+          const margin = 10;
+          const inside =
+            p.x >= b.x - margin &&
+            p.x <= b.x + b.width + margin &&
+            p.y >= b.y - margin &&
+            p.y <= b.y + b.height + margin;
+          if (!inside) notch.webContents.send("agent-island:cursor-left");
+        }, 250);
+      }
     });
 
     ipcMain.on("agent-island:jump", (_e, session: SessionSnapshot) => jumpToTerminal(session));
