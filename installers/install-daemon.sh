@@ -19,8 +19,8 @@ fi
 echo "==> Building daemon bundle"
 (cd "$REPO_ROOT" && pnpm --filter @agent-island/daemon build)
 
-if [ ! -f "$DAEMON_DIR/dist/main.js" ]; then
-  echo "error: build did not produce $DAEMON_DIR/dist/main.js" >&2
+if [ ! -f "$DAEMON_DIR/dist/main.cjs" ]; then
+  echo "error: build did not produce $DAEMON_DIR/dist/main.cjs" >&2
   exit 1
 fi
 
@@ -37,7 +37,7 @@ cat > "$PLIST" <<EOF
   <key>ProgramArguments</key>
   <array>
     <string>$NODE_BIN</string>
-    <string>$DAEMON_DIR/dist/main.js</string>
+    <string>$DAEMON_DIR/dist/main.cjs</string>
   </array>
   <key>WorkingDirectory</key>
   <string>$DAEMON_DIR</string>
