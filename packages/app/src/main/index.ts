@@ -2,6 +2,7 @@ import { app, BrowserWindow, globalShortcut, ipcMain, screen, type Tray } from "
 import type { ApprovalDecision, SessionSnapshot } from "@agent-island/shared";
 import { DaemonClient } from "./daemon-client";
 import { ensureDaemon, stopDaemon } from "./daemon-manager";
+import { setupZeroConfig } from "./zero-config";
 import { createNotchWindow } from "./windows/notch-window";
 import { createTray, updateTrayTitle } from "./tray";
 import { jumpToTerminal } from "./jump-back";
@@ -41,10 +42,21 @@ if (!app.requestSingleInstanceLock()) {
   app.whenReady().then(async () => {
     app.dock?.hide(); // menu-bar app, no Dock icon
     notch = createNotchWindow();
-    tray = createTray(
-      () => notch?.webContents.send("agent-island:toggle"),
-      () => app.quit(),
-    );
+
+    let soundsOn = true;
+    tray = createTray({
+      onToggle: () => notch?.webContents.send("agent-island:toggle"),
+      onQuit: () => app.quit(),
+      isSoundOn: () => soundsOn,
+      onToggleSound: (on) => {
+        soundsOn = on;
+        notch?.webContents.send("agent-island:sounds", on);
+      },
+    });
+    ipcMain.handle("agent-island:get-sounds", () => soundsOn);
+
+    // Zero Config: wire Claude Code to the daemon (token + safe hook merge).
+    setupZeroConfig();
 
     // One launch runs everything: spawn the daemon if it isn't already up.
     await ensureDaemon();

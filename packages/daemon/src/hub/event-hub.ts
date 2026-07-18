@@ -7,6 +7,7 @@ import {
   type ApprovalDecision,
   type EventInput,
   type PendingApproval,
+  type PendingQuestion,
   type SessionSnapshot,
   type WireMessage,
 } from "@agent-island/shared";
@@ -130,6 +131,17 @@ export class EventHub {
   /** Resolve a held approval from the UI. Returns false if unknown/expired. */
   resolveApproval(id: string, decision: ApprovalDecision): boolean {
     return this.approvals.resolve(id, decision);
+  }
+
+  /** Surface (or clear) an AskUserQuestion the agent is waiting on. */
+  setPendingQuestion(agent: AgentKind, sessionId: string, question: PendingQuestion | null): void {
+    const updated = this.registry.setPendingQuestion(
+      agent,
+      sessionId,
+      question,
+      new Date().toISOString(),
+    );
+    if (updated) this.broadcastSnapshot();
   }
 
   private broadcastSnapshot(): void {

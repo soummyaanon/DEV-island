@@ -2,8 +2,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { AgentUsage, SessionSnapshot } from "@agent-island/shared";
 import { SessionRow } from "./SessionRow";
 import { ApprovalCard } from "./ApprovalCard";
+import { QuestionCard } from "./QuestionCard";
 import { UsageFooter } from "./UsageFooter";
 import { PixelSprite } from "./PixelSprite";
+import { playAttention, playFail, playSuccess } from "./sounds";
 
 const ACTIVE_STATES = new Set(["working", "starting", "waiting-for-approval"]);
 const MAX_ROWS = 6;
@@ -18,10 +20,13 @@ export function App() {
 
   const islandRef = useRef<HTMLDivElement>(null);
   const interactiveRef = useRef(false);
+  const [soundsOn, setSoundsOn] = useState(true);
+  const prevStates = useRef<Map<string, { state: string; needsAction: boolean }> | null>(null);
 
   const pending = useMemo(() => sessions.filter((s) => s.pending_approval), [sessions]);
-  // A pending approval demands attention: force the panel open and interactive.
-  const expanded = hovering || pinned || pending.length > 0;
+  const asking = useMemo(() => sessions.filter((s) => s.pending_question), [sessions]);
+  // A pending approval or question demands attention: force the panel open.
+  const expanded = hovering || pinned || pending.length > 0 || asking.length > 0;
 
   // Subscribe to session state from the main process.
   useEffect(() => {
@@ -54,6 +59,37 @@ export function App() {
   useEffect(() => {
     return window.agentIsland.onCursorLeft(() => setHovering(false));
   }, []);
+
+  // Sound toggle lives in the tray menu.
+  useEffect(() => {
+    void window.agentIsland.getSounds().then(setSoundsOn);
+    return window.agentIsland.onSounds(setSoundsOn);
+  }, []);
+
+  // 8-bit alerts on state transitions: done -> success arpeggio, failure ->
+  // buzz, needs-you -> double ping. The first snapshot only primes the map so
+  // relaunching the app never replays history.
+  useEffect(() => {
+    const next = new Map(
+      sessions.map((s) => [
+        s.key,
+        { state: s.state, needsAction: s.requires_action || s.pending_approval !== null },
+      ]),
+    );
+    const prev = prevStates.current;
+    prevStates.current = next;
+    if (!prev || !soundsOn) return;
+
+    for (const [key, cur] of next) {
+      const was = prev.get(key);
+      if (!was) continue; // brand-new session: no sound until it transitions
+      if (cur.state !== was.state) {
+        if (cur.state === "done") playSuccess();
+        else if (cur.state === "failed") playFail();
+      }
+      if (cur.needsAction && !was.needsAction) playAttention();
+    }
+  }, [sessions, soundsOn]);
 
   // Notch band height, measured by main: the black body spans it so the shape
   // merges with the hardware notch; content renders below it.
@@ -131,6 +167,13 @@ export function App() {
                 key={`ap-${s.key}`}
                 session={s}
                 onDecide={(id, decision) => window.agentIsland.approve(id, decision)}
+              />
+            ))}
+            {asking.map((s) => (
+              <QuestionCard
+                key={`q-${s.key}`}
+                session={s}
+                onJump={(sess) => window.agentIsland.jump(sess)}
               />
             ))}
             <header className="panel-head">

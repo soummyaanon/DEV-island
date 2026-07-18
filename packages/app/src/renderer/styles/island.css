@@ -664,6 +664,62 @@ body {
   background: rgba(255, 255, 255, 0.1);
 }
 
+/* ---- "Claude asks" question card ---- */
+.question {
+  margin: 2px 9px 8px;
+  padding: 11px 13px 10px;
+  border-radius: 14px;
+  background: rgba(91, 168, 255, 0.06);
+  border: 1px solid rgba(91, 168, 255, 0.22);
+  cursor: pointer;
+}
+.question:hover {
+  background: rgba(91, 168, 255, 0.1);
+}
+.approval-mark.ask {
+  background: var(--working);
+  box-shadow: 0 0 7px var(--working);
+}
+.question-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+.q-options {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.q-options li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 5px 9px;
+}
+.q-options kbd {
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--working);
+  background: rgba(91, 168, 255, 0.14);
+  border-radius: 5px;
+  padding: 0 5px;
+  flex: none;
+}
+.q-hint {
+  font-size: 10px;
+  color: var(--text-dim);
+  text-align: right;
+}
+
 /* ---- Usage footer ---- */
 .usage {
   margin: 2px 9px 4px;

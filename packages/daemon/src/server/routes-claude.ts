@@ -1,5 +1,7 @@
 import type { FastifyInstance } from "fastify";
+import { randomUUID } from "node:crypto";
 import type { IncomingHttpHeaders } from "node:http";
+import type { PendingQuestion } from "@agent-island/shared";
 import type { EventHub } from "../hub/event-hub";
 import type { DaemonConfig } from "../config";
 import { makeAuthGuard } from "./auth-guard";
@@ -13,6 +15,26 @@ function header(headers: IncomingHttpHeaders, name: string): string | undefined 
   // Drop empty or uninterpolated ("$VAR" when the env var was unset) values.
   if (!trimmed || trimmed.startsWith("$")) return undefined;
   return trimmed;
+}
+
+/** Parse the AskUserQuestion tool input into a PendingQuestion (defensively). */
+function extractQuestion(input: Record<string, unknown> | undefined): PendingQuestion | null {
+  const questions = Array.isArray(input?.questions)
+    ? (input.questions as Array<Record<string, unknown>>)
+    : [];
+  const first = questions[0];
+  if (!first || typeof first.question !== "string") return null;
+  const options = Array.isArray(first.options)
+    ? (first.options as Array<Record<string, unknown>>)
+        .map((o) => (typeof o?.label === "string" ? o.label : null))
+        .filter((label): label is string => label !== null)
+    : [];
+  return {
+    id: randomUUID(),
+    question: first.question,
+    options,
+    created_at: new Date().toISOString(),
+  };
 }
 
 /** ExitPlanMode carries the plan text in tool_input.plan; surface it for review. */
@@ -77,6 +99,18 @@ export function registerClaudeRoutes(
       }
 
       hub.ingest(mapped);
+
+      // "Claude asks": surface AskUserQuestion in the notch while Claude waits;
+      // any subsequent activity means it was answered (or abandoned) — clear it.
+      if (eventName === "PreToolUse" && payload.tool_name === "AskUserQuestion") {
+        hub.setPendingQuestion(
+          "claude-code",
+          payload.session_id,
+          extractQuestion(payload.tool_input),
+        );
+      } else {
+        hub.setPendingQuestion("claude-code", payload.session_id, null);
+      }
 
       // Interactive approval: hold the PermissionRequest open so the user can
       // decide from the notch. Only when a UI is connected — otherwise fall back

@@ -40,6 +40,14 @@ const api = {
     return () => ipcRenderer.removeListener("agent-island:cursor-left", listener);
   },
 
+  getSounds: (): Promise<boolean> => ipcRenderer.invoke("agent-island:get-sounds"),
+
+  onSounds: (cb: (on: boolean) => void): (() => void) => {
+    const listener = (_e: unknown, on: boolean) => cb(on);
+    ipcRenderer.on("agent-island:sounds", listener);
+    return () => ipcRenderer.removeListener("agent-island:sounds", listener);
+  },
+
   onUsage: (cb: (usage: AgentUsage[]) => void): (() => void) => {
     const listener = (_e: unknown, usage: AgentUsage[]) => cb(usage);
     ipcRenderer.on("agent-island:usage", listener);

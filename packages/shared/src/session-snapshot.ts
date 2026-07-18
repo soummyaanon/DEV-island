@@ -3,6 +3,7 @@ import { AgentKindSchema } from "./agent-kind";
 import { EventTypeSchema } from "./agent-event";
 import { SessionStateSchema } from "./session-state";
 import { PendingApprovalSchema } from "./pending-approval";
+import { PendingQuestionSchema } from "./pending-question";
 
 /**
  * The current state of one session — exactly what the UI renders per row.
@@ -30,6 +31,8 @@ export const SessionSnapshotSchema = z.object({
   meta: z.record(z.unknown()),
   /** Set while the daemon is holding a permission hook open for this session. */
   pending_approval: PendingApprovalSchema.nullable(),
+  /** Set while Claude is waiting on an AskUserQuestion answer in the terminal. */
+  pending_question: PendingQuestionSchema.nullable(),
 });
 
 export type SessionSnapshot = z.infer<typeof SessionSnapshotSchema>;
