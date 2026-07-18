@@ -96,7 +96,7 @@ body {
 }
 
 .notch-spacer {
-  height: calc(var(--notch-inset, 33px) + 3px);
+  height: calc(var(--notch-inset, 33px) - 1px);
   display: flex;
   align-items: center;
   justify-content: space-between;
