@@ -1,22 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { AgentUsage, SessionSnapshot } from "@agent-island/shared";
+import type { SessionSnapshot } from "@agent-island/shared";
 import { SessionRow } from "./SessionRow";
 import { ApprovalCard } from "./ApprovalCard";
 import { QuestionCard } from "./QuestionCard";
-import { UsageFooter } from "./UsageFooter";
 import { PixelSprite } from "./PixelSprite";
 import { playAttention, playFail, playSuccess } from "./sounds";
 
 const ACTIVE_STATES = new Set(["working", "starting", "waiting-for-approval"]);
-const MAX_ROWS = 6;
+const MAX_ROWS = 5;
 
 export function App() {
   const [sessions, setSessions] = useState<SessionSnapshot[]>([]);
-  const [usage, setUsage] = useState<AgentUsage[]>([]);
   const [connected, setConnected] = useState(false);
   const [hovering, setHovering] = useState(false);
   const [pinned, setPinned] = useState(false);
-  const [now, setNow] = useState(() => Date.now());
 
   const islandRef = useRef<HTMLDivElement>(null);
   const interactiveRef = useRef(false);
@@ -39,19 +36,10 @@ export function App() {
       setConnected(p.connected);
     });
     const offToggle = window.agentIsland.onToggle(() => setPinned((v) => !v));
-    void window.agentIsland.getUsage().then(setUsage);
-    const offUsage = window.agentIsland.onUsage(setUsage);
     return () => {
       offSessions();
       offToggle();
-      offUsage();
     };
-  }, []);
-
-  // Tick elapsed timers once a second.
-  useEffect(() => {
-    const id = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(id);
   }, []);
 
   // Bulletproof auto-collapse: main watches the real cursor while we're
@@ -129,7 +117,6 @@ export function App() {
   }, [expanded]);
 
   const active = useMemo(() => sessions.filter((s) => ACTIVE_STATES.has(s.state)), [sessions]);
-  const attention = useMemo(() => sessions.filter((s) => s.requires_action), [sessions]);
   const visible = useMemo(() => sessions.slice(0, MAX_ROWS), [sessions]);
   const dominant = pending[0] ?? active[0] ?? sessions[0] ?? null;
   const stateCls = dominant ? `state-${dominant.state}` : connected ? "idle" : "offline";
@@ -137,70 +124,56 @@ export function App() {
   return (
     <div className="app">
       <div ref={islandRef} className="island-wrap">
-        {/* Concave "ears" that blend the shape into the hardware notch. */}
-        <i className="ear ear-l" aria-hidden />
-        <i className="ear ear-r" aria-hidden />
+        {(sessions.length > 0 || expanded) && (
+          <>
+            <i className="ear ear-l" aria-hidden />
+            <i className="ear ear-r" aria-hidden />
+          </>
+        )}
         <div
           className={`island ${stateCls}${expanded ? " expanded" : ""}${
-            attention.length || pending.length ? " attention" : ""
-          }${sessions.length === 0 ? " bare" : ""}`}
+            sessions.length === 0 ? " bare" : ""
+          }`}
         >
-        {/* The row spans the notch band: sprite + equalizer live in the wings
-            BESIDE the physical notch (true Dynamic Island). */}
-        <div className={`pill ${stateCls}`}>
-          <span className="sprite">
-            <PixelSprite size={16} />
-          </span>
-          <span className="pill-right">
-            {attention.length > 0 && <span className="pill-alert">{attention.length}</span>}
-            <span className={`eq${active.length > 0 ? " live" : ""}`}>
-              <i />
+          <div className={`notch-spacer ${stateCls}`} aria-hidden>
+            <PixelSprite />
+            <span className={`pixel-viz${active.length > 0 ? " live" : ""}`}>
               <i />
               <i />
               <i />
             </span>
-          </span>
-        </div>
+          </div>
 
-        <div className="panel-wrap">
-          <div className="panel">
-            {pending.map((s) => (
-              <ApprovalCard
-                key={`ap-${s.key}`}
-                session={s}
-                onDecide={(id, decision) => window.agentIsland.approve(id, decision)}
-              />
-            ))}
-            {asking.map((s) => (
-              <QuestionCard
-                key={`q-${s.key}`}
-                session={s}
-                onJump={(sess) => window.agentIsland.jump(sess)}
-              />
-            ))}
-            <header className="panel-head">
-              <span className="wordmark">Agent Island</span>
-              <span className="badge">
-                {connected ? `${active.length} active` : "offline"}
-              </span>
-            </header>
-            <ul className="rows">
-              {visible.map((s, i) => (
-                <SessionRow
-                  key={s.key}
+          <div className="panel-wrap">
+            <div className="panel">
+              {pending.map((s) => (
+                <ApprovalCard
+                  key={`ap-${s.key}`}
                   session={s}
-                  now={now}
-                  index={i}
+                  onDecide={(id, decision) => window.agentIsland.approve(id, decision)}
+                />
+              ))}
+              {asking.map((s) => (
+                <QuestionCard
+                  key={`q-${s.key}`}
+                  session={s}
                   onJump={(sess) => window.agentIsland.jump(sess)}
                 />
               ))}
-              {visible.length === 0 && (
-                <li className="empty">{connected ? "no sessions yet" : "waiting for daemon…"}</li>
-              )}
-            </ul>
-            <UsageFooter usage={usage} now={now} />
+              <ul className="rows">
+                {visible.map((s) => (
+                  <SessionRow
+                    key={s.key}
+                    session={s}
+                    onJump={(sess) => window.agentIsland.jump(sess)}
+                  />
+                ))}
+                {visible.length === 0 && (
+                  <li className="empty">{connected ? "no sessions" : "offline"}</li>
+                )}
+              </ul>
+            </div>
           </div>
-        </div>
         </div>
       </div>
     </div>
