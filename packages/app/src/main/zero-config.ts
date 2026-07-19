@@ -60,8 +60,13 @@ function buildHandler(slug: string, timeout: number, token: string): Json {
       "X-Term-Program": "$TERM_PROGRAM",
       "X-Iterm-Session-Id": "$ITERM_SESSION_ID",
       "X-Term-Session-Id": "$TERM_SESSION_ID",
+      // macOS stamps every process with the bundle id of the app that spawned
+      // it — the only reliable way to tell Cursor's terminal from VS Code's
+      // (both report TERM_PROGRAM=vscode). Jump uses this to bring back the
+      // exact host app.
+      "X-App-Bundle-Id": "$__CFBundleIdentifier",
     },
-    allowedEnvVars: ["TERM_PROGRAM", "ITERM_SESSION_ID", "TERM_SESSION_ID"],
+    allowedEnvVars: ["TERM_PROGRAM", "ITERM_SESSION_ID", "TERM_SESSION_ID", "__CFBundleIdentifier"],
     timeout,
   };
 }

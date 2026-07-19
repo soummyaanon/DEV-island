@@ -31,9 +31,18 @@ function metaString(session: SessionSnapshot, key: string): string | undefined {
 export function jumpToTerminal(session: SessionSnapshot): void {
   const term = metaString(session, "term_program") ?? "";
   const itermId = metaString(session, "iterm_session_id");
+  const hostBundleId = metaString(session, "app_bundle_id");
 
   if (term === "iTerm.app" && itermId) {
     jumpITerm(itermId);
+    return;
+  }
+
+  // The host app's own bundle id (from __CFBundleIdentifier) beats any
+  // TERM_PROGRAM mapping: Claude in Cursor's terminal reports
+  // TERM_PROGRAM=vscode, but this points at Cursor itself.
+  if (hostBundleId && SAFE_ID.test(hostBundleId)) {
+    osascript(`tell application id "${hostBundleId}" to activate`);
     return;
   }
 
