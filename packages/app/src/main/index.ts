@@ -1,4 +1,6 @@
-import { app, BrowserWindow, globalShortcut, ipcMain, screen, type Tray } from "electron";
+import { app, BrowserWindow, dialog, globalShortcut, ipcMain, screen, type Tray } from "electron";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import { extname, join } from "node:path";
 import type { AgentUsage, ApprovalDecision, SessionSnapshot } from "@agent-island/shared";
 import { DaemonClient } from "./daemon-client";
 import { ensureDaemon, stopDaemon } from "./daemon-manager";
@@ -124,9 +126,37 @@ if (!app.requestSingleInstanceLock()) {
     const onUpdateInfo = (info: { version: string }): void =>
       sendToNotch("agent-island:update", info);
 
+    const AUDIO_MIME: Record<string, string> = {
+      ".mp3": "audio/mpeg",
+      ".wav": "audio/wav",
+      ".m4a": "audio/mp4",
+      ".aac": "audio/aac",
+      ".ogg": "audio/ogg",
+      ".oga": "audio/ogg",
+      ".aif": "audio/aiff",
+      ".aiff": "audio/aiff",
+      ".flac": "audio/flac",
+    };
+    /** Read each imported sound file into a data URL (the renderer is sandboxed
+     *  and can't read arbitrary FS paths). Skips missing/unreadable files. */
+    function customSoundData(): Record<string, string> {
+      const out: Record<string, string> = {};
+      for (const [event, path] of Object.entries(settings.customSounds)) {
+        if (typeof path !== "string" || !existsSync(path)) continue;
+        try {
+          const mime = AUDIO_MIME[extname(path).toLowerCase()] ?? "audio/mpeg";
+          out[event] = `data:${mime};base64,${readFileSync(path).toString("base64")}`;
+        } catch {
+          /* unreadable -> skip; the event falls back to its theme */
+        }
+      }
+      return out;
+    }
+
     function settingsState() {
       return {
         ...settings,
+        customSounds: customSoundData(),
         openAtLogin: app.getLoginItemSettings().openAtLogin,
         version: app.getVersion(),
       };
@@ -144,6 +174,7 @@ if (!app.requestSingleInstanceLock()) {
       on: settings.sounds,
       theme: settings.soundTheme,
       overrides: settings.soundOverrides,
+      custom: customSoundData(),
     });
 
     /** The one place a setting changes: persist, apply side effects, broadcast. */
@@ -203,6 +234,54 @@ if (!app.requestSingleInstanceLock()) {
 
     ipcMain.handle("agent-island:get-sounds", () => soundPrefs());
     ipcMain.on("agent-island:set-sounds", (_e, on: boolean) => applySetting("sounds", on));
+
+    // Import a user's own audio file for one event: copy it into userData/sounds,
+    // remember the path, and broadcast the new data URLs to the notch + settings.
+    ipcMain.handle("agent-island:import-sound", async (_e, event: string) => {
+      if (!isSoundEvent(event)) return false;
+      const res = await dialog.showOpenDialog({
+        title: "Choose a sound",
+        properties: ["openFile"],
+        filters: [
+          { name: "Audio", extensions: ["mp3", "wav", "m4a", "aac", "ogg", "oga", "aif", "aiff", "flac"] },
+        ],
+      });
+      if (res.canceled || res.filePaths.length === 0) return false;
+      const src = res.filePaths[0];
+      const dir = join(app.getPath("userData"), "sounds");
+      const dest = join(dir, `${event}${extname(src).toLowerCase() || ".mp3"}`);
+      const prev = settings.customSounds[event];
+      try {
+        mkdirSync(dir, { recursive: true });
+        // A new extension would orphan the old file — remove it first.
+        if (typeof prev === "string" && prev !== dest && existsSync(prev)) rmSync(prev);
+        copyFileSync(src, dest);
+      } catch (err) {
+        console.error("[sound] import failed:", err);
+        return false;
+      }
+      settings.customSounds[event] = dest;
+      saveSettings(settings);
+      sendToNotch("agent-island:sounds", soundPrefs());
+      pushSettingsState(settingsState());
+      return true;
+    });
+
+    ipcMain.on("agent-island:clear-sound", (_e, event: string) => {
+      if (!isSoundEvent(event)) return;
+      const prev = settings.customSounds[event];
+      if (typeof prev === "string" && existsSync(prev)) {
+        try {
+          rmSync(prev);
+        } catch {
+          /* best-effort cleanup */
+        }
+      }
+      delete settings.customSounds[event];
+      saveSettings(settings);
+      sendToNotch("agent-island:sounds", soundPrefs());
+      pushSettingsState(settingsState());
+    });
     ipcMain.handle("agent-island:get-settings", () => settingsState());
     ipcMain.on("agent-island:set-setting", (_e, { key, value }: { key: string; value: boolean | string }) =>
       applySetting(key, value),

@@ -11,9 +11,11 @@ export interface SoundPrefs {
   theme: SoundTheme;
   /** Per-event theme override; absent = follow `theme`. */
   overrides: Partial<Record<SoundEvent, SoundTheme>>;
+  /** Per-event imported audio as a data URL; when present it wins over the theme. */
+  custom?: Partial<Record<SoundEvent, string>>;
 }
 
-export const DEFAULT_SOUND_PREFS: SoundPrefs = { on: true, theme: "8bit", overrides: {} };
+export const DEFAULT_SOUND_PREFS: SoundPrefs = { on: true, theme: "8bit", overrides: {}, custom: {} };
 
 export const THEME_LABELS: Record<SoundTheme, string> = {
   "8bit": "8-bit",

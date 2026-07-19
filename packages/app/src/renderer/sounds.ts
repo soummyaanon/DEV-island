@@ -144,13 +144,23 @@ const THEMES: Record<SoundTheme, ThemeSounds> = {
   },
 };
 
-/** Play `event`'s sound per prefs (theme + per-event overrides). No-op when off. */
+/** Play `event`'s sound per prefs (custom file > override/theme). No-op when off. */
 export function playSound(event: SoundEvent, prefs: SoundPrefs): void {
   if (!prefs.on) return;
+  const custom = prefs.custom?.[event];
+  if (custom) {
+    mp3(custom, 0.6);
+    return;
+  }
   THEMES[resolveTheme(event, prefs)][event]();
 }
 
 /** Preview a specific theme's sound for one event (Settings ▶ buttons). */
 export function previewSound(event: SoundEvent, theme: SoundTheme): void {
   THEMES[theme][event]();
+}
+
+/** Preview an imported custom sound (data URL) — Settings ▶ for custom rows. */
+export function previewCustom(dataUrl: string): void {
+  mp3(dataUrl, 0.6);
 }

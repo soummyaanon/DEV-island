@@ -5,6 +5,8 @@ export interface SoundPrefsPayload {
   on: boolean;
   theme: string;
   overrides: Record<string, string>;
+  /** Per-event imported audio as data URLs (event -> "data:audio/...;base64,..."). */
+  custom: Record<string, string>;
 }
 
 export interface SettingsState {
@@ -12,6 +14,8 @@ export interface SettingsState {
   sounds: boolean;
   soundTheme: string;
   soundOverrides: Record<string, string>;
+  /** Per-event imported audio as data URLs (event -> data URL), for preview/display. */
+  customSounds: Record<string, string>;
   tray: boolean;
   updateCheck: boolean;
   openAtLogin: boolean;
@@ -142,6 +146,11 @@ const api = {
     },
     set: (key: string, value: boolean | string): void =>
       ipcRenderer.send("agent-island:set-setting", { key, value }),
+    /** Open a file picker to import a custom sound for `event`. Resolves true if set. */
+    importSound: (event: string): Promise<boolean> =>
+      ipcRenderer.invoke("agent-island:import-sound", event),
+    /** Remove the imported custom sound for `event` (revert to theme). */
+    clearSound: (event: string): void => ipcRenderer.send("agent-island:clear-sound", event),
   },
 
   /* ---- Onboarding (first-run window only) ---- */

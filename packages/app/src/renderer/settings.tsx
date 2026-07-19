@@ -4,7 +4,7 @@ import { PixelSprite } from "./PixelSprite";
 import { OpenAiSprite } from "./OpenAiSprite";
 import { CursorSprite } from "./CursorSprite";
 import { TrafficLights } from "./TrafficLights";
-import { previewSound } from "./sounds";
+import { previewSound, previewCustom } from "./sounds";
 import {
   EVENT_LABELS,
   SOUND_EVENTS,
@@ -23,6 +23,7 @@ interface SettingsState {
   sounds: boolean;
   soundTheme: string;
   soundOverrides: Record<string, string>;
+  customSounds: Record<string, string>;
   tray: boolean;
   updateCheck: boolean;
   openAtLogin: boolean;
@@ -34,6 +35,7 @@ const DEFAULTS: SettingsState = {
   sounds: true,
   soundTheme: "8bit",
   soundOverrides: {},
+  customSounds: {},
   tray: false,
   updateCheck: true,
   openAtLogin: false,
@@ -107,6 +109,7 @@ function Settings() {
     on: state.sounds,
     theme: state.soundTheme as SoundTheme,
     overrides: state.soundOverrides as SoundPrefs["overrides"],
+    custom: state.customSounds as SoundPrefs["custom"],
   };
 
   return (
@@ -168,33 +171,60 @@ function Settings() {
             ))}
           </select>
         </div>
-        {SOUND_EVENTS.map((event: SoundEvent) => (
-          <div className="s-row s-sub" key={event}>
-            <div className="s-text">
-              <b>{EVENT_LABELS[event]}</b>
+        {SOUND_EVENTS.map((event: SoundEvent) => {
+          const custom = state.customSounds[event];
+          return (
+            <div className="s-row s-sub" key={event}>
+              <div className="s-text">
+                <b>{EVENT_LABELS[event]}</b>
+              </div>
+              <button
+                type="button"
+                className="s-play"
+                title="Preview"
+                onClick={() =>
+                  custom ? previewCustom(custom) : previewSound(event, resolveTheme(event, soundPrefs))
+                }
+              >
+                ▶
+              </button>
+              {custom ? (
+                <span className="s-custom" title="Playing your imported sound">
+                  <span className="s-custom-tag">Custom</span>
+                  <button
+                    type="button"
+                    className="s-play s-clear"
+                    title="Remove custom sound"
+                    onClick={() => window.agentIsland?.settings?.clearSound(event)}
+                  >
+                    ✕
+                  </button>
+                </span>
+              ) : (
+                <select
+                  className="s-select"
+                  value={state.soundOverrides[event] ?? ""}
+                  onChange={(e) => set(`soundOverride:${event}`, e.target.value)}
+                >
+                  <option value="">Theme default</option>
+                  {SOUND_THEMES.map((t) => (
+                    <option key={t} value={t}>
+                      {THEME_LABELS[t]}
+                    </option>
+                  ))}
+                </select>
+              )}
+              <button
+                type="button"
+                className="s-import"
+                title="Import your own audio file (mp3, wav, m4a…)"
+                onClick={() => void window.agentIsland?.settings?.importSound(event)}
+              >
+                {custom ? "Replace" : "Import"}
+              </button>
             </div>
-            <button
-              type="button"
-              className="s-play"
-              title="Preview"
-              onClick={() => previewSound(event, resolveTheme(event, soundPrefs))}
-            >
-              ▶
-            </button>
-            <select
-              className="s-select"
-              value={state.soundOverrides[event] ?? ""}
-              onChange={(e) => set(`soundOverride:${event}`, e.target.value)}
-            >
-              <option value="">Theme default</option>
-              {SOUND_THEMES.map((t) => (
-                <option key={t} value={t}>
-                  {THEME_LABELS[t]}
-                </option>
-              ))}
-            </select>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <h2>General</h2>

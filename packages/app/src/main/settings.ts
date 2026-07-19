@@ -16,6 +16,9 @@ export interface AppSettings {
   /** Which sound set plays; per-event overrides win over the theme. */
   soundTheme: SoundTheme;
   soundOverrides: Partial<Record<SoundEvent, SoundTheme>>;
+  /** Per-event imported audio files (absolute paths under userData/sounds).
+   *  A custom file, when present, wins over both the override and the theme. */
+  customSounds: Partial<Record<SoundEvent, string>>;
   /** Menu-bar icon (off by default — the island is the app). */
   tray: boolean;
   /** Anonymous GitHub Releases version check. */
@@ -27,6 +30,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   sounds: true,
   soundTheme: "8bit",
   soundOverrides: {},
+  customSounds: {},
   tray: false,
   updateCheck: true,
 };
@@ -61,6 +65,7 @@ export function loadSettings(): AppSettings {
     agents: { ...DEFAULT_SETTINGS.agents, ...(stored.agents ?? {}) },
     soundTheme: isSoundTheme(stored.soundTheme) ? stored.soundTheme : DEFAULT_SETTINGS.soundTheme,
     soundOverrides: { ...(stored.soundOverrides ?? {}) },
+    customSounds: { ...(stored.customSounds ?? {}) },
   };
   return cached;
 }

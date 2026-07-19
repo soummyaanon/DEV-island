@@ -92,11 +92,17 @@ export function App() {
 
   // Sound prefs (on/off, theme, per-event overrides) live in main.
   useEffect(() => {
-    const apply = (p: { on: boolean; theme: string; overrides: Record<string, string> }) => {
+    const apply = (p: {
+      on: boolean;
+      theme: string;
+      overrides: Record<string, string>;
+      custom?: Record<string, string>;
+    }) => {
       const prefs: SoundPrefs = {
         on: p.on,
         theme: p.theme as SoundTheme,
         overrides: p.overrides as SoundPrefs["overrides"],
+        custom: (p.custom ?? {}) as SoundPrefs["custom"],
       };
       soundRef.current = prefs;
       setSound(prefs);
