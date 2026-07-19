@@ -23,9 +23,10 @@ export default defineConfig({
     build: {
       rollupOptions: {
         input: {
-          // The notch overlay plus the first-run onboarding window.
+          // The notch overlay, first-run onboarding, and the settings window.
           index: resolve("src/renderer/index.html"),
           onboarding: resolve("src/renderer/onboarding.html"),
+          settings: resolve("src/renderer/settings.html"),
         },
       },
     },

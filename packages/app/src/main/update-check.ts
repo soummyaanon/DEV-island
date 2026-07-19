@@ -21,6 +21,7 @@ export interface UpdateInfo {
 }
 
 let timer: ReturnType<typeof setInterval> | null = null;
+let kickoff: ReturnType<typeof setTimeout> | null = null;
 let pendingUrl: string | null = null;
 
 /** "v0.2.0" beats "0.1.0"? Plain numeric semver compare, tolerant of a v prefix. */
@@ -93,12 +94,15 @@ export function openUpdatePage(): void {
 
 export function startUpdateCheck(onUpdate: (info: UpdateInfo) => void): void {
   if (process.env.AGENT_ISLAND_NO_UPDATE_CHECK === "1") return;
+  stopUpdateCheck(); // idempotent: settings can toggle this repeatedly
   // Give launch (daemon spawn, onboarding) a quiet moment first.
-  setTimeout(() => void checkOnce(onUpdate), 15_000);
+  kickoff = setTimeout(() => void checkOnce(onUpdate), 15_000);
   timer = setInterval(() => void checkOnce(onUpdate), CHECK_EVERY_MS);
 }
 
 export function stopUpdateCheck(): void {
   if (timer) clearInterval(timer);
+  if (kickoff) clearTimeout(kickoff);
   timer = null;
+  kickoff = null;
 }

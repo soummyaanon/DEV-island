@@ -160,6 +160,43 @@ export function setupZeroConfig(): ZeroConfigResult {
   }
 }
 
+/**
+ * Disconnect Claude Code: strip exactly our handlers from every hook event,
+ * leaving the user's own hooks untouched. Same backup/abort contract as install.
+ */
+export function removeClaudeHooks(): ZeroConfigResult {
+  const settingsPath = claudeSettingsPath();
+  try {
+    if (!existsSync(settingsPath)) return "unchanged";
+    let settings: Json;
+    try {
+      settings = JSON.parse(readFileSync(settingsPath, "utf8")) as Json;
+    } catch (err) {
+      console.error(`[zero-config] ${settingsPath} did not parse; leaving untouched:`, err);
+      return "error";
+    }
+    const before = canonical(settings);
+    const hooks = (settings.hooks && typeof settings.hooks === "object" ? settings.hooks : {}) as Json;
+    for (const { event } of HOOK_EVENTS) {
+      const preserved = stripOurHandlers(hooks[event]);
+      if (preserved.length > 0) hooks[event] = preserved;
+      else delete hooks[event];
+    }
+    if (Object.keys(hooks).length > 0) settings.hooks = hooks;
+    else delete settings.hooks;
+
+    if (canonical(settings) === before) return "unchanged";
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    copyFileSync(settingsPath, `${settingsPath}.agent-island-bak.${stamp}`);
+    writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`);
+    console.log(`[zero-config] Claude hooks removed from ${settingsPath}`);
+    return "updated";
+  } catch (err) {
+    console.error("[zero-config] claude removal failed:", err);
+    return "error";
+  }
+}
+
 /* ------------------------------------------------------------------------- */
 /* Cursor: hooks.json + a fire-and-forget bridge script                        */
 /* ------------------------------------------------------------------------- */
@@ -261,6 +298,45 @@ export function setupCursorZeroConfig(): ZeroConfigResult {
     return result;
   } catch (err) {
     console.error("[zero-config] cursor failed:", err);
+    return "error";
+  }
+}
+
+/** Disconnect Cursor: drop exactly our bridge entries; other tools' hooks stay. */
+export function removeCursorHooks(): ZeroConfigResult {
+  const hooksPath = cursorHooksPath();
+  try {
+    if (!existsSync(hooksPath)) return "unchanged";
+    let config: Json;
+    try {
+      config = JSON.parse(readFileSync(hooksPath, "utf8")) as Json;
+    } catch (err) {
+      console.error(`[zero-config] ${hooksPath} did not parse; leaving untouched:`, err);
+      return "error";
+    }
+    const before = canonical(config);
+    const hooks = (config.hooks && typeof config.hooks === "object" ? config.hooks : {}) as Json;
+    for (const event of Object.keys(hooks)) {
+      const entries = (Array.isArray(hooks[event]) ? (hooks[event] as unknown[]) : []).filter(
+        (entry) => {
+          const cmd = (entry as Json | null)?.command;
+          return !(typeof cmd === "string" && cmd.includes(CURSOR_MARKER));
+        },
+      );
+      if (entries.length > 0) hooks[event] = entries;
+      else delete hooks[event];
+    }
+    if (Object.keys(hooks).length > 0) config.hooks = hooks;
+    else delete config.hooks;
+
+    if (canonical(config) === before) return "unchanged";
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    copyFileSync(hooksPath, `${hooksPath}.agent-island-bak.${stamp}`);
+    writeFileSync(hooksPath, `${JSON.stringify(config, null, 2)}\n`);
+    console.log(`[zero-config] Cursor hooks removed from ${hooksPath}`);
+    return "updated";
+  } catch (err) {
+    console.error("[zero-config] cursor removal failed:", err);
     return "error";
   }
 }

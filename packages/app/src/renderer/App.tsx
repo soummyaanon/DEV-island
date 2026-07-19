@@ -250,16 +250,28 @@ export function App() {
                 ) : (
                   <span className="ctl-brand">agent island</span>
                 )}
-                <button
-                  className="ctl"
-                  title="Quit Agent Island"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    window.agentIsland.quit();
-                  }}
-                >
-                  quit
-                </button>
+                <span className="ctl-cluster">
+                  <button
+                    className="ctl"
+                    title="Settings"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      window.agentIsland.openSettings();
+                    }}
+                  >
+                    settings
+                  </button>
+                  <button
+                    className="ctl"
+                    title="Quit Agent Island"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      window.agentIsland.quit();
+                    }}
+                  >
+                    quit
+                  </button>
+                </span>
               </div>
             </div>
           </div>

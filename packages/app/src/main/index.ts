@@ -1,10 +1,17 @@
 import { app, BrowserWindow, globalShortcut, ipcMain, screen, type Tray } from "electron";
-import type { ApprovalDecision, SessionSnapshot } from "@agent-island/shared";
+import type { AgentUsage, ApprovalDecision, SessionSnapshot } from "@agent-island/shared";
 import { DaemonClient } from "./daemon-client";
 import { ensureDaemon, stopDaemon } from "./daemon-manager";
-import { setupCursorZeroConfig, setupZeroConfig } from "./zero-config";
+import {
+  removeClaudeHooks,
+  removeCursorHooks,
+  setupCursorZeroConfig,
+  setupZeroConfig,
+} from "./zero-config";
 import { createNotchWindow } from "./windows/notch-window";
 import { maybeShowOnboarding, registerOnboardingIpc } from "./windows/onboarding-window";
+import { pushSettingsState, showSettingsWindow } from "./windows/settings-window";
+import { loadSettings, saveSettings } from "./settings";
 import { createTray, updateTrayTitle } from "./tray";
 import { answerInTerminal, jumpToTerminal } from "./jump-back";
 import { openUpdatePage, startUpdateCheck, stopUpdateCheck } from "./update-check";
@@ -72,25 +79,97 @@ if (!app.requestSingleInstanceLock()) {
     app.dock?.hide(); // menu-bar app, no Dock icon
     notch = createNotchWindow();
 
-    let soundsOn = true;
-    // System-app feel: no menu-bar icon by default — controls live inside the
-    // island's expanded panel (hover the notch). AGENT_ISLAND_TRAY=1 restores it.
-    if (process.env.AGENT_ISLAND_TRAY === "1") {
-      tray = createTray({
-        onToggle: () => sendToNotch("agent-island:toggle"),
-        onQuit: () => app.quit(),
-        isSoundOn: () => soundsOn,
-        onToggleSound: (on) => {
-          soundsOn = on;
-          sendToNotch("agent-island:sounds", on);
-        },
-      });
+    const settings = loadSettings();
+
+    // Disabled integrations disappear everywhere the UI looks.
+    const filterSessions = (sessions: SessionSnapshot[]): SessionSnapshot[] =>
+      sessions.filter((s) => settings.agents[s.agent] !== false);
+    const filterUsage = (usage: AgentUsage[]): AgentUsage[] =>
+      usage.filter((u) => settings.agents[u.agent] !== false);
+
+    // Menu-bar icon: a setting now (AGENT_ISLAND_TRAY=1 still forces it on).
+    function syncTray(): void {
+      const want = settings.tray || process.env.AGENT_ISLAND_TRAY === "1";
+      if (want && !tray) {
+        tray = createTray({
+          onToggle: () => sendToNotch("agent-island:toggle"),
+          onQuit: () => app.quit(),
+          isSoundOn: () => settings.sounds,
+          onToggleSound: (on) => applySetting("sounds", on),
+        });
+      } else if (!want && tray) {
+        tray.destroy();
+        tray = null;
+      }
     }
-    ipcMain.handle("agent-island:get-sounds", () => soundsOn);
-    ipcMain.on("agent-island:set-sounds", (_e, on: boolean) => {
-      soundsOn = on;
-      sendToNotch("agent-island:sounds", on);
-    });
+    syncTray();
+
+    const onUpdateInfo = (info: { version: string }): void =>
+      sendToNotch("agent-island:update", info);
+
+    function settingsState() {
+      return {
+        ...settings,
+        openAtLogin: app.getLoginItemSettings().openAtLogin,
+        version: app.getVersion(),
+      };
+    }
+
+    function pushFiltered(): void {
+      sendToNotch("agent-island:sessions", {
+        sessions: filterSessions(daemon.list()),
+        connected: daemon.isConnected(),
+      });
+      sendToNotch("agent-island:usage", filterUsage(daemon.getUsage()));
+    }
+
+    /** The one place a setting changes: persist, apply side effects, broadcast. */
+    function applySetting(key: string, value: boolean): void {
+      switch (key) {
+        case "agent:claude-code":
+          settings.agents["claude-code"] = value;
+          if (value) setupZeroConfig();
+          else removeClaudeHooks();
+          break;
+        case "agent:codex":
+          settings.agents.codex = value; // read-only tailer; hiding it is disconnecting
+          break;
+        case "agent:cursor":
+          settings.agents.cursor = value;
+          if (value) setupCursorZeroConfig();
+          else removeCursorHooks();
+          break;
+        case "sounds":
+          settings.sounds = value;
+          sendToNotch("agent-island:sounds", value);
+          break;
+        case "tray":
+          settings.tray = value;
+          syncTray();
+          break;
+        case "updateCheck":
+          settings.updateCheck = value;
+          if (value) startUpdateCheck(onUpdateInfo);
+          else stopUpdateCheck();
+          break;
+        case "openAtLogin":
+          app.setLoginItemSettings({ openAtLogin: value, openAsHidden: true });
+          break;
+        default:
+          return;
+      }
+      saveSettings(settings);
+      pushSettingsState(settingsState());
+      pushFiltered();
+    }
+
+    ipcMain.handle("agent-island:get-sounds", () => settings.sounds);
+    ipcMain.on("agent-island:set-sounds", (_e, on: boolean) => applySetting("sounds", on));
+    ipcMain.handle("agent-island:get-settings", () => settingsState());
+    ipcMain.on("agent-island:set-setting", (_e, { key, value }: { key: string; value: boolean }) =>
+      applySetting(key, value),
+    );
+    ipcMain.on("agent-island:open-settings", () => showSettingsWindow());
 
     // First launch: a short onboarding (island tour + Accessibility + login).
     registerOnboardingIpc();
@@ -98,33 +177,35 @@ if (!app.requestSingleInstanceLock()) {
 
     // Update NOTIFIER (no self-update without a Developer ID): one anonymous
     // check against GitHub Releases; the island shows a chip, a notification
-    // links to the download. AGENT_ISLAND_NO_UPDATE_CHECK=1 disables.
-    startUpdateCheck((info) => sendToNotch("agent-island:update", info));
+    // links to the download. Toggle in Settings; AGENT_ISLAND_NO_UPDATE_CHECK=1
+    // still disables outright.
+    if (settings.updateCheck) startUpdateCheck(onUpdateInfo);
     ipcMain.on("agent-island:open-update", () => openUpdatePage());
 
-    // Zero Config: wire Claude Code and Cursor to the daemon (token + safe
-    // hook merges; Codex needs nothing — its rollout logs are tailed directly).
-    setupZeroConfig();
-    setupCursorZeroConfig();
+    // Zero Config: wire enabled agents to the daemon (token + safe hook
+    // merges; Codex needs nothing — its rollout logs are tailed directly).
+    if (settings.agents["claude-code"]) setupZeroConfig();
+    if (settings.agents.cursor) setupCursorZeroConfig();
 
     // One launch runs everything: spawn the daemon if it isn't already up.
     await ensureDaemon();
 
     daemon.onSessions((sessions: SessionSnapshot[], connected: boolean) => {
-      sendToNotch("agent-island:sessions", { sessions, connected });
-      if (tray && !tray.isDestroyed()) updateTrayTitle(tray, sessions);
-      syncApprovalShortcuts(sessions);
-      syncQuestionShortcuts(sessions);
+      const visible = filterSessions(sessions);
+      sendToNotch("agent-island:sessions", { sessions: visible, connected });
+      if (tray && !tray.isDestroyed()) updateTrayTitle(tray, visible);
+      syncApprovalShortcuts(visible);
+      syncQuestionShortcuts(visible);
     });
-    daemon.onUsage((usage) => sendToNotch("agent-island:usage", usage));
+    daemon.onUsage((usage) => sendToNotch("agent-island:usage", filterUsage(usage)));
     daemon.start();
 
     // Renderer pulls initial state on mount (it may load after the first push).
     ipcMain.handle("agent-island:get-sessions", () => ({
-      sessions: daemon.list(),
+      sessions: filterSessions(daemon.list()),
       connected: daemon.isConnected(),
     }));
-    ipcMain.handle("agent-island:get-usage", () => daemon.getUsage());
+    ipcMain.handle("agent-island:get-usage", () => filterUsage(daemon.getUsage()));
 
     // Renderer toggles click-through as the pointer enters/leaves the pill.
     // While interactive, poll the real cursor so the island reliably collapses
