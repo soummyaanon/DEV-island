@@ -1,5 +1,14 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { AgentUsage, ApprovalDecision, SessionSnapshot } from "@agent-island/shared";
+import type { AgentKind, AgentUsage, ApprovalDecision, SessionSnapshot } from "@agent-island/shared";
+
+export interface SettingsState {
+  agents: Record<AgentKind, boolean>;
+  sounds: boolean;
+  tray: boolean;
+  updateCheck: boolean;
+  openAtLogin: boolean;
+  version: string;
+}
 
 export interface SessionsPayload {
   sessions: SessionSnapshot[];
@@ -87,6 +96,22 @@ const api = {
   openUpdate: (): void => ipcRenderer.send("agent-island:open-update"),
 
   quit: (): void => ipcRenderer.send("agent-island:quit"),
+
+  /** Open the Settings window. */
+  openSettings: (): void => ipcRenderer.send("agent-island:open-settings"),
+
+  /* ---- Settings window ---- */
+
+  settings: {
+    get: (): Promise<SettingsState> => ipcRenderer.invoke("agent-island:get-settings"),
+    onState: (cb: (state: SettingsState) => void): (() => void) => {
+      const listener = (_e: unknown, state: SettingsState) => cb(state);
+      ipcRenderer.on("agent-island:settings-state", listener);
+      return () => ipcRenderer.removeListener("agent-island:settings-state", listener);
+    },
+    set: (key: string, value: boolean): void =>
+      ipcRenderer.send("agent-island:set-setting", { key, value }),
+  },
 
   /* ---- Onboarding (first-run window only) ---- */
 
