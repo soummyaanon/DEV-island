@@ -9,7 +9,9 @@ APP_DIR="$ROOT/packages/app"
 RELEASE="$APP_DIR/release"
 APP="$RELEASE/mac-arm64/Agent Island.app"
 VERSION="$(node -p "require('$APP_DIR/package.json').version")"
-DMG="$RELEASE/Agent Island-$VERSION-arm64.dmg"
+# Version lives in the release tag, not the filename — and no spaces, so
+# GitHub asset names stay verbatim.
+DMG="$RELEASE/Agent-Island.dmg"
 
 echo "==> Building daemon + app"
 pnpm --filter @agent-island/daemon build
@@ -62,7 +64,53 @@ Terminal alternative (skips steps 2–4):
   xattr -cr "/Applications/Agent Island.app"
 EOF
 
-hdiutil create -volname "Agent Island" -srcfolder "$STAGE" -ov -format UDZO "$DMG" >/dev/null
+# Retina background (1x + 2x combined into one TIFF Finder scales correctly).
+mkdir -p "$STAGE/.background"
+tiffutil -cathidpicheck "$ROOT/scripts/dmg/background.png" "$ROOT/scripts/dmg/background@2x.png" \
+  -out "$STAGE/.background/background.tiff" >/dev/null 2>&1
+
+echo "==> Styling the DMG window (Finder)"
+RW="$RELEASE/rw.dmg"
+rm -f "$RW"
+hdiutil create -volname "Agent Island" -srcfolder "$STAGE" -ov -format UDRW "$RW" >/dev/null
+MOUNT=$(hdiutil attach "$RW" -readwrite -noverify -noautoopen | awk -F'\t' '/\/Volumes\//{print $3}')
+# Style the volume we actually mounted — a stale "Agent Island" volume from a
+# user-opened DMG would otherwise steal the name (mounts as "Agent Island 1").
+VOLNAME=$(basename "$MOUNT")
+
+# Best-effort: a styling failure still ships a working (plain) DMG.
+if ! /usr/bin/osascript <<OSA
+tell application "Finder"
+  tell disk "$VOLNAME"
+    open
+    set current view of container window to icon view
+    set toolbar visible of container window to false
+    set statusbar visible of container window to false
+    set the bounds of container window to {200, 120, 840, 548}
+    set opts to the icon view options of container window
+    set arrangement of opts to not arranged
+    set icon size of opts to 96
+    set text size of opts to 12
+    set background picture of opts to file ".background:background.tiff"
+    set position of item "Agent Island.app" of container window to {160, 195}
+    set position of item "Applications" of container window to {480, 195}
+    set position of item "READ ME FIRST.txt" of container window to {320, 330}
+    close
+    open
+    update without registering applications
+    delay 2
+    close
+  end tell
+end tell
+OSA
+then
+  echo "    (styling failed — shipping an unstyled DMG)"
+fi
+sync
+hdiutil detach "$MOUNT" -quiet || hdiutil detach "$MOUNT" -force -quiet
+
+hdiutil convert "$RW" -format UDZO -imagekey zlib-level=9 -ov -o "$DMG" >/dev/null
+rm -f "$RW"
 rm -rf "$STAGE"
 
 echo "✓ $DMG"
