@@ -12,7 +12,7 @@ export function showSettingsWindow(): void {
   }
   win = new BrowserWindow({
     width: 470,
-    height: 560,
+    height: 700,
     show: false,
     frame: false,
     transparent: true,

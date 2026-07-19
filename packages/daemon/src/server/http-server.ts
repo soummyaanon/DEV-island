@@ -6,6 +6,7 @@ import { registerIngestRoutes } from "./routes-ingest";
 import { registerClaudeRoutes } from "./routes-claude";
 import { registerCursorRoutes } from "./routes-cursor";
 import { registerApprovalRoutes } from "./routes-approvals";
+import { registerQuestionRoutes } from "./routes-questions";
 import { registerUiRoutes } from "./routes-ui";
 import { registerStreamRoute } from "./ws-stream";
 
@@ -25,6 +26,7 @@ export async function buildServer(
   registerClaudeRoutes(app, hub, config, token);
   registerCursorRoutes(app, hub, config, token);
   registerApprovalRoutes(app, hub);
+  registerQuestionRoutes(app, hub);
   registerStreamRoute(app, hub);
 
   return app;

@@ -292,7 +292,7 @@ describe("extractCodexQuestion", () => {
           '{"questions":[{"question":"Deploy now?","options":[{"label":"Yes"},{"label":"No"}]}]}',
       }),
     );
-    expect(q).toMatchObject({ question: "Deploy now?", options: ["Yes", "No"] });
+    expect(q).toMatchObject({ questions: [{ question: "Deploy now?", options: ["Yes", "No"] }] });
     expect(q?.id).toBeTruthy();
     expect(q?.created_at).toBeTruthy();
   });

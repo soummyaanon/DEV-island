@@ -4,12 +4,25 @@ import { PixelSprite } from "./PixelSprite";
 import { OpenAiSprite } from "./OpenAiSprite";
 import { CursorSprite } from "./CursorSprite";
 import { TrafficLights } from "./TrafficLights";
+import { previewSound } from "./sounds";
+import {
+  EVENT_LABELS,
+  SOUND_EVENTS,
+  SOUND_THEMES,
+  THEME_LABELS,
+  resolveTheme,
+  type SoundEvent,
+  type SoundPrefs,
+  type SoundTheme,
+} from "./sound-prefs";
 import "./styles/window-chrome.css";
 import "./styles/settings.css";
 
 interface SettingsState {
   agents: Record<string, boolean>;
   sounds: boolean;
+  soundTheme: string;
+  soundOverrides: Record<string, string>;
   tray: boolean;
   updateCheck: boolean;
   openAtLogin: boolean;
@@ -19,6 +32,8 @@ interface SettingsState {
 const DEFAULTS: SettingsState = {
   agents: { "claude-code": true, codex: true, cursor: true },
   sounds: true,
+  soundTheme: "8bit",
+  soundOverrides: {},
   tray: false,
   updateCheck: true,
   openAtLogin: false,
@@ -72,14 +87,26 @@ function Settings() {
     return window.agentIsland.settings.onState(setState);
   }, []);
 
-  const set = (key: string, value: boolean) => {
+  const set = (key: string, value: boolean | string) => {
     window.agentIsland?.settings?.set(key, value);
     // optimistic; main pushes the authoritative state right back
-    setState((s) =>
-      key.startsWith("agent:")
-        ? { ...s, agents: { ...s.agents, [key.slice(6)]: value } }
-        : { ...s, [key]: value },
-    );
+    setState((s) => {
+      if (key.startsWith("agent:"))
+        return { ...s, agents: { ...s.agents, [key.slice(6)]: value === true } };
+      if (key.startsWith("soundOverride:")) {
+        const overrides = { ...s.soundOverrides };
+        if (typeof value === "string" && value) overrides[key.slice(14)] = value;
+        else delete overrides[key.slice(14)];
+        return { ...s, soundOverrides: overrides };
+      }
+      return { ...s, [key]: value };
+    });
+  };
+
+  const soundPrefs: SoundPrefs = {
+    on: state.sounds,
+    theme: state.soundTheme as SoundTheme,
+    overrides: state.soundOverrides as SoundPrefs["overrides"],
   };
 
   return (
@@ -116,14 +143,62 @@ function Settings() {
         />
       </div>
 
-      <h2>General</h2>
+      <h2>Sounds</h2>
       <div className="s-group">
         <Row
           title="Sound effects"
-          detail="8-bit chimes when agents finish, fail, or need you."
+          detail="Chimes when agents finish, ask, need you — and when you allow."
           on={state.sounds}
           onChange={(v) => set("sounds", v)}
         />
+        <div className="s-row">
+          <div className="s-text">
+            <b>Theme</b>
+            <span>The sound set for all events.</span>
+          </div>
+          <select
+            className="s-select"
+            value={state.soundTheme}
+            onChange={(e) => set("soundTheme", e.target.value)}
+          >
+            {SOUND_THEMES.map((t) => (
+              <option key={t} value={t}>
+                {THEME_LABELS[t]}
+              </option>
+            ))}
+          </select>
+        </div>
+        {SOUND_EVENTS.map((event: SoundEvent) => (
+          <div className="s-row s-sub" key={event}>
+            <div className="s-text">
+              <b>{EVENT_LABELS[event]}</b>
+            </div>
+            <button
+              type="button"
+              className="s-play"
+              title="Preview"
+              onClick={() => previewSound(event, resolveTheme(event, soundPrefs))}
+            >
+              ▶
+            </button>
+            <select
+              className="s-select"
+              value={state.soundOverrides[event] ?? ""}
+              onChange={(e) => set(`soundOverride:${event}`, e.target.value)}
+            >
+              <option value="">Theme default</option>
+              {SOUND_THEMES.map((t) => (
+                <option key={t} value={t}>
+                  {THEME_LABELS[t]}
+                </option>
+              ))}
+            </select>
+          </div>
+        ))}
+      </div>
+
+      <h2>General</h2>
+      <div className="s-group">
         <Row
           title="Open at login"
           detail="Start silently with your Mac — no Dock, no windows."

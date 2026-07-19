@@ -7,7 +7,8 @@ import { PixelSprite } from "./PixelSprite";
 import { OpenAiSprite } from "./OpenAiSprite";
 import { CursorSprite } from "./CursorSprite";
 import { UsageFooter } from "./UsageFooter";
-import { playAttention, playFail, playSuccess } from "./sounds";
+import { playSound } from "./sounds";
+import { DEFAULT_SOUND_PREFS, type SoundPrefs, type SoundTheme } from "./sound-prefs";
 
 const ACTIVE_STATES = new Set(["working", "starting", "waiting-for-approval"]);
 const MAX_ROWS = 5;
@@ -29,9 +30,14 @@ export function App() {
 
   const islandRef = useRef<HTMLDivElement>(null);
   const interactiveRef = useRef(false);
-  const [soundsOn, setSoundsOn] = useState(true);
+  const [sound, setSound] = useState<SoundPrefs>(DEFAULT_SOUND_PREFS);
+  // Mirror for once-registered listeners (chimes) that must not go stale.
+  const soundRef = useRef<SoundPrefs>(DEFAULT_SOUND_PREFS);
   const [update, setUpdate] = useState<{ version: string } | null>(null);
-  const prevStates = useRef<Map<string, { state: string; needsAction: boolean }> | null>(null);
+  const prevStates = useRef<Map<
+    string,
+    { state: string; needsAction: boolean; hasQuestion: boolean }
+  > | null>(null);
 
   const pending = useMemo(() => sessions.filter((s) => s.pending_approval), [sessions]);
   const asking = useMemo(() => sessions.filter((s) => s.pending_question), [sessions]);
@@ -76,39 +82,57 @@ export function App() {
     return window.agentIsland.onCursorLeft(() => setHovering(false));
   }, []);
 
-  // Sound toggle lives in the tray menu.
+  // Sound prefs (on/off, theme, per-event overrides) live in main.
   useEffect(() => {
-    void window.agentIsland.getSounds().then(setSoundsOn);
-    return window.agentIsland.onSounds(setSoundsOn);
+    const apply = (p: { on: boolean; theme: string; overrides: Record<string, string> }) => {
+      const prefs: SoundPrefs = {
+        on: p.on,
+        theme: p.theme as SoundTheme,
+        overrides: p.overrides as SoundPrefs["overrides"],
+      };
+      soundRef.current = prefs;
+      setSound(prefs);
+    };
+    void window.agentIsland.getSounds().then(apply);
+    return window.agentIsland.onSounds(apply);
   }, []);
 
   // A newer release exists — surface a quiet chip in the panel footer.
   useEffect(() => window.agentIsland.onUpdate(setUpdate), []);
 
-  // 8-bit alerts on state transitions: done -> success arpeggio, failure ->
-  // buzz, needs-you -> double ping. The first snapshot only primes the map so
-  // relaunching the app never replays history.
+  // One-shot chimes pushed by main (allowing an approval, answering a question).
+  useEffect(() => {
+    return window.agentIsland.onChime((event) => {
+      if (event === "approve") playSound("approve", soundRef.current);
+    });
+  }, []);
+
+  // Alerts on state transitions: done -> success, failure -> fail, question ->
+  // question chime, other needs-you -> attention. The first snapshot only
+  // primes the map so relaunching the app never replays history.
   useEffect(() => {
     const next = new Map(
       sessions.map((s) => [
         s.key,
-        { state: s.state, needsAction: s.requires_action || s.pending_approval !== null },
+        {
+          state: s.state,
+          needsAction: s.requires_action || s.pending_approval !== null,
+          hasQuestion: s.pending_question !== null,
+        },
       ]),
     );
     const prev = prevStates.current;
     prevStates.current = next;
-    if (!prev || !soundsOn) return;
+    if (!prev || !sound.on) return;
 
     for (const [key, cur] of next) {
       const was = prev.get(key);
       if (!was) continue; // brand-new session: no sound until it transitions
-      if (cur.state !== was.state) {
-        if (cur.state === "done") playSuccess();
-        else if (cur.state === "failed") playFail();
-      }
-      if (cur.needsAction && !was.needsAction) playAttention();
+      if (cur.state !== was.state && cur.state === "done") playSound("success", sound);
+      if (cur.hasQuestion && !was.hasQuestion) playSound("question", sound);
+      else if (cur.needsAction && !was.needsAction) playSound("attention", sound);
     }
-  }, [sessions, soundsOn]);
+  }, [sessions, sound]);
 
   // Notch geometry, measured by main: the black body spans the band height so
   // the shape merges with the hardware notch, and every island width derives
@@ -205,10 +229,10 @@ export function App() {
               ))}
               {asking.map((s) => (
                 <QuestionCard
-                  key={`q-${s.key}`}
+                  key={`q-${s.pending_question?.id ?? s.key}`}
                   session={s}
                   onJump={(sess) => window.agentIsland.jump(sess)}
-                  onAnswer={(sess, digit) => window.agentIsland.answer(sess, digit)}
+                  onAnswer={(sess, options) => window.agentIsland.answer(sess, options)}
                 />
               ))}
               <ul className="rows">
@@ -231,10 +255,10 @@ export function App() {
                   title="Sound effects"
                   onClick={(e) => {
                     e.stopPropagation();
-                    window.agentIsland.setSounds(!soundsOn);
+                    window.agentIsland.setSounds(!sound.on);
                   }}
                 >
-                  {soundsOn ? "♪ on" : "♪ off"}
+                  {sound.on ? "♪ on" : "♪ off"}
                 </button>
                 {update ? (
                   <button

@@ -3,21 +3,21 @@ import type { ApprovalDecision } from "@agent-island/shared";
 /** The outcome of a held approval: the user's choice, or a timeout fallback. */
 export type ApprovalOutcome = ApprovalDecision | "timeout";
 
-interface Pending {
-  resolve: (outcome: ApprovalOutcome) => void;
+interface Pending<T> {
+  resolve: (outcome: T | "timeout") => void;
   timer: ReturnType<typeof setTimeout>;
 }
 
 /**
- * Tracks in-flight approvals. Each corresponds to one agent permission hook the
- * daemon is holding open; it resolves when the user decides in the notch, or
- * after a timeout (so a held hook never hangs the agent forever).
+ * Tracks in-flight holds. Each corresponds to one agent hook the daemon is
+ * holding open; it resolves when the user decides in the notch, or after a
+ * timeout (so a held hook never hangs the agent forever).
  */
-export class ApprovalRegistry {
-  private readonly pending = new Map<string, Pending>();
+export class HoldRegistry<T> {
+  private readonly pending = new Map<string, Pending<T>>();
 
   /** Await a decision for `id`; resolves with the choice or "timeout". */
-  await(id: string, timeoutMs: number): Promise<ApprovalOutcome> {
+  await(id: string, timeoutMs: number): Promise<T | "timeout"> {
     return new Promise((resolve) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
@@ -27,8 +27,8 @@ export class ApprovalRegistry {
     });
   }
 
-  /** Resolve a held approval from the UI. Returns false if unknown/expired. */
-  resolve(id: string, decision: ApprovalDecision): boolean {
+  /** Resolve a held id from the UI. Returns false if unknown/expired. */
+  resolve(id: string, decision: T): boolean {
     const p = this.pending.get(id);
     if (!p) return false;
     clearTimeout(p.timer);
@@ -41,3 +41,6 @@ export class ApprovalRegistry {
     return this.pending.has(id);
   }
 }
+
+/** Held permission approvals: resolves with allow/deny. */
+export class ApprovalRegistry extends HoldRegistry<ApprovalDecision> {}

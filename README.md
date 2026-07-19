@@ -50,15 +50,19 @@ MacBook (Pro 14"/16", Air 13"/15", or no notch at all).
   the full command or diff. <kbd>⌘Y</kbd> / <kbd>⌘N</kbd> decide from anywhere;
   if you don't answer, Claude's own prompt takes over untouched.
 - **Answer questions from the notch** — when an agent asks a multiple-choice
-  question, the island auto-expands and <kbd>⌘1–9</kbd> (or a click) types the
-  answer into the right terminal. iTerm2 works out of the box; every other
-  terminal works after granting Accessibility in onboarding.
+  question, the island auto-expands and <kbd>⌘1–9</kbd> (or a click) answers it.
+  Claude questions are answered directly through the hook — no terminal focus,
+  no extra permissions, works in any terminal. Codex answers are typed into the
+  terminal (iTerm2 out of the box; other terminals after granting Accessibility
+  in onboarding).
 - **Jump back** — click a session and the app that hosts it comes forward: the
   exact iTerm2 tab, Cursor itself when Claude runs in Cursor's terminal (the
   island reads the process's real host app — no guessing), Terminal, Warp,
   Ghostty, WezTerm, VS Code.
-- **8-bit sounds** — success arpeggio on done, buzz on failure, double ping
-  when an agent needs you. Toggle in the panel footer.
+- **Sound themes** — pick 8-bit chiptunes, Arcade, Soft chimes, or the Anime
+  pack in Settings, with per-event overrides and previews: distinct sounds for
+  done, needs-you, question-asked, and a confirm chime when you allow something.
+  Quick toggle in the panel footer.
 - **Codex usage footer** — your plan's remaining quota, read locally from
   Codex's own logs.
 - **Feels like a system app** — no Dock icon, no menu-bar icon; the island

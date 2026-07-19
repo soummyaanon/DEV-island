@@ -11,7 +11,7 @@ import {
 import { createNotchWindow } from "./windows/notch-window";
 import { maybeShowOnboarding, registerOnboardingIpc } from "./windows/onboarding-window";
 import { pushSettingsState, showSettingsWindow } from "./windows/settings-window";
-import { loadSettings, saveSettings } from "./settings";
+import { isSoundEvent, isSoundTheme, loadSettings, saveSettings } from "./settings";
 import { createTray, updateTrayTitle } from "./tray";
 import { answerInTerminal, jumpToTerminal } from "./jump-back";
 import { openUpdatePage, startUpdateCheck, stopUpdateCheck } from "./update-check";
@@ -46,7 +46,9 @@ if (!app.requestSingleInstanceLock()) {
     globalShortcut.unregister("CommandOrControl+N");
     if (id) {
       globalShortcut.register("CommandOrControl+Y", () => {
-        if (pendingApprovalId) void daemon.resolveApproval(pendingApprovalId, "allow");
+        if (!pendingApprovalId) return;
+        sendToNotch("agent-island:chime", "approve");
+        void daemon.resolveApproval(pendingApprovalId, "allow");
       });
       globalShortcut.register("CommandOrControl+N", () => {
         if (pendingApprovalId) void daemon.resolveApproval(pendingApprovalId, "deny");
@@ -54,9 +56,24 @@ if (!app.requestSingleInstanceLock()) {
     }
   }
 
-  // While an agent waits on a multiple-choice question, ⌘1..⌘9 answer it from
-  // anywhere (registered only for the shown options, released the moment the
-  // question clears — same transient pattern as the ⌘Y/⌘N approvals).
+  // Claude questions are answered through the daemon's held hook — no terminal
+  // focus or synthetic keystrokes needed. Codex (and an expired hold) falls
+  // back to jump + keystrokes (single-question only; multi just jumps).
+  async function answerQuestion(session: SessionSnapshot, options: number[]): Promise<void> {
+    const q = session.pending_question;
+    if (q && session.agent === "claude-code" && (await daemon.answerQuestion(q.id, options))) {
+      console.log(`[jump] answered ${q.id} via hook (${options.join(",")})`);
+      sendToNotch("agent-island:chime", "approve");
+      return;
+    }
+    if (options.length === 1) answerInTerminal(session, String(options[0] + 1));
+    else jumpToTerminal(session);
+  }
+
+  // While an agent waits on a single multiple-choice question, ⌘1..⌘9 answer
+  // it from anywhere (registered only for the shown options, released the
+  // moment the question clears — same transient pattern as ⌘Y/⌘N approvals).
+  // Multi-question cards are answered by clicking each choice on the island.
   let questionId: string | null = null;
   let questionKeyCount = 0;
   function syncQuestionShortcuts(sessions: SessionSnapshot[]): void {
@@ -68,10 +85,10 @@ if (!app.requestSingleInstanceLock()) {
     }
     questionId = q?.id ?? null;
     questionKeyCount = 0;
-    if (!session || !q) return;
-    questionKeyCount = Math.min(9, q.options.length);
+    if (!session || !q || q.questions.length !== 1) return;
+    questionKeyCount = Math.min(9, q.questions[0].options.length);
     for (let i = 1; i <= questionKeyCount; i++) {
-      globalShortcut.register(`CommandOrControl+${i}`, () => answerInTerminal(session, String(i)));
+      globalShortcut.register(`CommandOrControl+${i}`, () => void answerQuestion(session, [i - 1]));
     }
   }
 
@@ -123,50 +140,71 @@ if (!app.requestSingleInstanceLock()) {
       sendToNotch("agent-island:usage", filterUsage(daemon.getUsage()));
     }
 
+    const soundPrefs = () => ({
+      on: settings.sounds,
+      theme: settings.soundTheme,
+      overrides: settings.soundOverrides,
+    });
+
     /** The one place a setting changes: persist, apply side effects, broadcast. */
-    function applySetting(key: string, value: boolean): void {
+    function applySetting(key: string, value: boolean | string): void {
       switch (key) {
         case "agent:claude-code":
-          settings.agents["claude-code"] = value;
+          settings.agents["claude-code"] = value === true;
           if (value) setupZeroConfig();
           else removeClaudeHooks();
           break;
         case "agent:codex":
-          settings.agents.codex = value; // read-only tailer; hiding it is disconnecting
+          settings.agents.codex = value === true; // read-only tailer; hiding it is disconnecting
           break;
         case "agent:cursor":
-          settings.agents.cursor = value;
+          settings.agents.cursor = value === true;
           if (value) setupCursorZeroConfig();
           else removeCursorHooks();
           break;
         case "sounds":
-          settings.sounds = value;
-          sendToNotch("agent-island:sounds", value);
+          settings.sounds = value === true;
+          sendToNotch("agent-island:sounds", soundPrefs());
+          break;
+        case "soundTheme":
+          if (!isSoundTheme(value)) return;
+          settings.soundTheme = value;
+          // A theme switch is a fresh start: per-event overrides reset so
+          // every row follows the newly picked theme.
+          settings.soundOverrides = {};
+          sendToNotch("agent-island:sounds", soundPrefs());
           break;
         case "tray":
-          settings.tray = value;
+          settings.tray = value === true;
           syncTray();
           break;
         case "updateCheck":
-          settings.updateCheck = value;
+          settings.updateCheck = value === true;
           if (value) startUpdateCheck(onUpdateInfo);
           else stopUpdateCheck();
           break;
         case "openAtLogin":
-          app.setLoginItemSettings({ openAtLogin: value, openAsHidden: true });
+          app.setLoginItemSettings({ openAtLogin: value === true, openAsHidden: true });
           break;
-        default:
-          return;
+        default: {
+          // "soundOverride:<event>" — value is a theme, or "" for theme-default.
+          const event = key.startsWith("soundOverride:") ? key.slice(14) : null;
+          if (!isSoundEvent(event)) return;
+          if (isSoundTheme(value)) settings.soundOverrides[event] = value;
+          else delete settings.soundOverrides[event];
+          sendToNotch("agent-island:sounds", soundPrefs());
+          break;
+        }
       }
       saveSettings(settings);
       pushSettingsState(settingsState());
       pushFiltered();
     }
 
-    ipcMain.handle("agent-island:get-sounds", () => settings.sounds);
+    ipcMain.handle("agent-island:get-sounds", () => soundPrefs());
     ipcMain.on("agent-island:set-sounds", (_e, on: boolean) => applySetting("sounds", on));
     ipcMain.handle("agent-island:get-settings", () => settingsState());
-    ipcMain.on("agent-island:set-setting", (_e, { key, value }: { key: string; value: boolean }) =>
+    ipcMain.on("agent-island:set-setting", (_e, { key, value }: { key: string; value: boolean | string }) =>
       applySetting(key, value),
     );
     ipcMain.on("agent-island:open-settings", () => showSettingsWindow());
@@ -219,6 +257,7 @@ if (!app.requestSingleInstanceLock()) {
     // alone proved flaky and left it stuck open).
     let cursorWatch: ReturnType<typeof setInterval> | null = null;
     ipcMain.on("agent-island:set-interactive", (_e, interactive: boolean) => {
+      console.log(`[notch] interactive=${interactive}`);
       if (notch && !notch.isDestroyed()) notch.setIgnoreMouseEvents(!interactive, { forward: true });
       if (cursorWatch) {
         clearInterval(cursorWatch);
@@ -240,17 +279,23 @@ if (!app.requestSingleInstanceLock()) {
       }
     });
 
-    ipcMain.on("agent-island:jump", (_e, session: SessionSnapshot) => jumpToTerminal(session));
+    ipcMain.on("agent-island:jump", (_e, session: SessionSnapshot) => {
+      console.log(`[jump] requested for ${session.key}`);
+      jumpToTerminal(session);
+    });
 
     ipcMain.on(
       "agent-island:answer",
-      (_e, { session, digit }: { session: SessionSnapshot; digit: number }) =>
-        answerInTerminal(session, String(digit)),
+      (_e, { session, options }: { session: SessionSnapshot; options: number[] }) => {
+        console.log(`[jump] answer [${options.join(",")}] for ${session.key}`);
+        void answerQuestion(session, options);
+      },
     );
 
     ipcMain.on(
       "agent-island:approve",
       (_e, { id, decision }: { id: string; decision: ApprovalDecision }) => {
+        if (decision === "allow") sendToNotch("agent-island:chime", "approve");
         void daemon.resolveApproval(id, decision);
       },
     );
