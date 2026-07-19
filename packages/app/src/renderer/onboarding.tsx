@@ -3,6 +3,8 @@ import { createRoot } from "react-dom/client";
 import { PixelSprite } from "./PixelSprite";
 import { OpenAiSprite } from "./OpenAiSprite";
 import { CursorSprite } from "./CursorSprite";
+import { TrafficLights } from "./TrafficLights";
+import "./styles/window-chrome.css";
 import "./styles/onboarding.css";
 
 interface OnboardingState {
@@ -60,6 +62,8 @@ function Onboarding() {
   return (
     <div className="onboard">
       <div className="drag-strip" />
+      {/* Closing the intro still counts as onboarded — never trap the user. */}
+      <TrafficLights onClose={() => window.agentIsland?.onboarding?.finish()} />
       <IslandDemo />
 
       <h1 className="ob-title">Agent Island</h1>

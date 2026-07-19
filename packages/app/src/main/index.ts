@@ -171,6 +171,12 @@ if (!app.requestSingleInstanceLock()) {
     );
     ipcMain.on("agent-island:open-settings", () => showSettingsWindow());
 
+    // Traffic lights in frameless windows: act on whichever window asked.
+    ipcMain.on("agent-island:win-close", (e) => BrowserWindow.fromWebContents(e.sender)?.close());
+    ipcMain.on("agent-island:win-minimize", (e) =>
+      BrowserWindow.fromWebContents(e.sender)?.minimize(),
+    );
+
     // First launch: a short onboarding (island tour + Accessibility + login).
     registerOnboardingIpc();
     maybeShowOnboarding();
