@@ -18,6 +18,13 @@ pnpm --filter @agent-island/app build
 echo "==> Packaging .app (electron-builder --dir)"
 pnpm --filter @agent-island/app run pack
 
+# electron-builder's electronLanguages only trims app-level lproj on macOS;
+# the Electron Framework ships ~55 locale.pak (~42MB) that Chromium happily
+# lives without (missing locale falls back to en). Trim BEFORE signing.
+echo "==> Trimming Electron Framework locales (en only)"
+FW_RES="$APP/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources"
+find "$FW_RES" -maxdepth 1 -name "*.lproj" ! -name "en*.lproj" -exec rm -rf {} +
+
 echo "==> Deep ad-hoc signing the bundle"
 codesign --force --deep --sign - "$APP"
 codesign --verify --deep --strict "$APP"

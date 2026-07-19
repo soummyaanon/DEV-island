@@ -1,0 +1,335 @@
+:root {
+  --bg: #101116;
+  --edge: rgba(255, 255, 255, 0.09);
+  --text: rgba(255, 255, 255, 0.94);
+  --text-dim: rgba(255, 255, 255, 0.5);
+  --accent: #ff8a5b;
+  --working: #5ba8ff;
+  --done: #4ecb8d;
+  --spring: cubic-bezier(0.34, 1.2, 0.64, 1);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  background: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+body {
+  font-family: -apple-system, "SF Pro Text", system-ui, sans-serif;
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* The whole window is one rounded card. */
+.onboard {
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 26px 44px 26px;
+  background: linear-gradient(180deg, #191b23, #0c0d11 60%, #08090b);
+  border: 1px solid var(--edge);
+  border-radius: 22px;
+  overflow: hidden;
+  animation: card-in 0.5s var(--spring);
+}
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(10px);
+  }
+}
+
+/* Frameless window: the top strip drags it. */
+.drag-strip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 40px;
+  -webkit-app-region: drag;
+}
+
+/* ---- Hero: a living mock of the island ---- */
+.demo-strip {
+  margin-top: 6px;
+  animation: rise 0.6s var(--spring) 0.08s backwards;
+}
+.demo-island {
+  width: 300px;
+  background: #000;
+  border-radius: 0 0 16px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: none;
+  padding-bottom: 8px;
+  position: relative;
+  overflow: hidden;
+  animation: island-breathe 5s ease-in-out infinite;
+}
+@keyframes island-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.02);
+  }
+}
+.demo-band {
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  color: var(--working);
+}
+.demo-sprites {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.demo-sprites .pixel-sprite.live g.f1 {
+  animation: crab-f1 0.7s steps(1, end) infinite;
+}
+.demo-sprites .pixel-sprite g.f2 {
+  opacity: 0;
+}
+.demo-sprites .pixel-sprite.live g.f2 {
+  animation: crab-f2 0.7s steps(1, end) infinite;
+}
+@keyframes crab-f1 {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes crab-f2 {
+  0%,
+  49% {
+    opacity: 0;
+  }
+  50%,
+  100% {
+    opacity: 1;
+  }
+}
+.demo-sprites .openai-sprite.live {
+  animation: spin 2.8s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.demo-sprites .cursor-sprite.live {
+  animation: bob 1.2s ease-in-out infinite alternate;
+}
+@keyframes bob {
+  from {
+    transform: translateY(0.6px);
+  }
+  to {
+    transform: translateY(-0.6px);
+  }
+}
+.demo-sprites .pixel-sprite.live,
+.demo-sprites .openai-sprite.live,
+.demo-sprites .cursor-sprite.live {
+  filter: drop-shadow(0 0 3px currentColor);
+}
+.demo-count {
+  font-size: 11px;
+  font-weight: 700;
+}
+.demo-rows {
+  padding: 2px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.demo-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+}
+.demo-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+.demo-dot.working {
+  background: var(--working);
+  box-shadow: 0 0 5px var(--working);
+}
+.demo-dot.done {
+  background: var(--done);
+}
+.demo-name {
+  flex: 1;
+  font-size: 11.5px;
+  font-weight: 550;
+}
+.demo-meta {
+  font-size: 9.5px;
+  color: var(--text-dim);
+}
+
+/* ---- Copy ---- */
+.ob-title {
+  margin-top: 20px;
+  font-size: 27px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  animation: rise 0.6s var(--spring) 0.16s backwards;
+}
+.ob-sub {
+  margin-top: 8px;
+  max-width: 470px;
+  text-align: center;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text-dim);
+  animation: rise 0.6s var(--spring) 0.24s backwards;
+}
+.ob-sub kbd {
+  font: inherit;
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.09);
+  border-radius: 5px;
+  padding: 0 5px;
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+
+/* ---- Setup steps ---- */
+.ob-steps {
+  margin-top: 18px;
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: rise 0.6s var(--spring) 0.32s backwards;
+}
+.ob-step {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 11px 14px;
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  transition: border-color 0.3s ease;
+}
+.ob-step.done {
+  border-color: rgba(78, 203, 141, 0.35);
+}
+.ob-step-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ob-step-text b {
+  font-size: 12.5px;
+  font-weight: 640;
+}
+.ob-step-text span {
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.45;
+}
+.ob-btn {
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 650;
+  color: #111214;
+  background: #ececec;
+  border: none;
+  border-radius: 9px;
+  padding: 6px 14px;
+  cursor: pointer;
+  flex: none;
+  transition: transform 0.08s ease;
+}
+.ob-btn:hover {
+  background: #fff;
+}
+.ob-btn:active {
+  transform: scale(0.97);
+}
+.ob-check {
+  flex: none;
+  font-size: 11.5px;
+  font-weight: 650;
+  color: var(--done);
+}
+
+/* ---- CTA ---- */
+.ob-start {
+  margin-top: 20px;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 680;
+  color: #1b0d06;
+  background: linear-gradient(180deg, #ffa27b, var(--accent));
+  border: none;
+  border-radius: 12px;
+  padding: 11px 26px;
+  cursor: pointer;
+  box-shadow: 0 4px 18px rgba(255, 138, 91, 0.35);
+  animation: rise 0.6s var(--spring) 0.4s backwards;
+  transition: transform 0.1s var(--spring);
+}
+.ob-start:hover {
+  transform: translateY(-1px);
+}
+.ob-start:active {
+  transform: scale(0.98);
+}
+.ob-hint {
+  margin-top: 10px;
+  font-size: 10.5px;
+  color: var(--text-dim);
+  animation: rise 0.6s var(--spring) 0.48s backwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onboard,
+  .demo-strip,
+  .ob-title,
+  .ob-sub,
+  .ob-steps,
+  .ob-start,
+  .ob-hint,
+  .demo-island,
+  .demo-sprites .pixel-sprite.live g.f1,
+  .demo-sprites .pixel-sprite.live g.f2,
+  .demo-sprites .openai-sprite.live {
+    animation: none;
+  }
+}

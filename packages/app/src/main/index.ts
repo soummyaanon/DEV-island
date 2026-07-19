@@ -2,10 +2,12 @@ import { app, BrowserWindow, globalShortcut, ipcMain, screen, type Tray } from "
 import type { ApprovalDecision, SessionSnapshot } from "@agent-island/shared";
 import { DaemonClient } from "./daemon-client";
 import { ensureDaemon, stopDaemon } from "./daemon-manager";
-import { setupZeroConfig } from "./zero-config";
+import { setupCursorZeroConfig, setupZeroConfig } from "./zero-config";
 import { createNotchWindow } from "./windows/notch-window";
+import { maybeShowOnboarding, registerOnboardingIpc } from "./windows/onboarding-window";
 import { createTray, updateTrayTitle } from "./tray";
-import { jumpToTerminal } from "./jump-back";
+import { answerInTerminal, jumpToTerminal } from "./jump-back";
+import { openUpdatePage, startUpdateCheck, stopUpdateCheck } from "./update-check";
 
 // One instance only — two overlays fighting over the notch would be chaos.
 if (!app.requestSingleInstanceLock()) {
@@ -19,6 +21,12 @@ if (!app.requestSingleInstanceLock()) {
   let notch: BrowserWindow | null = null;
   let tray: Tray | null = null;
   const daemon = new DaemonClient();
+
+  // During quit the window object outlives its native counterpart; sending to a
+  // destroyed webContents throws "Object has been destroyed".
+  function sendToNotch(channel: string, ...args: unknown[]): void {
+    if (notch && !notch.isDestroyed()) notch.webContents.send(channel, ...args);
+  }
 
   // ⌘Y / ⌘N resolve a pending approval. The notch window is non-focusable, so we
   // use global shortcuts — registered only while an approval is actually pending.
@@ -39,34 +47,76 @@ if (!app.requestSingleInstanceLock()) {
     }
   }
 
+  // While an agent waits on a multiple-choice question, ⌘1..⌘9 answer it from
+  // anywhere (registered only for the shown options, released the moment the
+  // question clears — same transient pattern as the ⌘Y/⌘N approvals).
+  let questionId: string | null = null;
+  let questionKeyCount = 0;
+  function syncQuestionShortcuts(sessions: SessionSnapshot[]): void {
+    const session = sessions.find((s) => s.pending_question);
+    const q = session?.pending_question ?? null;
+    if ((q?.id ?? null) === questionId) return;
+    for (let i = 1; i <= questionKeyCount; i++) {
+      globalShortcut.unregister(`CommandOrControl+${i}`);
+    }
+    questionId = q?.id ?? null;
+    questionKeyCount = 0;
+    if (!session || !q) return;
+    questionKeyCount = Math.min(9, q.options.length);
+    for (let i = 1; i <= questionKeyCount; i++) {
+      globalShortcut.register(`CommandOrControl+${i}`, () => answerInTerminal(session, String(i)));
+    }
+  }
+
   app.whenReady().then(async () => {
     app.dock?.hide(); // menu-bar app, no Dock icon
     notch = createNotchWindow();
 
     let soundsOn = true;
-    tray = createTray({
-      onToggle: () => notch?.webContents.send("agent-island:toggle"),
-      onQuit: () => app.quit(),
-      isSoundOn: () => soundsOn,
-      onToggleSound: (on) => {
-        soundsOn = on;
-        notch?.webContents.send("agent-island:sounds", on);
-      },
-    });
+    // System-app feel: no menu-bar icon by default — controls live inside the
+    // island's expanded panel (hover the notch). AGENT_ISLAND_TRAY=1 restores it.
+    if (process.env.AGENT_ISLAND_TRAY === "1") {
+      tray = createTray({
+        onToggle: () => sendToNotch("agent-island:toggle"),
+        onQuit: () => app.quit(),
+        isSoundOn: () => soundsOn,
+        onToggleSound: (on) => {
+          soundsOn = on;
+          sendToNotch("agent-island:sounds", on);
+        },
+      });
+    }
     ipcMain.handle("agent-island:get-sounds", () => soundsOn);
+    ipcMain.on("agent-island:set-sounds", (_e, on: boolean) => {
+      soundsOn = on;
+      sendToNotch("agent-island:sounds", on);
+    });
 
-    // Zero Config: wire Claude Code to the daemon (token + safe hook merge).
+    // First launch: a short onboarding (island tour + Accessibility + login).
+    registerOnboardingIpc();
+    maybeShowOnboarding();
+
+    // Update NOTIFIER (no self-update without a Developer ID): one anonymous
+    // check against GitHub Releases; the island shows a chip, a notification
+    // links to the download. AGENT_ISLAND_NO_UPDATE_CHECK=1 disables.
+    startUpdateCheck((info) => sendToNotch("agent-island:update", info));
+    ipcMain.on("agent-island:open-update", () => openUpdatePage());
+
+    // Zero Config: wire Claude Code and Cursor to the daemon (token + safe
+    // hook merges; Codex needs nothing — its rollout logs are tailed directly).
     setupZeroConfig();
+    setupCursorZeroConfig();
 
     // One launch runs everything: spawn the daemon if it isn't already up.
     await ensureDaemon();
 
     daemon.onSessions((sessions: SessionSnapshot[], connected: boolean) => {
-      notch?.webContents.send("agent-island:sessions", { sessions, connected });
-      if (tray) updateTrayTitle(tray, sessions);
+      sendToNotch("agent-island:sessions", { sessions, connected });
+      if (tray && !tray.isDestroyed()) updateTrayTitle(tray, sessions);
       syncApprovalShortcuts(sessions);
+      syncQuestionShortcuts(sessions);
     });
-    daemon.onUsage((usage) => notch?.webContents.send("agent-island:usage", usage));
+    daemon.onUsage((usage) => sendToNotch("agent-island:usage", usage));
     daemon.start();
 
     // Renderer pulls initial state on mount (it may load after the first push).
@@ -82,14 +132,14 @@ if (!app.requestSingleInstanceLock()) {
     // alone proved flaky and left it stuck open).
     let cursorWatch: ReturnType<typeof setInterval> | null = null;
     ipcMain.on("agent-island:set-interactive", (_e, interactive: boolean) => {
-      notch?.setIgnoreMouseEvents(!interactive, { forward: true });
+      if (notch && !notch.isDestroyed()) notch.setIgnoreMouseEvents(!interactive, { forward: true });
       if (cursorWatch) {
         clearInterval(cursorWatch);
         cursorWatch = null;
       }
       if (interactive) {
         cursorWatch = setInterval(() => {
-          if (!notch) return;
+          if (!notch || notch.isDestroyed()) return;
           const p = screen.getCursorScreenPoint();
           const b = notch.getBounds();
           const margin = 10;
@@ -98,12 +148,18 @@ if (!app.requestSingleInstanceLock()) {
             p.x <= b.x + b.width + margin &&
             p.y >= b.y - margin &&
             p.y <= b.y + b.height + margin;
-          if (!inside) notch.webContents.send("agent-island:cursor-left");
+          if (!inside) sendToNotch("agent-island:cursor-left");
         }, 250);
       }
     });
 
     ipcMain.on("agent-island:jump", (_e, session: SessionSnapshot) => jumpToTerminal(session));
+
+    ipcMain.on(
+      "agent-island:answer",
+      (_e, { session, digit }: { session: SessionSnapshot; digit: number }) =>
+        answerInTerminal(session, String(digit)),
+    );
 
     ipcMain.on(
       "agent-island:approve",
@@ -122,6 +178,7 @@ if (!app.requestSingleInstanceLock()) {
 
   app.on("before-quit", () => {
     globalShortcut.unregisterAll();
+    stopUpdateCheck();
     daemon.stop();
     stopDaemon();
   });

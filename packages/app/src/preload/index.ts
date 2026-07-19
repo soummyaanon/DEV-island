@@ -24,11 +24,15 @@ const api = {
 
   getUsage: (): Promise<AgentUsage[]> => ipcRenderer.invoke("agent-island:get-usage"),
 
-  /** Window geometry: `inset` = px between window top and the notch's bottom line. */
-  getLayout: (): Promise<{ inset: number }> => ipcRenderer.invoke("agent-island:get-layout"),
+  /**
+   * Window geometry: `inset` = px between window top and the notch's bottom
+   * line; `notchWidth` = measured hardware notch width (0 = unknown/no notch).
+   */
+  getLayout: (): Promise<{ inset: number; notchWidth: number }> =>
+    ipcRenderer.invoke("agent-island:get-layout"),
 
-  onLayout: (cb: (layout: { inset: number }) => void): (() => void) => {
-    const listener = (_e: unknown, layout: { inset: number }) => cb(layout);
+  onLayout: (cb: (layout: { inset: number; notchWidth: number }) => void): (() => void) => {
+    const listener = (_e: unknown, layout: { inset: number; notchWidth: number }) => cb(layout);
     ipcRenderer.on("agent-island:layout", listener);
     return () => ipcRenderer.removeListener("agent-island:layout", listener);
   },
@@ -61,11 +65,48 @@ const api = {
   /** Bring the session's terminal to the front. */
   jump: (session: SessionSnapshot): void => ipcRenderer.send("agent-island:jump", session),
 
+  /** Answer a pending question by typing its option number into the terminal. */
+  answer: (session: SessionSnapshot, digit: number): void =>
+    ipcRenderer.send("agent-island:answer", { session, digit }),
+
   /** Resolve a pending approval from the notch. */
   approve: (id: string, decision: ApprovalDecision): void =>
     ipcRenderer.send("agent-island:approve", { id, decision }),
 
+  /** Toggle sound effects (persisted in main for this run). */
+  setSounds: (on: boolean): void => ipcRenderer.send("agent-island:set-sounds", on),
+
+  /** A newer release exists on GitHub (update notifier, not auto-update). */
+  onUpdate: (cb: (info: { version: string }) => void): (() => void) => {
+    const listener = (_e: unknown, info: { version: string }) => cb(info);
+    ipcRenderer.on("agent-island:update", listener);
+    return () => ipcRenderer.removeListener("agent-island:update", listener);
+  },
+
+  /** Open the latest release's download page in the browser. */
+  openUpdate: (): void => ipcRenderer.send("agent-island:open-update"),
+
   quit: (): void => ipcRenderer.send("agent-island:quit"),
+
+  /* ---- Onboarding (first-run window only) ---- */
+
+  onboarding: {
+    getState: (): Promise<{ accessibilityTrusted: boolean; openAtLogin: boolean }> =>
+      ipcRenderer.invoke("agent-island:onboarding-state"),
+    onState: (
+      cb: (state: { accessibilityTrusted: boolean; openAtLogin: boolean }) => void,
+    ): (() => void) => {
+      const listener = (
+        _e: unknown,
+        state: { accessibilityTrusted: boolean; openAtLogin: boolean },
+      ) => cb(state);
+      ipcRenderer.on("agent-island:onboarding-state", listener);
+      return () => ipcRenderer.removeListener("agent-island:onboarding-state", listener);
+    },
+    enableAccessibility: (): void => ipcRenderer.send("agent-island:enable-accessibility"),
+    setLogin: (on: boolean): void => ipcRenderer.send("agent-island:set-login", on),
+    finish: (): void => ipcRenderer.send("agent-island:finish-onboarding"),
+  },
 };
 
 contextBridge.exposeInMainWorld("agentIsland", api);

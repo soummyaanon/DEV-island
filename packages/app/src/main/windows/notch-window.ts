@@ -1,9 +1,35 @@
 import { BrowserWindow, ipcMain, screen } from "electron";
+import { execFile } from "node:child_process";
 import { join } from "node:path";
 
 /** Overlay window size (logical px). Wide/tall enough for the expanded panel. */
 const WIN_WIDTH = 460;
 const WIN_HEIGHT = 400;
+
+/**
+ * Measure the hardware notch width in logical px. Electron has no API for it,
+ * but JXA can bridge into AppKit: the notch is the gap between NSScreen's two
+ * auxiliary top areas (the menu-bar "wings"). Resolves 0 on Macs without a
+ * notch, on external displays, or on any error — callers fall back to a
+ * sensible default so this can never break the overlay.
+ */
+function measureNotchWidth(): Promise<number> {
+  const jxa = `
+    ObjC.import("AppKit");
+    const s = $.NSScreen.mainScreen;
+    const l = s.auxiliaryTopLeftArea;
+    const r = s.auxiliaryTopRightArea;
+    if (!l || !r) "0";
+    else String(Math.round(s.frame.size.width - l.size.width - r.size.width));`;
+  return new Promise((resolve) => {
+    execFile("osascript", ["-l", "JavaScript", "-e", jxa], { timeout: 3000 }, (err, stdout) => {
+      if (err) return resolve(0);
+      const width = Number(stdout.trim());
+      // Sanity band: a real notch is roughly 120–260 logical px.
+      resolve(Number.isFinite(width) && width >= 120 && width <= 260 ? width : 0);
+    });
+  });
+}
 
 /**
  * The Dynamic Island overlay: a transparent, always-on-top, click-through window
@@ -66,22 +92,30 @@ export function createNotchWindow(): BrowserWindow {
   // Start click-through; renderer toggles this when the pointer is over the pill.
   win.setIgnoreMouseEvents(true, { forward: true });
 
+  // Measured once at startup; 0 until resolved (renderer keeps its default).
+  let notchWidth = 0;
+  void measureNotchWidth().then((width) => {
+    notchWidth = width;
+    if (!win.isDestroyed()) pushLayout();
+  });
+
   const layout = () => {
     // Menu bar bottom (= the notch's bottom line) relative to where the window
     // actually ended up. macOS sometimes nudges non-focusable overlay windows,
     // so measure rather than assume.
     const actualY = win.getBounds().y;
     const menuBarBottom = primary.workArea.y;
-    return { inset: Math.max(0, menuBarBottom - actualY) };
+    return { inset: Math.max(0, menuBarBottom - actualY), notchWidth };
   };
 
   const pushLayout = () => {
     // Re-assert the requested position (macOS can shift it on show), then tell
     // the renderer the real geometry.
+    if (win.isDestroyed()) return;
     win.setPosition(x, y);
     const l = layout();
     console.log(
-      `[notch] windowY=${win.getBounds().y} menuBarBottom=${primary.workArea.y} inset=${l.inset}`,
+      `[notch] windowY=${win.getBounds().y} menuBarBottom=${primary.workArea.y} inset=${l.inset} notchWidth=${l.notchWidth}`,
     );
     win.webContents.send("agent-island:layout", l);
   };

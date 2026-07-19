@@ -4,11 +4,20 @@ import { SessionRow } from "./SessionRow";
 import { ApprovalCard } from "./ApprovalCard";
 import { QuestionCard } from "./QuestionCard";
 import { PixelSprite } from "./PixelSprite";
+import { OpenAiSprite } from "./OpenAiSprite";
+import { CursorSprite } from "./CursorSprite";
 import { UsageFooter } from "./UsageFooter";
 import { playAttention, playFail, playSuccess } from "./sounds";
 
 const ACTIVE_STATES = new Set(["working", "starting", "waiting-for-approval"]);
 const MAX_ROWS = 5;
+
+/** Wing order: one sprite per agent kind that has sessions. */
+const AGENT_SPRITES = [
+  { kind: "claude-code", Sprite: PixelSprite },
+  { kind: "codex", Sprite: OpenAiSprite },
+  { kind: "cursor", Sprite: CursorSprite },
+] as const;
 
 export function App() {
   const [sessions, setSessions] = useState<SessionSnapshot[]>([]);
@@ -21,6 +30,7 @@ export function App() {
   const islandRef = useRef<HTMLDivElement>(null);
   const interactiveRef = useRef(false);
   const [soundsOn, setSoundsOn] = useState(true);
+  const [update, setUpdate] = useState<{ version: string } | null>(null);
   const prevStates = useRef<Map<string, { state: string; needsAction: boolean }> | null>(null);
 
   const pending = useMemo(() => sessions.filter((s) => s.pending_approval), [sessions]);
@@ -72,6 +82,9 @@ export function App() {
     return window.agentIsland.onSounds(setSoundsOn);
   }, []);
 
+  // A newer release exists — surface a quiet chip in the panel footer.
+  useEffect(() => window.agentIsland.onUpdate(setUpdate), []);
+
   // 8-bit alerts on state transitions: done -> success arpeggio, failure ->
   // buzz, needs-you -> double ping. The first snapshot only primes the map so
   // relaunching the app never replays history.
@@ -97,11 +110,16 @@ export function App() {
     }
   }, [sessions, soundsOn]);
 
-  // Notch band height, measured by main: the black body spans it so the shape
-  // merges with the hardware notch; content renders below it.
+  // Notch geometry, measured by main: the black body spans the band height so
+  // the shape merges with the hardware notch, and every island width derives
+  // from the real notch width — so the same build hugs a 14" Pro or a 13" Air.
   useEffect(() => {
-    const apply = (l: { inset: number }) =>
+    const apply = (l: { inset: number; notchWidth: number }) => {
       document.documentElement.style.setProperty("--notch-inset", `${l.inset}px`);
+      if (l.notchWidth > 0) {
+        document.documentElement.style.setProperty("--notch-width", `${l.notchWidth}px`);
+      }
+    };
     void window.agentIsland.getLayout().then(apply);
     return window.agentIsland.onLayout(apply);
   }, []);
@@ -139,6 +157,11 @@ export function App() {
   const dominant = pending[0] ?? active[0] ?? sessions[0] ?? null;
   const stateCls = dominant ? `state-${dominant.state}` : connected ? "idle" : "offline";
 
+  // Sprites are strictly live: one per agent kind that is ACTIVELY running
+  // (working / starting / waiting). Nothing running = an empty wing.
+  const liveKinds = new Set(active.map((s) => s.agent));
+  const shown = AGENT_SPRITES.filter((a) => liveKinds.has(a.kind));
+
   return (
     <div className="app">
       <div ref={islandRef} className="island-wrap">
@@ -151,11 +174,22 @@ export function App() {
         <div
           className={`island ${stateCls}${expanded ? " expanded" : ""}${
             sessions.length === 0 ? " bare" : ""
-          }`}
+          } spr-${shown.length}`}
         >
-          <div className={`notch-spacer ${stateCls}`} aria-hidden>
-            <PixelSprite live={active.length > 0} />
-            <span className="spacer-info">
+          <div className={`notch-spacer ${stateCls}`}>
+            <span className="sprites">
+              {shown.map(({ kind, Sprite }) => (
+                <Sprite key={kind} live />
+              ))}
+            </span>
+            <span
+              className="spacer-info"
+              aria-label={
+                needsYou.length > 0
+                  ? `${needsYou.length} sessions need attention`
+                  : `${active.length} active sessions`
+              }
+            >
               {needsYou.length > 0 ? `${needsYou.length}!` : active.length > 0 ? active.length : ""}
             </span>
           </div>
@@ -174,6 +208,7 @@ export function App() {
                   key={`q-${s.key}`}
                   session={s}
                   onJump={(sess) => window.agentIsland.jump(sess)}
+                  onAnswer={(sess, digit) => window.agentIsland.answer(sess, digit)}
                 />
               ))}
               <ul className="rows">
@@ -190,6 +225,42 @@ export function App() {
                 )}
               </ul>
               <UsageFooter usage={usage} />
+              <div className="panel-controls">
+                <button
+                  className="ctl"
+                  title="Sound effects"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    window.agentIsland.setSounds(!soundsOn);
+                  }}
+                >
+                  {soundsOn ? "♪ on" : "♪ off"}
+                </button>
+                {update ? (
+                  <button
+                    className="ctl update"
+                    title={`Download Agent Island ${update.version}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      window.agentIsland.openUpdate();
+                    }}
+                  >
+                    ↑ update {update.version}
+                  </button>
+                ) : (
+                  <span className="ctl-brand">agent island</span>
+                )}
+                <button
+                  className="ctl"
+                  title="Quit Agent Island"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    window.agentIsland.quit();
+                  }}
+                >
+                  quit
+                </button>
+              </div>
             </div>
           </div>
         </div>

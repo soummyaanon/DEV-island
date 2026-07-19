@@ -1,6 +1,6 @@
 # Agent Island — Session Memory / Resume Notes
 
-_Last updated: 2026-07-19 (late night session). Branch: `feat/agent-island-m1-m4` (pushed)._
+_Last updated: 2026-07-19 (afternoon session). Branch: `feat/agent-island-m1-m4`._
 
 ## What exists and WORKS (all committed)
 
@@ -12,6 +12,39 @@ _Last updated: 2026-07-19 (late night session). Branch: `feat/agent-island-m1-m4
 - **Claude adapter**: all 6 hooks via HTTP (SessionStart/Pre/PostToolUse/
   PermissionRequest/Notification/Stop), terminal identity headers for jump,
   permission_mode + rich activity titles, AskUserQuestion -> pending_question.
+- **Codex adapter (M3) — DONE**: read-only rollout tailer in the daemon
+  (`adapters/codex/rollout-reader.ts` + pure `event-mapper.ts`, 31 vitest
+  tests — the repo's first). Stat-polls `$CODEX_HOME/sessions` (1.5s/10s),
+  compact catch-up (session_started + latest state), live tool titles
+  ("Running…", "Editing…"), task_started/complete/aborted lifecycle,
+  request_user_input -> pending_question card, model+approval_policy in
+  meta. Zero Codex config, never writes to Codex, failures = log lines.
+  Design: docs/superpowers/specs/2026-07-19-codex-adapter-design.md.
+- **Notch dual sprites**: OpenAI blossom (official petal path, currentColor,
+  slow spin when live, reduced-motion aware) for Codex; crab for Claude;
+  both side by side when both agents run (island 248->276px "dual" mode).
+- **Quit crash FIXED**: "Object has been destroyed" on quit (late ws close ->
+  emit -> send to destroyed window). DaemonClient suppresses emits after
+  stop(); every webContents.send site guarded with isDestroyed().
+- **Cursor adapter — DONE (3-agent launch)**: Cursor hooks (~/.cursor/
+  hooks.json, 12 events) -> fire-and-forget bridge script (~/.agent-island/
+  bin/cursor-hook.sh, backgrounds curl so Cursor NEVER waits) -> POST
+  /events/cursor/:hookEvent -> pure mapper (7 tests). Zero-config safe-merge
+  preserves other tools' hook entries (vibe-island coexists). Jump on a
+  cursor session activates Cursor.app. Cube sprite in the wing.
+- **Notch auto-adapt**: JXA/NSScreen (auxiliaryTopLeftArea/RightArea) measures
+  the REAL notch width at startup (185pt on this Mac) -> --notch-width CSS
+  var drives all island widths. Works on Air 13" etc.; 196px fallback when
+  no notch. spr-2/spr-3 classes widen the wings per sprite count.
+- **Round-2 UX**: electric working feel (bottom scanline sweep, neon glow on
+  live sprites, count pulse, spring easing — all reduced-motion aware); real
+  app icon (glowing crab, build/icon.icns via headless-Chrome+iconutil);
+  ⌘1–9 answers pending questions from anywhere (iTerm write-text; other
+  terminals via Accessibility keystroke once granted; else jump), options
+  clickable in the ask card; first-run ONBOARDING window (animated island
+  demo, Accessibility + login steps, flag at userData/onboarded); TRAY-LESS
+  by default (AGENT_ISLAND_TRAY=1 restores) — sounds/quit live in the panel
+  footer, hover the notch to reach them.
 - **Electron app** (`packages/app`): TRUE notch hug — `type:"panel"` +
   `enableLargerThanScreen:true` -> windowY=0 over the menu-bar band (the
   breakthrough; see skill below). Island wraps the notch, animated 2-frame
@@ -33,13 +66,18 @@ _Last updated: 2026-07-19 (late night session). Branch: `feat/agent-island-m1-m4
 
 ## Next up (agreed backlog, in rough priority)
 
-1. **Codex adapter (M3)** — notify forwarder + rollout tailer. Research DONE:
-   rollout format mapped (`~/.codex/sessions/**/rollout-*.jsonl`, entries
-   `{timestamp,type,payload}`; session_meta has session_id+cwd; event_msg
-   task_started/task_complete; response_item tool calls). notify = argv[1]
-   JSON, config.toml needs `notify = [...]` PREPENDED (top-level keys before
-   tables). 128 real rollouts on this Mac to test against.
-2. Homebrew cask (free no-warning distribution) — user deferred.
+1. **Stability + size reduction** (user's stated goal 2026-07-19): shrink
+   DMG/app further. Done so far: en-only electronLanguages + framework
+   locale trim (114->100MB), react/react-dom out of the packed asar, old
+   release/ artifacts cleaned (357MB). Remaining ideas: prune asar further,
+   Electron upgrade, asar unpack audit.
+2. **Releases/CI — DONE 2026-07-19**: README.md, .github/workflows/ci.yml
+   (typecheck+test on push/PR) and release.yml (tag v* -> macos-14 arm64
+   build -> DMG attached to GitHub Release). v0.1.0 shipped. In-app SILENT
+   auto-update still blocked on Apple Developer ID (electron-updater
+   requires a valid signature on macOS) — until then users update from
+   Releases.
+3. Homebrew cask (free no-warning distribution) — user deferred.
 3. Apple Developer ID ($99) -> real signing + notarization + electron-updater
    auto-update (zip artifact + blockmaps already produced). 15-min job in
    package-dmg.sh once ID exists.

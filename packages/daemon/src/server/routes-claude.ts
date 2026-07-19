@@ -49,9 +49,11 @@ function terminalMeta(headers: IncomingHttpHeaders): Record<string, string> {
   const term = header(headers, "x-term-program");
   const iterm = header(headers, "x-iterm-session-id");
   const termSession = header(headers, "x-term-session-id");
+  const bundleId = header(headers, "x-app-bundle-id");
   if (term) meta.term_program = term;
   if (iterm) meta.iterm_session_id = iterm;
   if (termSession) meta.term_session_id = termSession;
+  if (bundleId) meta.app_bundle_id = bundleId;
   return meta;
 }
 

@@ -6,6 +6,7 @@ import { ensureToken } from "./auth-token";
 import { EventHub } from "./hub/event-hub";
 import { buildServer } from "./server/http-server";
 import { readCodexUsage } from "./adapters/codex/usage-reader";
+import { CodexRolloutReader } from "./adapters/codex/rollout-reader";
 
 async function main(): Promise<void> {
   const config = loadConfig();
@@ -29,6 +30,28 @@ async function main(): Promise<void> {
   void refreshUsage();
   const usageTimer = setInterval(() => void refreshUsage(), config.usagePollMs);
 
+  // Tail Codex rollout logs into the hub (read-only; Codex is never touched).
+  // A failed reader is a logged degradation, never a failed daemon.
+  const codexReader = new CodexRolloutReader(
+    config.codexHome,
+    {
+      ingest: (input) => hub.ingest(input),
+      setPendingQuestion: (sessionId, question) =>
+        hub.setPendingQuestion("codex", sessionId, question),
+    },
+    {
+      pollMs: config.codexPollMs,
+      scanMs: config.codexScanMs,
+      activeMs: config.codexActiveMs,
+      log: (message) => app.log.warn(message),
+    },
+  );
+  try {
+    await codexReader.start();
+  } catch (err) {
+    app.log.warn(`codex rollout reader failed to start: ${String(err)}`);
+  }
+
   await app.listen({ host: config.host, port: config.port });
   app.log.info(
     `agentislandd ready — auth ${config.strictAuth ? "STRICT" : "lenient (dev)"}, token at ${config.tokenPath}`,
@@ -41,6 +64,7 @@ async function main(): Promise<void> {
     app.log.info(`received ${signal}, shutting down`);
     clearInterval(heartbeat);
     clearInterval(usageTimer);
+    codexReader.stop();
     await app.close();
     process.exit(0);
   };

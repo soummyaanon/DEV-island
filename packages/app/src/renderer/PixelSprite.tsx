@@ -43,7 +43,8 @@ export function PixelSprite({ size = 13, live = false }: { size?: number; live?:
       viewBox="0 0 11 8"
       shapeRendering="crispEdges"
       fill="currentColor"
-      aria-hidden
+      role="img"
+      aria-label={live ? "Claude Code working" : "Claude Code"}
     >
       <g className="f1">
         <Frame rows={FRAME_A} />

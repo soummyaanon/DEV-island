@@ -52,11 +52,15 @@ body {
 }
 
 :root {
-  --motion: cubic-bezier(0.16, 1, 0.3, 1);
+  /* Spring with a touch of overshoot — the island lands with life. */
+  --motion: cubic-bezier(0.34, 1.2, 0.64, 1);
 }
 
+/* All widths derive from the measured hardware notch (--notch-width is set at
+   runtime by main via JXA/NSScreen; 196px is the fallback for unknown). Wings
+   get generous room: sprite row on the left, count badge on the right. */
 .island {
-  width: 248px;
+  width: calc(var(--notch-width, 196px) + 68px);
   background: #000;
   border-radius: 0 0 12px 12px;
   overflow: hidden;
@@ -66,14 +70,26 @@ body {
 }
 
 .island.expanded {
-  width: 360px;
+  width: max(360px, calc(var(--notch-width, 196px) + 110px));
   border-radius: 0 0 16px 16px;
-  transition-duration: 0.17s;
+  transition-duration: 0.26s;
+}
+
+.island {
+  position: relative;
 }
 
 .island.bare:not(.expanded) {
-  width: 196px;
+  width: var(--notch-width, 196px);
   border-radius: 0;
+}
+
+/* More agents on deck: widen the wings so every sprite fits beside the notch. */
+.island.spr-2:not(.expanded):not(.bare) {
+  width: calc(var(--notch-width, 196px) + 100px);
+}
+.island.spr-3:not(.expanded):not(.bare) {
+  width: calc(var(--notch-width, 196px) + 136px);
 }
 
 /* Concave top "ears" (quad-Bezier r=10 in the reference — a radial-gradient
@@ -123,9 +139,48 @@ body {
   opacity: 0;
 }
 
-.pixel-sprite {
+/* Left wing: one sprite per active agent kind. */
+.sprites {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.pixel-sprite,
+.openai-sprite,
+.cursor-sprite {
   display: block;
   flex: none;
+}
+
+/* Live sprites get a soft neon glow in their state color. */
+.pixel-sprite.live,
+.openai-sprite.live,
+.cursor-sprite.live {
+  filter: drop-shadow(0 0 3px currentColor);
+}
+
+/* Cursor's cube floats while it works. */
+.cursor-sprite.live {
+  animation: cursor-bob 1.2s ease-in-out infinite alternate;
+}
+@keyframes cursor-bob {
+  from {
+    transform: translateY(0.6px);
+  }
+  to {
+    transform: translateY(-0.6px);
+  }
+}
+
+/* The OpenAI blossom turns slowly while Codex works. */
+.openai-sprite.live {
+  animation: openai-spin 2.8s linear infinite;
+}
+@keyframes openai-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* The crab animates like the arcade original: two frames, hard steps. */
@@ -167,6 +222,17 @@ body {
   min-width: 12px;
   text-align: right;
   color: currentColor;
+}
+.notch-spacer.state-working .spacer-info {
+  animation: count-pulse 1.5s ease-in-out infinite alternate;
+}
+@keyframes count-pulse {
+  from {
+    opacity: 0.55;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 /* ---- Status dots ---- */
@@ -325,6 +391,46 @@ body {
 .usage-item b {
   font-weight: 600;
   color: var(--text);
+}
+
+/* ---- Panel controls (tray-less: sounds + quit live here) ---- */
+.panel-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 8px;
+  padding: 4px 4px 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+.ctl {
+  font: inherit;
+  font-size: 9.5px;
+  font-weight: 600;
+  color: var(--text-dim);
+  background: none;
+  border: none;
+  border-radius: 6px;
+  padding: 3px 7px;
+  cursor: pointer;
+}
+.ctl:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.07);
+}
+.ctl-brand {
+  font-size: 8.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.22);
+}
+.ctl.update {
+  color: var(--accent);
+  font-weight: 700;
+}
+.ctl.update:hover {
+  background: rgba(255, 138, 91, 0.14);
+  color: var(--accent);
 }
 
 /* ---- Approval / Permission request panel ---- */
@@ -555,6 +661,11 @@ body {
   background: rgba(255, 255, 255, 0.05);
   border-radius: 8px;
   padding: 5px 9px;
+  cursor: pointer;
+  transition: background 0.1s ease;
+}
+.q-options li:hover {
+  background: rgba(91, 168, 255, 0.16);
 }
 .q-options kbd {
   font: inherit;
@@ -579,7 +690,10 @@ body {
     transition: none;
   }
   .pixel-sprite.live g.f1,
-  .pixel-sprite.live g.f2 {
+  .pixel-sprite.live g.f2,
+  .openai-sprite.live,
+  .cursor-sprite.live,
+  .notch-spacer.state-working .spacer-info {
     animation: none;
   }
 }

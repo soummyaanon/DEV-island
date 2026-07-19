@@ -145,6 +145,9 @@ export class DaemonClient {
   }
 
   private emit(): void {
+    // After stop() the app is quitting: windows may already be destroyed, so
+    // listeners must never fire again (the ws 'close' event arrives late).
+    if (this.stopped) return;
     const list = this.list();
     for (const fn of this.listeners) fn(list, this.connected);
   }
