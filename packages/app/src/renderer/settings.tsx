@@ -28,6 +28,7 @@ interface SettingsState {
   updateCheck: boolean;
   openAtLogin: boolean;
   version: string;
+  update: { version: string } | null;
 }
 
 const DEFAULTS: SettingsState = {
@@ -40,6 +41,7 @@ const DEFAULTS: SettingsState = {
   updateCheck: true,
   openAtLogin: false,
   version: "",
+  update: null,
 };
 
 function Toggle({ on, onChange }: { on: boolean; onChange: (next: boolean) => void }) {
@@ -82,11 +84,21 @@ function Row({
 
 function Settings() {
   const [state, setState] = useState<SettingsState>(DEFAULTS);
+  const [checking, setChecking] = useState(false);
+  const [installing, setInstalling] = useState(false);
 
   useEffect(() => {
     if (!window.agentIsland?.settings) return; // plain-browser preview
     void window.agentIsland.settings.get().then(setState);
     return window.agentIsland.settings.onState(setState);
+  }, []);
+
+  // Check the moment Settings opens, so the status is fresh without waiting for
+  // the hourly background check.
+  useEffect(() => {
+    if (!window.agentIsland?.settings?.checkUpdates) return;
+    setChecking(true);
+    void window.agentIsland.settings.checkUpdates().finally(() => setChecking(false));
   }, []);
 
   const set = (key: string, value: boolean | string) => {
@@ -243,10 +255,62 @@ function Settings() {
         />
         <Row
           title="Check for updates"
-          detail="One anonymous version check against GitHub Releases."
+          detail="One anonymous version check against GitHub Releases, hourly."
           on={state.updateCheck}
           onChange={(v) => set("updateCheck", v)}
         />
+      </div>
+
+      <h2>Updates</h2>
+      <div className="s-group">
+        <div className="s-row">
+          <div className="s-text">
+            <b>{state.update ? `Update available — v${state.update.version}` : "Agent Island"}</b>
+            <span>
+              {state.update
+                ? `You're on v${state.version}. Installing replaces the app and relaunches.`
+                : checking
+                  ? "Checking for updates…"
+                  : `You're on v${state.version} — up to date.`}
+            </span>
+          </div>
+          {state.update ? (
+            <button
+              type="button"
+              className="s-import s-install"
+              disabled={installing}
+              onClick={() => {
+                setInstalling(true);
+                // On success the app quits and relaunches, so we only re-enable on failure.
+                void window.agentIsland?.settings?.installUpdate().then((ok) => {
+                  if (!ok) setInstalling(false);
+                });
+              }}
+            >
+              {installing ? "Installing…" : "Install & Restart"}
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="s-import"
+              disabled={checking}
+              onClick={() => {
+                setChecking(true);
+                void window.agentIsland?.settings
+                  ?.checkUpdates()
+                  .finally(() => setChecking(false));
+              }}
+            >
+              {checking ? "Checking…" : "Check now"}
+            </button>
+          )}
+        </div>
+        {state.update && (
+          <div className="s-note">
+            After updating, re-enable Agent Island in System Settings → Privacy &amp; Security →
+            Accessibility (ad-hoc builds lose the grant on replace).
+          </div>
+        )}
       </div>
 
       <div className="s-footer">Agent Island {state.version && `v${state.version}`} · everything stays on this Mac</div>

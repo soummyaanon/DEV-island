@@ -20,6 +20,8 @@ export interface SettingsState {
   updateCheck: boolean;
   openAtLogin: boolean;
   version: string;
+  /** Newest available version, or null when up to date / not yet checked. */
+  update: { version: string } | null;
 }
 
 export interface SessionsPayload {
@@ -161,6 +163,11 @@ const api = {
       ipcRenderer.invoke("agent-island:import-sound", event),
     /** Remove the imported custom sound for `event` (revert to theme). */
     clearSound: (event: string): void => ipcRenderer.send("agent-island:clear-sound", event),
+    /** Check for a newer release right now; resolves the newest version (or null). */
+    checkUpdates: (): Promise<{ version: string } | null> =>
+      ipcRenderer.invoke("agent-island:check-updates"),
+    /** Download the newest DMG and self-replace + relaunch. Resolves false if it can't. */
+    installUpdate: (): Promise<boolean> => ipcRenderer.invoke("agent-island:install-update"),
   },
 
   /* ---- Onboarding (first-run window only) ---- */

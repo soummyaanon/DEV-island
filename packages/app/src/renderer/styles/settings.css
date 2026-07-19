@@ -252,6 +252,24 @@ h2 {
 .s-import:hover {
   border-color: var(--accent);
 }
+.s-import:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.s-install {
+  background: var(--accent);
+  color: #0b0b0d;
+  border-color: var(--accent);
+}
+.s-install:hover {
+  filter: brightness(1.08);
+}
+.s-note {
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: var(--text-dim);
+  padding: 6px 2px 2px;
+}
 .s-custom {
   display: inline-flex;
   align-items: center;

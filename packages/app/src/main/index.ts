@@ -16,7 +16,14 @@ import { pushSettingsState, showSettingsWindow } from "./windows/settings-window
 import { isSoundEvent, isSoundTheme, loadSettings, saveSettings } from "./settings";
 import { createTray, updateTrayTitle } from "./tray";
 import { answerInTerminal, jumpToTerminal, sendPromptToTerminal } from "./jump-back";
-import { openUpdatePage, startUpdateCheck, stopUpdateCheck } from "./update-check";
+import {
+  checkNow,
+  downloadAndInstall,
+  getPendingUpdate,
+  openUpdatePage,
+  startUpdateCheck,
+  stopUpdateCheck,
+} from "./update-check";
 
 // One instance only — two overlays fighting over the notch would be chaos.
 if (!app.requestSingleInstanceLock()) {
@@ -159,6 +166,7 @@ if (!app.requestSingleInstanceLock()) {
         customSounds: customSoundData(),
         openAtLogin: app.getLoginItemSettings().openAtLogin,
         version: app.getVersion(),
+        update: getPendingUpdate(),
       };
     }
 
@@ -283,6 +291,14 @@ if (!app.requestSingleInstanceLock()) {
       pushSettingsState(settingsState());
     });
     ipcMain.handle("agent-island:get-settings", () => settingsState());
+    // Settings "Check for updates" — run a check now and push the result back.
+    ipcMain.handle("agent-island:check-updates", async () => {
+      await checkNow(onUpdateInfo);
+      pushSettingsState(settingsState());
+      return getPendingUpdate();
+    });
+    // Settings "Install & Restart" — download the DMG and self-replace.
+    ipcMain.handle("agent-island:install-update", () => downloadAndInstall());
     ipcMain.on("agent-island:set-setting", (_e, { key, value }: { key: string; value: boolean | string }) =>
       applySetting(key, value),
     );
