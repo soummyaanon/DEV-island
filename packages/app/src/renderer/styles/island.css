@@ -76,6 +76,11 @@ body {
   border-radius: 0;
 }
 
+/* Both agents on deck: widen the wings so crab + OpenAI mark fit side by side. */
+.island.dual:not(.expanded) {
+  width: 276px;
+}
+
 /* Concave top "ears" (quad-Bezier r=10 in the reference — a radial-gradient
    inverse corner is the CSS equivalent). They flare the top edge outward so
    the shape blends into the notch instead of butting against it. */
@@ -123,9 +128,27 @@ body {
   opacity: 0;
 }
 
-.pixel-sprite {
+/* Left wing: one sprite per active agent kind. */
+.sprites {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.pixel-sprite,
+.openai-sprite {
   display: block;
   flex: none;
+}
+
+/* The OpenAI blossom turns slowly while Codex works. */
+.openai-sprite.live {
+  animation: openai-spin 2.8s linear infinite;
+}
+@keyframes openai-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* The crab animates like the arcade original: two frames, hard steps. */
@@ -579,7 +602,8 @@ body {
     transition: none;
   }
   .pixel-sprite.live g.f1,
-  .pixel-sprite.live g.f2 {
+  .pixel-sprite.live g.f2,
+  .openai-sprite.live {
     animation: none;
   }
 }

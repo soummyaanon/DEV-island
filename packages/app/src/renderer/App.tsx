@@ -4,6 +4,7 @@ import { SessionRow } from "./SessionRow";
 import { ApprovalCard } from "./ApprovalCard";
 import { QuestionCard } from "./QuestionCard";
 import { PixelSprite } from "./PixelSprite";
+import { OpenAiSprite } from "./OpenAiSprite";
 import { UsageFooter } from "./UsageFooter";
 import { playAttention, playFail, playSuccess } from "./sounds";
 
@@ -139,6 +140,14 @@ export function App() {
   const dominant = pending[0] ?? active[0] ?? sessions[0] ?? null;
   const stateCls = dominant ? `state-${dominant.state}` : connected ? "idle" : "offline";
 
+  // One sprite per agent kind: the crab stays the default face; the OpenAI mark
+  // appears for Codex sessions; both wave side by side when both are around.
+  const hasCodex = sessions.some((s) => s.agent === "codex");
+  const showCrab = sessions.some((s) => s.agent === "claude-code") || !hasCodex;
+  const claudeLive = active.some((s) => s.agent === "claude-code");
+  const codexLive = active.some((s) => s.agent === "codex");
+  const dual = showCrab && hasCodex;
+
   return (
     <div className="app">
       <div ref={islandRef} className="island-wrap">
@@ -151,11 +160,21 @@ export function App() {
         <div
           className={`island ${stateCls}${expanded ? " expanded" : ""}${
             sessions.length === 0 ? " bare" : ""
-          }`}
+          }${dual ? " dual" : ""}`}
         >
-          <div className={`notch-spacer ${stateCls}`} aria-hidden>
-            <PixelSprite live={active.length > 0} />
-            <span className="spacer-info">
+          <div className={`notch-spacer ${stateCls}`}>
+            <span className="sprites">
+              {showCrab && <PixelSprite live={claudeLive} />}
+              {hasCodex && <OpenAiSprite live={codexLive} />}
+            </span>
+            <span
+              className="spacer-info"
+              aria-label={
+                needsYou.length > 0
+                  ? `${needsYou.length} sessions need attention`
+                  : `${active.length} active sessions`
+              }
+            >
               {needsYou.length > 0 ? `${needsYou.length}!` : active.length > 0 ? active.length : ""}
             </span>
           </div>
