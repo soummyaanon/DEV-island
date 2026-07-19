@@ -22,6 +22,10 @@ export interface DaemonConfig {
   usagePollMs: number;
   /** Only show Codex usage if its rollout was written within this window ("in use"). */
   codexActiveMs: number;
+  /** How often the Codex rollout tailer polls attached files for appends. */
+  codexPollMs: number;
+  /** How often the Codex rollout tailer rescans for new session files. */
+  codexScanMs: number;
 }
 
 function intFromEnv(name: string, fallback: number): number {
@@ -47,5 +51,7 @@ export function loadConfig(): DaemonConfig {
     codexHome: process.env.CODEX_HOME ?? join(homedir(), ".codex"),
     usagePollMs: intFromEnv("AGENT_ISLAND_USAGE_POLL_MS", 45_000),
     codexActiveMs: intFromEnv("AGENT_ISLAND_CODEX_ACTIVE_MS", 600_000), // 10 min
+    codexPollMs: intFromEnv("AGENT_ISLAND_CODEX_POLL_MS", 1_500),
+    codexScanMs: intFromEnv("AGENT_ISLAND_CODEX_SCAN_MS", 10_000),
   };
 }
