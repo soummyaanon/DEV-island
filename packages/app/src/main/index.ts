@@ -13,7 +13,7 @@ import { maybeShowOnboarding, registerOnboardingIpc } from "./windows/onboarding
 import { pushSettingsState, showSettingsWindow } from "./windows/settings-window";
 import { isSoundEvent, isSoundTheme, loadSettings, saveSettings } from "./settings";
 import { createTray, updateTrayTitle } from "./tray";
-import { answerInTerminal, jumpToTerminal } from "./jump-back";
+import { answerInTerminal, jumpToTerminal, sendPromptToTerminal } from "./jump-back";
 import { openUpdatePage, startUpdateCheck, stopUpdateCheck } from "./update-check";
 
 // One instance only — two overlays fighting over the notch would be chaos.
@@ -291,6 +291,24 @@ if (!app.requestSingleInstanceLock()) {
         void answerQuestion(session, options);
       },
     );
+
+    ipcMain.on(
+      "agent-island:send-prompt",
+      (_e, { session, text }: { session: SessionSnapshot; text: string }) => {
+        console.log(`[jump] send-prompt for ${session.key}`);
+        sendPromptToTerminal(session, text);
+      },
+    );
+
+    // The overlay is created non-focusable so it never steals focus from the
+    // terminal — but a non-focusable window can't become key, so keystrokes
+    // never reach the prompt input. Flip focusable on only while composing.
+    ipcMain.on("agent-island:prompt-composing", (_e, active: boolean) => {
+      if (!notch || notch.isDestroyed()) return;
+      console.log(`[notch] prompt-composing=${active}`);
+      notch.setFocusable(active);
+      if (active) notch.focus();
+    });
 
     ipcMain.on(
       "agent-island:approve",

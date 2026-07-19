@@ -86,6 +86,18 @@ const api = {
   answer: (session: SessionSnapshot, options: number[]): void =>
     ipcRenderer.send("agent-island:answer", { session, options }),
 
+  /** Type a free-form prompt into the session's terminal and submit it. */
+  sendPrompt: (session: SessionSnapshot, text: string): void =>
+    ipcRenderer.send("agent-island:send-prompt", { session, text }),
+
+  /**
+   * Toggle keyboard focus for the prompt input. The overlay is non-focusable by
+   * default (so it never steals focus from the terminal); flip it on only while
+   * the user is typing a prompt, then off again.
+   */
+  setPromptComposing: (active: boolean): void =>
+    ipcRenderer.send("agent-island:prompt-composing", active),
+
   /** One-shot chime pushed by main (e.g. "approve" after allowing something). */
   onChime: (cb: (event: string) => void): (() => void) => {
     const listener = (_e: unknown, event: string) => cb(event);

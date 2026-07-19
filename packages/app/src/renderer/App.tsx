@@ -27,6 +27,8 @@ export function App() {
   const [hovering, setHovering] = useState(false);
   const [pinned, setPinned] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  const [promptText, setPromptText] = useState("");
+  const [promptFocused, setPromptFocused] = useState(false);
 
   const islandRef = useRef<HTMLDivElement>(null);
   const interactiveRef = useRef(false);
@@ -46,8 +48,14 @@ export function App() {
     [sessions],
   );
   // Anything waiting on the human forces the panel open automatically.
+  // Typing a prompt keeps it open even if the cursor drifts off the window.
   const expanded =
-    hovering || pinned || pending.length > 0 || asking.length > 0 || needsYou.length > 0;
+    hovering ||
+    pinned ||
+    promptFocused ||
+    pending.length > 0 ||
+    asking.length > 0 ||
+    needsYou.length > 0;
 
   // Subscribe to session state from the main process.
   useEffect(() => {
@@ -181,6 +189,16 @@ export function App() {
   const dominant = pending[0] ?? active[0] ?? sessions[0] ?? null;
   const stateCls = dominant ? `state-${dominant.state}` : connected ? "idle" : "offline";
 
+  // Free-form prompts go to the top/active session (the first running one, else
+  // the first in the list).
+  const promptTarget = active[0] ?? sessions[0] ?? null;
+  const submitPrompt = () => {
+    const text = promptText.trim();
+    if (!text || !promptTarget) return;
+    window.agentIsland.sendPrompt(promptTarget, text);
+    setPromptText("");
+  };
+
   // Sprites are strictly live: one per agent kind that is ACTIVELY running
   // (working / starting / waiting). Nothing running = an empty wing.
   const liveKinds = new Set(active.map((s) => s.agent));
@@ -249,16 +267,61 @@ export function App() {
                 )}
               </ul>
               <UsageFooter usage={usage} />
+              {promptTarget && (
+                <form
+                  className="prompt-bar"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    submitPrompt();
+                  }}
+                >
+                  <input
+                    className="prompt-input"
+                    type="text"
+                    value={promptText}
+                    placeholder="Ask the agent…"
+                    aria-label="Send a prompt to the agent"
+                    spellCheck={false}
+                    onChange={(e) => setPromptText(e.target.value)}
+                    onFocus={() => {
+                      setPromptFocused(true);
+                      window.agentIsland.setPromptComposing(true);
+                    }}
+                    onBlur={() => {
+                      setPromptFocused(false);
+                      window.agentIsland.setPromptComposing(false);
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") {
+                        setPromptText("");
+                        e.currentTarget.blur();
+                      }
+                    }}
+                  />
+                  <button
+                    className="ctl icon prompt-send"
+                    type="submit"
+                    title="Send prompt"
+                    aria-label="Send prompt"
+                    disabled={!promptText.trim()}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    ↵
+                  </button>
+                </form>
+              )}
               <div className="panel-controls">
                 <button
-                  className="ctl"
-                  title="Sound effects"
+                  className={`ctl icon${sound.on ? "" : " off"}`}
+                  title={sound.on ? "Sound on" : "Sound off"}
+                  aria-label={sound.on ? "Sound on" : "Sound off"}
                   onClick={(e) => {
                     e.stopPropagation();
                     window.agentIsland.setSounds(!sound.on);
                   }}
                 >
-                  {sound.on ? "♪ on" : "♪ off"}
+                  ♪
                 </button>
                 {update ? (
                   <button
@@ -271,29 +334,29 @@ export function App() {
                   >
                     ↑ update {update.version}
                   </button>
-                ) : (
-                  <span className="ctl-brand">agent island</span>
-                )}
+                ) : null}
                 <span className="ctl-cluster">
                   <button
-                    className="ctl"
+                    className="ctl icon"
                     title="Settings"
+                    aria-label="Settings"
                     onClick={(e) => {
                       e.stopPropagation();
                       window.agentIsland.openSettings();
                     }}
                   >
-                    settings
+                    ⚙
                   </button>
                   <button
-                    className="ctl"
-                    title="Quit Agent Island"
+                    className="ctl icon quit"
+                    title="Quit"
+                    aria-label="Quit"
                     onClick={(e) => {
                       e.stopPropagation();
                       window.agentIsland.quit();
                     }}
                   >
-                    quit
+                    ⏻
                   </button>
                 </span>
               </div>

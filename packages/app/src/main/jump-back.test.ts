@@ -10,6 +10,7 @@ vi.mock("electron", () => ({
   systemPreferences: {
     isTrustedAccessibilityClient: () => true,
   },
+  shell: { openExternal: vi.fn() },
 }));
 
 const session: SessionSnapshot = {

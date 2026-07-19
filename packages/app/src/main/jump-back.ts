@@ -2,8 +2,21 @@ import { execFile } from "node:child_process";
 import { appendFile } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { systemPreferences } from "electron";
+import { shell, systemPreferences } from "electron";
 import type { SessionSnapshot } from "@agent-island/shared";
+
+/** Open the Accessibility pane at most once per run so a blocked send guides,
+ *  not spams. macOS only shows the grant dialog on the first request anyway. */
+let accessibilityPromptShown = false;
+function requestAccessibilityOnce(): void {
+  if (accessibilityPromptShown) return;
+  accessibilityPromptShown = true;
+  // `true` asks macOS to add us to the list and show the grant dialog.
+  systemPreferences.isTrustedAccessibilityClient(true);
+  void shell.openExternal(
+    "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
+  );
+}
 
 /**
  * Menu-bar apps have no visible console; mirror jump diagnostics to a file so
@@ -121,6 +134,43 @@ export function answerInTerminal(session: SessionSnapshot, digit: string): void 
       },
     );
   }
+}
+
+/**
+ * Type a free-form prompt into the session's terminal and press Enter. Brings
+ * the owning terminal forward first, then uses Accessibility-backed System
+ * Events — the same path as {@link answerInTerminal}. Single-line only; newlines
+ * are flattened to spaces so a stray Enter never submits half a prompt.
+ */
+export function sendPromptToTerminal(session: SessionSnapshot, text: string): void {
+  const prompt = text.replace(/\s*\n\s*/g, " ").trim();
+  if (!prompt) return;
+  logJump(`send-prompt (${prompt.length} chars) for ${session.key}`);
+  jumpToTerminal(session);
+
+  if (!systemPreferences.isTrustedAccessibilityClient(false)) {
+    logJump("Accessibility not granted — jumped without typing the prompt");
+    requestAccessibilityOnce();
+    return;
+  }
+
+  // AppleScript string literal: escape backslashes first, then double quotes.
+  const escaped = prompt.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  execFile(
+    "osascript",
+    [
+      "-e",
+      `
+      delay 0.4
+      tell application "System Events"
+        keystroke "${escaped}"
+        key code 36
+      end tell`,
+    ],
+    (err) => {
+      logJump(err ? `send-prompt failed: ${err.message}` : "prompt sent");
+    },
+  );
 }
 
 /** True if an app with this bundle id is currently running (lsappinfo ships with macOS). */

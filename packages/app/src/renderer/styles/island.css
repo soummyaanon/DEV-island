@@ -394,6 +394,50 @@ body {
 }
 
 /* ---- Panel controls (tray-less: sounds + quit live here) ---- */
+.prompt-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 4px 8px 0;
+  padding: 3px 3px 3px 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.prompt-bar:focus-within {
+  border-color: rgba(116, 183, 255, 0.5);
+  background: rgba(255, 255, 255, 0.07);
+}
+.prompt-input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 11px;
+  color: var(--text);
+  background: none;
+  border: none;
+  outline: none;
+  padding: 3px 0;
+}
+.prompt-input::placeholder {
+  color: var(--text-dim);
+}
+.ctl.icon.prompt-send {
+  color: var(--accent);
+  font-size: 16px;
+}
+/* The power glyph renders heavier than the others — knock it down to match. */
+.ctl.icon.quit {
+  font-size: 12px;
+}
+.ctl.icon.prompt-send:disabled {
+  color: var(--text-dim);
+  opacity: 0.5;
+  cursor: default;
+}
+.ctl.icon.prompt-send:disabled:hover {
+  background: none;
+}
 .panel-controls {
   display: flex;
   align-items: center;
@@ -423,11 +467,14 @@ body {
   align-items: center;
   gap: 2px;
 }
-.ctl-brand {
-  font-size: 8.5px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.22);
+.ctl.icon {
+  font-size: 16px;
+  line-height: 1;
+  padding: 4px 7px;
+}
+.ctl.icon.off {
+  color: rgba(255, 255, 255, 0.25);
+  text-decoration: line-through;
 }
 .ctl.update {
   color: var(--accent);
