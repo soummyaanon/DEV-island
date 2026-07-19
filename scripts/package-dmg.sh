@@ -39,32 +39,8 @@ mkdir -p "$STAGE"
 cp -R "$APP" "$STAGE/"
 ln -s /Applications "$STAGE/Applications"
 
-cat > "$STAGE/READ ME FIRST.txt" <<'EOF'
-AGENT ISLAND — FIRST LAUNCH (one time only)
-===========================================
-
-1. Drag "Agent Island" onto the "Applications" folder in this window.
-
-2. Open Agent Island once. macOS will say it "could not verify" the app.
-   Click "Done"  (NOT "Move to Bin").
-
-3. Open  System Settings > Privacy & Security  and scroll down to Security.
-
-4. Next to the Agent Island message, click "Open Anyway" and confirm.
-
-5. That's it — it opens normally from now on.
-   The island appears around your MacBook notch, and Claude Code is
-   configured automatically on first launch.
-
-Why this dance? Agent Island isn't notarized by Apple (yet), so macOS
-asks once. Everything runs 100% locally on your Mac — no cloud, no
-accounts, no telemetry.
-
-Terminal alternative (skips steps 2–4):
-  xattr -cr "/Applications/Agent Island.app"
-EOF
-
 # Retina background (1x + 2x combined into one TIFF Finder scales correctly).
+# No README in the window — the background art carries the Gatekeeper hint.
 mkdir -p "$STAGE/.background"
 tiffutil -cathidpicheck "$ROOT/scripts/dmg/background.png" "$ROOT/scripts/dmg/background@2x.png" \
   -out "$STAGE/.background/background.tiff" >/dev/null 2>&1
@@ -92,9 +68,8 @@ tell application "Finder"
     set icon size of opts to 96
     set text size of opts to 12
     set background picture of opts to file ".background:background.tiff"
-    set position of item "Agent Island.app" of container window to {160, 195}
-    set position of item "Applications" of container window to {480, 195}
-    set position of item "READ ME FIRST.txt" of container window to {320, 330}
+    set position of item "Agent Island.app" of container window to {165, 200}
+    set position of item "Applications" of container window to {475, 200}
     close
     open
     update without registering applications
