@@ -67,11 +67,17 @@ _Last updated: 2026-07-19 (afternoon session). Branch: `feat/agent-island-m1-m4`
 ## Next up (agreed backlog, in rough priority)
 
 1. **Stability + size reduction** (user's stated goal 2026-07-19): shrink
-   DMG/app further. Done so far: en-only electronLanguages, react/react-dom
-   out of the packed asar (renderer is vite-bundled), old release/ artifacts
-   cleaned (357MB). Remaining ideas: prune asar further, single target
-   (drop zip if unused), Electron upgrade, asar unpack audit.
-2. Homebrew cask (free no-warning distribution) — user deferred.
+   DMG/app further. Done so far: en-only electronLanguages + framework
+   locale trim (114->100MB), react/react-dom out of the packed asar, old
+   release/ artifacts cleaned (357MB). Remaining ideas: prune asar further,
+   Electron upgrade, asar unpack audit.
+2. **Releases/CI — DONE 2026-07-19**: README.md, .github/workflows/ci.yml
+   (typecheck+test on push/PR) and release.yml (tag v* -> macos-14 arm64
+   build -> DMG attached to GitHub Release). v0.1.0 shipped. In-app SILENT
+   auto-update still blocked on Apple Developer ID (electron-updater
+   requires a valid signature on macOS) — until then users update from
+   Releases.
+3. Homebrew cask (free no-warning distribution) — user deferred.
 3. Apple Developer ID ($99) -> real signing + notarization + electron-updater
    auto-update (zip artifact + blockmaps already produced). 15-min job in
    package-dmg.sh once ID exists.
