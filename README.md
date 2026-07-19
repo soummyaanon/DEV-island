@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/soummyaanon/DEV-island/releases/latest"><img src="https://img.shields.io/github/v/release/soummyaanon/DEV-island?label=download&color=74b7ff" alt="Latest release"/></a>
+  <a href="https://github.com/soummyaanon/DEV-island-releases/releases/latest/download/Agent-Island.dmg"><img src="https://img.shields.io/github/v/release/soummyaanon/DEV-island-releases?label=download&color=74b7ff" alt="Latest release"/></a>
   <a href="https://github.com/soummyaanon/DEV-island/actions/workflows/ci.yml"><img src="https://github.com/soummyaanon/DEV-island/actions/workflows/ci.yml/badge.svg" alt="CI"/></a>
   <img src="https://img.shields.io/badge/macOS-Apple%20Silicon-black" alt="macOS Apple Silicon"/>
   <img src="https://img.shields.io/badge/privacy-100%25%20local-4ecb8d" alt="100% local"/>
@@ -83,7 +83,7 @@ it entirely with `AGENT_ISLAND_NO_UPDATE_CHECK=1`.
 
 ## Install
 
-1. Download the DMG from [Releases](https://github.com/soummyaanon/DEV-island/releases/latest).
+1. [Download the DMG](https://github.com/soummyaanon/DEV-island-releases/releases/latest/download/Agent-Island.dmg) (always the latest release).
 2. Drag **Agent Island** into **Applications** and open it.
 3. Because this release is ad-hoc signed, macOS may say it “could not verify”
    the app. Click **Done**, then open **System Settings → Privacy & Security**

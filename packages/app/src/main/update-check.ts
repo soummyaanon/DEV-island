@@ -12,8 +12,16 @@ import { join } from "node:path";
  * AGENT_ISLAND_NO_UPDATE_CHECK=1.
  */
 
-const RELEASES_API = "https://api.github.com/repos/soummyaanon/DEV-island/releases/latest";
-const RELEASES_PAGE = "https://github.com/soummyaanon/DEV-island/releases/latest";
+// Releases are published to a separate PUBLIC repo (downloads only, no source),
+// so this anonymous check works — the source repo is private and its releases
+// API 404s without auth.
+const RELEASES_API =
+  "https://api.github.com/repos/soummyaanon/DEV-island-releases/releases/latest";
+// Stable one-click download of the newest DMG — GitHub 302s straight to the
+// asset, so this never redirects the user to the release page. The packaging
+// script always names the asset "Agent-Island.dmg", so this URL is permanent.
+const DIRECT_DOWNLOAD =
+  "https://github.com/soummyaanon/DEV-island-releases/releases/latest/download/Agent-Island.dmg";
 const CHECK_EVERY_MS = 6 * 60 * 60 * 1000;
 
 export interface UpdateInfo {
@@ -69,7 +77,8 @@ async function checkOnce(onUpdate: (info: UpdateInfo) => void): Promise<void> {
     const latest = typeof release.tag_name === "string" ? release.tag_name : "";
     if (!latest || !isNewerVersion(app.getVersion(), latest)) return;
 
-    pendingUrl = typeof release.html_url === "string" ? release.html_url : RELEASES_PAGE;
+    // Point the notifier at the direct DMG download, not the release page.
+    pendingUrl = DIRECT_DOWNLOAD;
     const version = latest.replace(/^v/i, "");
     onUpdate({ version });
 
@@ -87,9 +96,9 @@ async function checkOnce(onUpdate: (info: UpdateInfo) => void): Promise<void> {
   }
 }
 
-/** Open the pending release page (or the releases list as a fallback). */
+/** Start the direct DMG download (falls back to the releases page). */
 export function openUpdatePage(): void {
-  void shell.openExternal(pendingUrl ?? RELEASES_PAGE);
+  void shell.openExternal(pendingUrl ?? DIRECT_DOWNLOAD);
 }
 
 export function startUpdateCheck(onUpdate: (info: UpdateInfo) => void): void {

@@ -1,7 +1,11 @@
 name: Release
 
 # Tag a version (git tag v0.2.0 && git push origin v0.2.0) and this builds the
-# signed DMG on an Apple Silicon runner and attaches it to the GitHub Release.
+# DMG on an Apple Silicon runner and publishes it to the PUBLIC downloads repo
+# (soummyaanon/DEV-island-releases) — source stays here in the private repo.
+#
+# Requires a repo secret RELEASES_TOKEN: a token with `contents: write` on the
+# public releases repo (the default GITHUB_TOKEN can't write across repos).
 on:
   push:
     tags: ["v*"]
@@ -9,6 +13,9 @@ on:
 
 permissions:
   contents: write
+
+env:
+  RELEASES_REPO: soummyaanon/DEV-island-releases
 
 jobs:
   build-and-release:
@@ -30,8 +37,26 @@ jobs:
       - name: Build release DMG
         run: pnpm package
 
-      - name: Publish release
+      # Notes come from THIS (source) repo's commits — the public repo has no
+      # history of its own worth summarizing.
+      - name: Generate release notes
+        id: notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          {
+            echo "body<<__NOTES__"
+            gh api "repos/${{ github.repository }}/releases/generate-notes" \
+              -f tag_name="${{ github.ref_name }}" --jq .body
+            echo "__NOTES__"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Publish DMG to public downloads repo
         uses: softprops/action-gh-release@v2
         with:
+          repository: ${{ env.RELEASES_REPO }}
+          token: ${{ secrets.RELEASES_TOKEN }}
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          body: ${{ steps.notes.outputs.body }}
           files: packages/app/release/*.dmg
-          generate_release_notes: true
