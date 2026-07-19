@@ -153,12 +153,10 @@ export function App() {
   const dominant = pending[0] ?? active[0] ?? sessions[0] ?? null;
   const stateCls = dominant ? `state-${dominant.state}` : connected ? "idle" : "offline";
 
-  // One sprite per agent kind with sessions (crab is the default face when
-  // nothing is around); all present kinds animate side by side in the wing.
-  const kinds = new Set(sessions.map((s) => s.agent));
+  // Sprites are strictly live: one per agent kind that is ACTIVELY running
+  // (working / starting / waiting). Nothing running = an empty wing.
   const liveKinds = new Set(active.map((s) => s.agent));
-  const sprites = AGENT_SPRITES.filter((a) => kinds.has(a.kind));
-  const shown = sprites.length > 0 ? sprites : [AGENT_SPRITES[0]];
+  const shown = AGENT_SPRITES.filter((a) => liveKinds.has(a.kind));
 
   return (
     <div className="app">
@@ -177,7 +175,7 @@ export function App() {
           <div className={`notch-spacer ${stateCls}`}>
             <span className="sprites">
               {shown.map(({ kind, Sprite }) => (
-                <Sprite key={kind} live={liveKinds.has(kind)} />
+                <Sprite key={kind} live />
               ))}
             </span>
             <span
