@@ -14,7 +14,7 @@
     "typecheck": "pnpm -r run typecheck",
     "test": "pnpm --filter @agent-island/daemon test",
     "smoke": "node scripts/smoke.mjs",
-    "package": "pnpm --filter @agent-island/daemon build && pnpm --filter @agent-island/app build && pnpm --filter @agent-island/app run dist"
+    "package": "bash scripts/package-dmg.sh"
   },
   "devDependencies": {
     "typescript": "^5.8.3"
