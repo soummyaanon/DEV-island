@@ -19,7 +19,7 @@ export function showSettingsWindow(): void {
     backgroundColor: "#00000000",
     resizable: false,
     maximizable: false,
-    minimizable: false,
+    minimizable: true,
     fullscreenable: false,
     hasShadow: true,
     webPreferences: {

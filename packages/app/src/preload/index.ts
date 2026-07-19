@@ -100,6 +100,10 @@ const api = {
   /** Open the Settings window. */
   openSettings: (): void => ipcRenderer.send("agent-island:open-settings"),
 
+  /** Window chrome for frameless windows (settings/onboarding). */
+  winClose: (): void => ipcRenderer.send("agent-island:win-close"),
+  winMinimize: (): void => ipcRenderer.send("agent-island:win-minimize"),
+
   /* ---- Settings window ---- */
 
   settings: {

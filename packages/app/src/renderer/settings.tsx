@@ -3,6 +3,8 @@ import { createRoot } from "react-dom/client";
 import { PixelSprite } from "./PixelSprite";
 import { OpenAiSprite } from "./OpenAiSprite";
 import { CursorSprite } from "./CursorSprite";
+import { TrafficLights } from "./TrafficLights";
+import "./styles/window-chrome.css";
 import "./styles/settings.css";
 
 interface SettingsState {
@@ -83,6 +85,10 @@ function Settings() {
   return (
     <div className="settings">
       <div className="drag-strip" />
+      <TrafficLights
+        onClose={() => window.agentIsland?.winClose()}
+        onMinimize={() => window.agentIsland?.winMinimize()}
+      />
       <h1>Settings</h1>
 
       <h2>Integrations</h2>
