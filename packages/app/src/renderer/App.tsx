@@ -5,11 +5,19 @@ import { ApprovalCard } from "./ApprovalCard";
 import { QuestionCard } from "./QuestionCard";
 import { PixelSprite } from "./PixelSprite";
 import { OpenAiSprite } from "./OpenAiSprite";
+import { CursorSprite } from "./CursorSprite";
 import { UsageFooter } from "./UsageFooter";
 import { playAttention, playFail, playSuccess } from "./sounds";
 
 const ACTIVE_STATES = new Set(["working", "starting", "waiting-for-approval"]);
 const MAX_ROWS = 5;
+
+/** Wing order: one sprite per agent kind that has sessions. */
+const AGENT_SPRITES = [
+  { kind: "claude-code", Sprite: PixelSprite },
+  { kind: "codex", Sprite: OpenAiSprite },
+  { kind: "cursor", Sprite: CursorSprite },
+] as const;
 
 export function App() {
   const [sessions, setSessions] = useState<SessionSnapshot[]>([]);
@@ -98,11 +106,16 @@ export function App() {
     }
   }, [sessions, soundsOn]);
 
-  // Notch band height, measured by main: the black body spans it so the shape
-  // merges with the hardware notch; content renders below it.
+  // Notch geometry, measured by main: the black body spans the band height so
+  // the shape merges with the hardware notch, and every island width derives
+  // from the real notch width — so the same build hugs a 14" Pro or a 13" Air.
   useEffect(() => {
-    const apply = (l: { inset: number }) =>
+    const apply = (l: { inset: number; notchWidth: number }) => {
       document.documentElement.style.setProperty("--notch-inset", `${l.inset}px`);
+      if (l.notchWidth > 0) {
+        document.documentElement.style.setProperty("--notch-width", `${l.notchWidth}px`);
+      }
+    };
     void window.agentIsland.getLayout().then(apply);
     return window.agentIsland.onLayout(apply);
   }, []);
@@ -140,13 +153,12 @@ export function App() {
   const dominant = pending[0] ?? active[0] ?? sessions[0] ?? null;
   const stateCls = dominant ? `state-${dominant.state}` : connected ? "idle" : "offline";
 
-  // One sprite per agent kind: the crab stays the default face; the OpenAI mark
-  // appears for Codex sessions; both wave side by side when both are around.
-  const hasCodex = sessions.some((s) => s.agent === "codex");
-  const showCrab = sessions.some((s) => s.agent === "claude-code") || !hasCodex;
-  const claudeLive = active.some((s) => s.agent === "claude-code");
-  const codexLive = active.some((s) => s.agent === "codex");
-  const dual = showCrab && hasCodex;
+  // One sprite per agent kind with sessions (crab is the default face when
+  // nothing is around); all present kinds animate side by side in the wing.
+  const kinds = new Set(sessions.map((s) => s.agent));
+  const liveKinds = new Set(active.map((s) => s.agent));
+  const sprites = AGENT_SPRITES.filter((a) => kinds.has(a.kind));
+  const shown = sprites.length > 0 ? sprites : [AGENT_SPRITES[0]];
 
   return (
     <div className="app">
@@ -160,12 +172,13 @@ export function App() {
         <div
           className={`island ${stateCls}${expanded ? " expanded" : ""}${
             sessions.length === 0 ? " bare" : ""
-          }${dual ? " dual" : ""}`}
+          } spr-${shown.length}`}
         >
           <div className={`notch-spacer ${stateCls}`}>
             <span className="sprites">
-              {showCrab && <PixelSprite live={claudeLive} />}
-              {hasCodex && <OpenAiSprite live={codexLive} />}
+              {shown.map(({ kind, Sprite }) => (
+                <Sprite key={kind} live={liveKinds.has(kind)} />
+              ))}
             </span>
             <span
               className="spacer-info"
@@ -193,6 +206,7 @@ export function App() {
                   key={`q-${s.key}`}
                   session={s}
                   onJump={(sess) => window.agentIsland.jump(sess)}
+                  onAnswer={(sess, digit) => window.agentIsland.answer(sess, digit)}
                 />
               ))}
               <ul className="rows">
@@ -209,6 +223,29 @@ export function App() {
                 )}
               </ul>
               <UsageFooter usage={usage} />
+              <div className="panel-controls">
+                <button
+                  className="ctl"
+                  title="Sound effects"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    window.agentIsland.setSounds(!soundsOn);
+                  }}
+                >
+                  {soundsOn ? "♪ on" : "♪ off"}
+                </button>
+                <span className="ctl-brand">agent island</span>
+                <button
+                  className="ctl"
+                  title="Quit Agent Island"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    window.agentIsland.quit();
+                  }}
+                >
+                  quit
+                </button>
+              </div>
             </div>
           </div>
         </div>

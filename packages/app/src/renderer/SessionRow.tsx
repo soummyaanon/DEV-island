@@ -3,6 +3,7 @@ import type { SessionSnapshot, SessionState } from "@agent-island/shared";
 const AGENT_LABEL: Record<string, string> = {
   "claude-code": "claude",
   codex: "codex",
+  cursor: "cursor",
 };
 
 const MODE_LABEL: Record<string, string> = {

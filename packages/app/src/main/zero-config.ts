@@ -154,3 +154,108 @@ export function setupZeroConfig(): ZeroConfigResult {
     return "error";
   }
 }
+
+/* ------------------------------------------------------------------------- */
+/* Cursor: hooks.json + a fire-and-forget bridge script                        */
+/* ------------------------------------------------------------------------- */
+
+const CURSOR_MARKER = ".agent-island/bin/cursor-hook";
+/** Only observing hooks — plus gating ones our bridge answers instantly by exiting 0. */
+const CURSOR_EVENTS = [
+  "beforeSubmitPrompt",
+  "beforeShellExecution",
+  "afterShellExecution",
+  "beforeReadFile",
+  "afterFileEdit",
+  "beforeMCPExecution",
+  "afterMCPExecution",
+  "afterAgentThought",
+  "afterAgentResponse",
+  "subagentStart",
+  "subagentStop",
+  "stop",
+];
+
+function cursorHooksPath(): string {
+  return process.env.AGENT_ISLAND_CURSOR_HOOKS ?? join(homedir(), ".cursor", "hooks.json");
+}
+
+/** The bridge: forward stdin JSON to the daemon in the background, exit 0 now. */
+function bridgeScript(): string {
+  return `#!/bin/zsh
+# Agent Island Cursor bridge (auto-generated; safe to delete).
+# Forwards the hook JSON from stdin to the local daemon, fire-and-forget:
+# Cursor never waits on us and never fails because of us.
+EVENT="\${1:-unknown}"
+IN="$(cat)"
+TOKEN="$(cat "$HOME/.agent-island/token" 2>/dev/null)"
+( printf '%s' "$IN" | /usr/bin/curl -s -m 2 -X POST "http://127.0.0.1:7433/events/cursor/\${EVENT}" \\
+    -H "content-type: application/json" -H "x-agent-island-token: \${TOKEN}" \\
+    --data-binary @- >/dev/null 2>&1 & )
+exit 0
+`;
+}
+
+/**
+ * Wire Cursor to the daemon: install the bridge script and safe-merge one
+ * entry per hook event into ~/.cursor/hooks.json. Same contract as the Claude
+ * merge — other tools' hooks are preserved verbatim, re-runs are idempotent,
+ * a timestamped backup precedes any write, and unparseable config aborts.
+ */
+export function setupCursorZeroConfig(): ZeroConfigResult {
+  const hooksPath = cursorHooksPath();
+  try {
+    ensureToken();
+
+    const binPath = join(agentIslandHome(), "bin", "cursor-hook.sh");
+    const script = bridgeScript();
+    if (!existsSync(binPath) || readFileSync(binPath, "utf8") !== script) {
+      mkdirSync(dirname(binPath), { recursive: true });
+      writeFileSync(binPath, script, { mode: 0o755 });
+    }
+
+    let config: Json = {};
+    const existed = existsSync(hooksPath);
+    if (existed) {
+      try {
+        config = JSON.parse(readFileSync(hooksPath, "utf8")) as Json;
+      } catch (err) {
+        console.error(`[zero-config] ${hooksPath} did not parse; leaving untouched:`, err);
+        return "error";
+      }
+    }
+
+    const before = canonical(config);
+    if (typeof config.version !== "number") config.version = 1;
+    const hooks = (config.hooks && typeof config.hooks === "object" ? config.hooks : {}) as Json;
+
+    for (const event of CURSOR_EVENTS) {
+      const entries = (Array.isArray(hooks[event]) ? (hooks[event] as unknown[]) : []).filter(
+        (entry) => {
+          const cmd = (entry as Json | null)?.command;
+          return !(typeof cmd === "string" && cmd.includes(CURSOR_MARKER));
+        },
+      );
+      entries.push({ command: `${binPath} ${event}` });
+      hooks[event] = entries;
+    }
+    config.hooks = hooks;
+
+    if (canonical(config) === before) return "unchanged";
+
+    if (existed) {
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+      copyFileSync(hooksPath, `${hooksPath}.agent-island-bak.${stamp}`);
+    } else {
+      mkdirSync(dirname(hooksPath), { recursive: true });
+    }
+    writeFileSync(hooksPath, `${JSON.stringify(config, null, 2)}\n`);
+
+    const result: ZeroConfigResult = existed ? "updated" : "installed";
+    console.log(`[zero-config] Cursor hooks ${result} in ${hooksPath}`);
+    return result;
+  } catch (err) {
+    console.error("[zero-config] cursor failed:", err);
+    return "error";
+  }
+}

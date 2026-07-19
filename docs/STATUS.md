@@ -26,6 +26,25 @@ _Last updated: 2026-07-19 (afternoon session). Branch: `feat/agent-island-m1-m4`
 - **Quit crash FIXED**: "Object has been destroyed" on quit (late ws close ->
   emit -> send to destroyed window). DaemonClient suppresses emits after
   stop(); every webContents.send site guarded with isDestroyed().
+- **Cursor adapter — DONE (3-agent launch)**: Cursor hooks (~/.cursor/
+  hooks.json, 12 events) -> fire-and-forget bridge script (~/.agent-island/
+  bin/cursor-hook.sh, backgrounds curl so Cursor NEVER waits) -> POST
+  /events/cursor/:hookEvent -> pure mapper (7 tests). Zero-config safe-merge
+  preserves other tools' hook entries (vibe-island coexists). Jump on a
+  cursor session activates Cursor.app. Cube sprite in the wing.
+- **Notch auto-adapt**: JXA/NSScreen (auxiliaryTopLeftArea/RightArea) measures
+  the REAL notch width at startup (185pt on this Mac) -> --notch-width CSS
+  var drives all island widths. Works on Air 13" etc.; 196px fallback when
+  no notch. spr-2/spr-3 classes widen the wings per sprite count.
+- **Round-2 UX**: electric working feel (bottom scanline sweep, neon glow on
+  live sprites, count pulse, spring easing — all reduced-motion aware); real
+  app icon (glowing crab, build/icon.icns via headless-Chrome+iconutil);
+  ⌘1–9 answers pending questions from anywhere (iTerm write-text; other
+  terminals via Accessibility keystroke once granted; else jump), options
+  clickable in the ask card; first-run ONBOARDING window (animated island
+  demo, Accessibility + login steps, flag at userData/onboarded); TRAY-LESS
+  by default (AGENT_ISLAND_TRAY=1 restores) — sounds/quit live in the panel
+  footer, hover the notch to reach them.
 - **Electron app** (`packages/app`): TRUE notch hug — `type:"panel"` +
   `enableLargerThanScreen:true` -> windowY=0 over the menu-bar band (the
   breakthrough; see skill below). Island wraps the notch, animated 2-frame

@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { systemPreferences } from "electron";
 import type { SessionSnapshot } from "@agent-island/shared";
 
 /** TERM_PROGRAM value -> macOS bundle id, for activate-app fallback. */
@@ -36,6 +37,13 @@ export function jumpToTerminal(session: SessionSnapshot): void {
     return;
   }
 
+  // Cursor sessions come from the IDE's hooks (no terminal identity): jump
+  // means bringing Cursor itself to the front.
+  if (!term && session.agent === "cursor") {
+    osascript(`tell application id "${BUNDLE_IDS.Cursor}" to activate`);
+    return;
+  }
+
   const bundle = BUNDLE_IDS[term];
   if (bundle) {
     osascript(`tell application id "${bundle}" to activate`);
@@ -43,6 +51,49 @@ export function jumpToTerminal(session: SessionSnapshot): void {
     osascript(`tell application "${term}" to activate`);
   } else {
     console.warn(`[jump] no known terminal for session ${session.key} (term="${term}")`);
+  }
+}
+
+/**
+ * Best-effort remote answer: type one digit into the session's terminal so the
+ * agent's numbered prompt (AskUserQuestion / request_user_input) is selected
+ * without leaving the notch. Only iTerm2 exposes safe per-session typing
+ * (`write text`, no Accessibility permission needed); everywhere else we just
+ * jump so the user can answer by hand. Always brings the terminal forward —
+ * the user should see what got selected.
+ */
+export function answerInTerminal(session: SessionSnapshot, digit: string): void {
+  const term = metaString(session, "term_program");
+  const itermId = metaString(session, "iterm_session_id");
+
+  if (/^[1-9]$/.test(digit) && term === "iTerm.app" && itermId && SAFE_ID.test(itermId)) {
+    const guid = itermId.includes(":") ? (itermId.split(":").pop() ?? itermId) : itermId;
+    osascript(`
+      tell application "iTerm2"
+        repeat with w in windows
+          repeat with t in tabs of w
+            repeat with s in sessions of t
+              if (id of s) is "${guid}" then
+                tell s to write text "${digit}" newline NO
+                return
+              end if
+            end repeat
+          end repeat
+        end repeat
+      end tell`);
+    jumpToTerminal(session);
+    return;
+  }
+
+  jumpToTerminal(session);
+
+  // Any other terminal: with the Accessibility permission we can press the key
+  // in the (now-frontmost) terminal via System Events. Without it, the jump
+  // above already put the user where they can answer by hand.
+  if (/^[1-9]$/.test(digit) && systemPreferences.isTrustedAccessibilityClient(false)) {
+    osascript(`
+      delay 0.4
+      tell application "System Events" to keystroke "${digit}"`);
   }
 }
 

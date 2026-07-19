@@ -2,10 +2,11 @@ import { app, BrowserWindow, globalShortcut, ipcMain, screen, type Tray } from "
 import type { ApprovalDecision, SessionSnapshot } from "@agent-island/shared";
 import { DaemonClient } from "./daemon-client";
 import { ensureDaemon, stopDaemon } from "./daemon-manager";
-import { setupZeroConfig } from "./zero-config";
+import { setupCursorZeroConfig, setupZeroConfig } from "./zero-config";
 import { createNotchWindow } from "./windows/notch-window";
+import { maybeShowOnboarding, registerOnboardingIpc } from "./windows/onboarding-window";
 import { createTray, updateTrayTitle } from "./tray";
-import { jumpToTerminal } from "./jump-back";
+import { answerInTerminal, jumpToTerminal } from "./jump-back";
 
 // One instance only — two overlays fighting over the notch would be chaos.
 if (!app.requestSingleInstanceLock()) {
@@ -45,24 +46,59 @@ if (!app.requestSingleInstanceLock()) {
     }
   }
 
+  // While an agent waits on a multiple-choice question, ⌘1..⌘9 answer it from
+  // anywhere (registered only for the shown options, released the moment the
+  // question clears — same transient pattern as the ⌘Y/⌘N approvals).
+  let questionId: string | null = null;
+  let questionKeyCount = 0;
+  function syncQuestionShortcuts(sessions: SessionSnapshot[]): void {
+    const session = sessions.find((s) => s.pending_question);
+    const q = session?.pending_question ?? null;
+    if ((q?.id ?? null) === questionId) return;
+    for (let i = 1; i <= questionKeyCount; i++) {
+      globalShortcut.unregister(`CommandOrControl+${i}`);
+    }
+    questionId = q?.id ?? null;
+    questionKeyCount = 0;
+    if (!session || !q) return;
+    questionKeyCount = Math.min(9, q.options.length);
+    for (let i = 1; i <= questionKeyCount; i++) {
+      globalShortcut.register(`CommandOrControl+${i}`, () => answerInTerminal(session, String(i)));
+    }
+  }
+
   app.whenReady().then(async () => {
     app.dock?.hide(); // menu-bar app, no Dock icon
     notch = createNotchWindow();
 
     let soundsOn = true;
-    tray = createTray({
-      onToggle: () => sendToNotch("agent-island:toggle"),
-      onQuit: () => app.quit(),
-      isSoundOn: () => soundsOn,
-      onToggleSound: (on) => {
-        soundsOn = on;
-        sendToNotch("agent-island:sounds", on);
-      },
-    });
+    // System-app feel: no menu-bar icon by default — controls live inside the
+    // island's expanded panel (hover the notch). AGENT_ISLAND_TRAY=1 restores it.
+    if (process.env.AGENT_ISLAND_TRAY === "1") {
+      tray = createTray({
+        onToggle: () => sendToNotch("agent-island:toggle"),
+        onQuit: () => app.quit(),
+        isSoundOn: () => soundsOn,
+        onToggleSound: (on) => {
+          soundsOn = on;
+          sendToNotch("agent-island:sounds", on);
+        },
+      });
+    }
     ipcMain.handle("agent-island:get-sounds", () => soundsOn);
+    ipcMain.on("agent-island:set-sounds", (_e, on: boolean) => {
+      soundsOn = on;
+      sendToNotch("agent-island:sounds", on);
+    });
 
-    // Zero Config: wire Claude Code to the daemon (token + safe hook merge).
+    // First launch: a short onboarding (island tour + Accessibility + login).
+    registerOnboardingIpc();
+    maybeShowOnboarding();
+
+    // Zero Config: wire Claude Code and Cursor to the daemon (token + safe
+    // hook merges; Codex needs nothing — its rollout logs are tailed directly).
     setupZeroConfig();
+    setupCursorZeroConfig();
 
     // One launch runs everything: spawn the daemon if it isn't already up.
     await ensureDaemon();
@@ -71,6 +107,7 @@ if (!app.requestSingleInstanceLock()) {
       sendToNotch("agent-island:sessions", { sessions, connected });
       if (tray && !tray.isDestroyed()) updateTrayTitle(tray, sessions);
       syncApprovalShortcuts(sessions);
+      syncQuestionShortcuts(sessions);
     });
     daemon.onUsage((usage) => sendToNotch("agent-island:usage", usage));
     daemon.start();
@@ -110,6 +147,12 @@ if (!app.requestSingleInstanceLock()) {
     });
 
     ipcMain.on("agent-island:jump", (_e, session: SessionSnapshot) => jumpToTerminal(session));
+
+    ipcMain.on(
+      "agent-island:answer",
+      (_e, { session, digit }: { session: SessionSnapshot; digit: number }) =>
+        answerInTerminal(session, String(digit)),
+    );
 
     ipcMain.on(
       "agent-island:approve",
