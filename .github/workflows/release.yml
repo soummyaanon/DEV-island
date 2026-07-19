@@ -16,6 +16,9 @@ permissions:
 
 env:
   RELEASES_REPO: soummyaanon/DEV-island-releases
+  # True only when the cross-repo publish token is configured. Until then the
+  # run still succeeds and uploads the DMG as a build artifact instead.
+  HAS_TOKEN: ${{ secrets.RELEASES_TOKEN != '' }}
 
 jobs:
   build-and-release:
@@ -52,6 +55,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Publish DMG to public downloads repo
+        if: env.HAS_TOKEN == 'true'
         uses: softprops/action-gh-release@v2
         with:
           repository: ${{ env.RELEASES_REPO }}
@@ -60,3 +64,17 @@ jobs:
           name: ${{ github.ref_name }}
           body: ${{ steps.notes.outputs.body }}
           files: packages/app/release/*.dmg
+
+      # Fallback when RELEASES_TOKEN isn't set yet: keep the build green and make
+      # the DMG downloadable from the run, without leaking source to a release.
+      - name: Upload DMG as artifact (RELEASES_TOKEN not set)
+        if: env.HAS_TOKEN != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Agent-Island-dmg
+          path: packages/app/release/*.dmg
+
+      - name: Warn that RELEASES_TOKEN is missing
+        if: env.HAS_TOKEN != 'true'
+        run: |
+          echo "::warning::RELEASES_TOKEN secret not set — DMG uploaded as an artifact instead of published to ${RELEASES_REPO}. Add the secret to enable automated releases."

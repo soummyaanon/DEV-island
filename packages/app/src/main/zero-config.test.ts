@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -42,5 +42,40 @@ describe("Claude zero-config", () => {
     const bridge = readFileSync(join(home, "bin", "claude-hook.sh"), "utf8");
     expect(bridge).toContain('X-App-Bundle-Id: ${__CFBundleIdentifier:-}');
     expect(bridge).toContain("--data-binary @-");
+  });
+
+  // The app now calls removeClaudeHooks() on quit so the HTTP hooks don't fire
+  // against a dead daemon. This locks in that it strips ONLY our handlers.
+  it("removeClaudeHooks strips our hooks but keeps the user's own", async () => {
+    const root = mkdtempSync(join(tmpdir(), "agent-island-zero-config-"));
+    const home = join(root, "home");
+    const settingsPath = join(root, "settings.json");
+    process.env.AGENT_ISLAND_HOME = home;
+    process.env.AGENT_ISLAND_CLAUDE_SETTINGS = settingsPath;
+
+    // A user's own PreToolUse hook that must survive both install and removal.
+    writeFileSync(
+      settingsPath,
+      JSON.stringify({
+        hooks: {
+          PreToolUse: [{ matcher: "*", hooks: [{ type: "command", command: "echo mine" }] }],
+        },
+      }),
+    );
+
+    const { setupZeroConfig, removeClaudeHooks } = await import("./zero-config");
+    expect(setupZeroConfig()).toBe("updated");
+    const installed = JSON.stringify(
+      (JSON.parse(readFileSync(settingsPath, "utf8")) as { hooks: unknown }).hooks,
+    );
+    expect(installed).toContain("/events/claude/pre-tool"); // ours added
+    expect(installed).toContain("echo mine"); // user's kept
+
+    expect(removeClaudeHooks()).toBe("updated");
+    const after = JSON.stringify(
+      (JSON.parse(readFileSync(settingsPath, "utf8")) as { hooks?: unknown }).hooks ?? {},
+    );
+    expect(after).not.toContain("/events/claude/"); // ours gone
+    expect(after).toContain("echo mine"); // user's still there
   });
 });

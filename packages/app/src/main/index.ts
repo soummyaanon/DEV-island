@@ -329,6 +329,11 @@ if (!app.requestSingleInstanceLock()) {
   app.on("before-quit", () => {
     globalShortcut.unregisterAll();
     stopUpdateCheck();
+    // Remove our hooks before we go: the HTTP hooks point at the daemon we're
+    // about to stop, so leaving them behind makes every subsequent Claude/Cursor
+    // tool call error against a dead port. They're re-installed on next launch.
+    removeClaudeHooks();
+    removeCursorHooks();
     daemon.stop();
     stopDaemon();
   });
