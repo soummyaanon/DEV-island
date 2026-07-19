@@ -19,27 +19,53 @@ function header(headers: IncomingHttpHeaders, name: string): string | undefined 
 
 /** Parse the AskUserQuestion tool input into a PendingQuestion (defensively). */
 function extractQuestion(input: Record<string, unknown> | undefined): PendingQuestion | null {
-  const questions = Array.isArray(input?.questions)
+  const raw = Array.isArray(input?.questions)
     ? (input.questions as Array<Record<string, unknown>>)
     : [];
-  const first = questions[0];
-  if (!first || typeof first.question !== "string") return null;
-  const options = Array.isArray(first.options)
-    ? (first.options as Array<Record<string, unknown>>)
-        .map((o) => {
-          if (typeof o?.label !== "string") return null;
-          return typeof o.description === "string" && o.description.trim()
-            ? `${o.label} — ${o.description}`
-            : o.label;
-        })
-        .filter((label): label is string => label !== null)
+  const questions = raw
+    .filter((q): q is Record<string, unknown> => typeof q?.question === "string")
+    .map((q) => ({
+      question: q.question as string,
+      options: Array.isArray(q.options)
+        ? (q.options as Array<Record<string, unknown>>)
+            .map((o) => {
+              if (typeof o?.label !== "string") return null;
+              return typeof o.description === "string" && o.description.trim()
+                ? `${o.label} — ${o.description}`
+                : o.label;
+            })
+            .filter((label): label is string => label !== null)
+        : [],
+    }));
+  if (questions.length === 0) return null;
+  return { id: randomUUID(), questions, created_at: new Date().toISOString() };
+}
+
+/**
+ * The questions the notch can answer remotely: every entry single-select with
+ * at least one labelled option. Returns question texts + raw option labels
+ * (the hook answer needs the label verbatim, not the display string), or null
+ * when the tool call is not remotely answerable.
+ */
+function answerableQuestions(
+  input: Record<string, unknown> | undefined,
+): Array<{ question: string; labels: string[] }> | null {
+  const raw = Array.isArray(input?.questions)
+    ? (input.questions as Array<Record<string, unknown>>)
     : [];
-  return {
-    id: randomUUID(),
-    question: first.question,
-    options,
-    created_at: new Date().toISOString(),
-  };
+  if (raw.length === 0) return null;
+  const out: Array<{ question: string; labels: string[] }> = [];
+  for (const q of raw) {
+    if (typeof q?.question !== "string" || q.multiSelect === true) return null;
+    const labels = Array.isArray(q.options)
+      ? (q.options as Array<Record<string, unknown>>)
+          .map((o) => (typeof o?.label === "string" ? o.label : null))
+          .filter((label): label is string => label !== null)
+      : [];
+    if (labels.length === 0) return null;
+    out.push({ question: q.question, labels });
+  }
+  return out;
 }
 
 /** ExitPlanMode carries the plan text in tool_input.plan; surface it for review. */
@@ -47,6 +73,14 @@ function extractPlan(input: Record<string, unknown> | undefined): string | undef
   const plan = input?.plan;
   return typeof plan === "string" && plan.trim() ? plan : undefined;
 }
+
+/**
+ * A plausible macOS bundle id: reverse-DNS with at least one dot. Claude's
+ * header interpolation only knows UPPERCASE env var names, so a deployed
+ * "$__CFBundleIdentifier" template arrives as the literal tail
+ * "undleIdentifier" — shaped like a word, never like a bundle id.
+ */
+const BUNDLE_ID = /^[\w-]+(\.[\w-]+)+$/;
 
 /** Terminal identity forwarded by the hook (via allowedEnvVars), for jump-to-terminal. */
 function terminalMeta(headers: IncomingHttpHeaders): Record<string, string> {
@@ -58,7 +92,7 @@ function terminalMeta(headers: IncomingHttpHeaders): Record<string, string> {
   if (term) meta.term_program = term;
   if (iterm) meta.iterm_session_id = iterm;
   if (termSession) meta.term_session_id = termSession;
-  if (bundleId) meta.app_bundle_id = bundleId;
+  if (bundleId && BUNDLE_ID.test(bundleId)) meta.app_bundle_id = bundleId;
   return meta;
 }
 
@@ -117,12 +151,49 @@ export function registerClaudeRoutes(
         payload.tool_name === "AskUserQuestion" &&
         (eventName === "PermissionRequest" || eventName === "PreToolUse");
       if (isQuestion) {
-        hub.setPendingQuestion(
-          "claude-code",
-          payload.session_id,
-          extractQuestion(payload.tool_input),
-        );
-      } else {
+        const question = extractQuestion(payload.tool_input);
+        const answerable = answerableQuestions(payload.tool_input);
+
+        // Hold the PermissionRequest open so clicks on the notch answer the
+        // questions through the hook response — no terminal focus, no synthetic
+        // keystrokes. Timeout → Claude's own picker takes over and the card
+        // stays for jump-to-terminal.
+        if (
+          question &&
+          answerable &&
+          eventName === "PermissionRequest" &&
+          hub.subscriberCount() > 0
+        ) {
+          const outcome = await hub.requestQuestionAnswer(
+            "claude-code",
+            payload.session_id,
+            question,
+          );
+          const labels =
+            outcome === "timeout" || outcome.length !== answerable.length
+              ? null
+              : answerable.map((q, i) => q.labels[outcome[i]]);
+          if (labels && labels.every((label) => label !== undefined)) {
+            const answers = Object.fromEntries(
+              answerable.map((q, i) => [q.question, labels[i] as string]),
+            );
+            return reply.code(200).send({
+              hookSpecificOutput: {
+                hookEventName: "PermissionRequest",
+                decision: {
+                  behavior: "allow",
+                  updatedInput: { ...(payload.tool_input ?? {}), answers },
+                },
+              },
+            });
+          }
+          return reply.code(204).send();
+        }
+
+        hub.setPendingQuestion("claude-code", payload.session_id, question);
+      } else if (eventName !== "Notification") {
+        // Notification hooks ("waiting for your input", idle) fire WHILE the
+        // question is still open — only real activity means it was answered.
         hub.setPendingQuestion("claude-code", payload.session_id, null);
       }
 

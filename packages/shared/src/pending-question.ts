@@ -1,17 +1,25 @@
 import { z } from "zod";
 
 /**
- * A multiple-choice question Claude is asking the user (the AskUserQuestion
- * tool). Surfaced in the notch while Claude waits; answering happens in the
- * terminal (jump-to-terminal), since the CLI owns the input.
+ * A multiple-choice question an agent is asking the user (Claude's
+ * AskUserQuestion tool, Codex's request_user_input). Surfaced in the notch
+ * while the agent waits. Claude questions are answered directly from the notch
+ * (the daemon holds the hook open and replies with the choice); Codex answers
+ * fall back to jump-to-terminal + keystrokes.
  */
+export const PendingSubQuestionSchema = z.object({
+  /** The question text. */
+  question: z.string(),
+  /** Display labels for its options, in order (answers are sent as indices). */
+  options: z.array(z.string()),
+});
+
 export const PendingQuestionSchema = z.object({
   id: z.string(),
-  /** The question text (first question if the tool asked several). */
-  question: z.string(),
-  /** Option labels, in order. */
-  options: z.array(z.string()),
+  /** Every question in the ask — the notch collects one choice per entry. */
+  questions: z.array(PendingSubQuestionSchema).min(1),
   created_at: z.string().datetime(),
 });
 
+export type PendingSubQuestion = z.infer<typeof PendingSubQuestionSchema>;
 export type PendingQuestion = z.infer<typeof PendingQuestionSchema>;

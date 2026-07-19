@@ -184,3 +184,56 @@ h2 {
     transition: none;
   }
 }
+
+/* Sounds section: theme/override dropdowns + preview buttons */
+.s-select {
+  flex: none;
+  appearance: none;
+  -webkit-appearance: none;
+  font: inherit;
+  font-size: 11.5px;
+  color: var(--text);
+  background: var(--group-bg);
+  border: 1px solid var(--group-edge);
+  border-radius: 7px;
+  padding: 4px 22px 4px 9px;
+  background-image: linear-gradient(45deg, transparent 50%, var(--text-dim) 50%),
+    linear-gradient(135deg, var(--text-dim) 50%, transparent 50%);
+  background-position:
+    right 12px top 55%,
+    right 8px top 55%;
+  background-size: 4px 4px;
+  background-repeat: no-repeat;
+}
+.s-select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.s-row.s-sub {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+.s-row.s-sub .s-text b {
+  font-weight: 560;
+  color: var(--text-dim);
+}
+.s-play {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid var(--group-edge);
+  background: var(--group-bg);
+  color: var(--accent);
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 0.15s var(--spring);
+}
+.s-play:hover {
+  transform: scale(1.12);
+  border-color: var(--accent);
+}
+.s-play:active {
+  transform: scale(0.95);
+}

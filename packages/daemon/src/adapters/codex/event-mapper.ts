@@ -109,19 +109,18 @@ export function extractCodexQuestion(entry: CodexRolloutEntry): PendingQuestion 
   const questions = Array.isArray(args.questions)
     ? (args.questions as Array<Record<string, unknown>>)
     : [];
-  const first = questions[0];
-  if (!first || typeof first.question !== "string") return null;
-  const options = Array.isArray(first.options)
-    ? (first.options as Array<Record<string, unknown>>)
-        .map((o) => (typeof o?.label === "string" ? o.label : null))
-        .filter((label): label is string => label !== null)
-    : [];
-  return {
-    id: randomUUID(),
-    question: first.question,
-    options,
-    created_at: new Date().toISOString(),
-  };
+  const mapped = questions
+    .filter((q): q is Record<string, unknown> => typeof q?.question === "string")
+    .map((q) => ({
+      question: q.question as string,
+      options: Array.isArray(q.options)
+        ? (q.options as Array<Record<string, unknown>>)
+            .map((o) => (typeof o?.label === "string" ? o.label : null))
+            .filter((label): label is string => label !== null)
+        : [],
+    }));
+  if (mapped.length === 0) return null;
+  return { id: randomUUID(), questions: mapped, created_at: new Date().toISOString() };
 }
 
 /** A `response_item` tool call -> canonical tool activity (Claude-style titles). */

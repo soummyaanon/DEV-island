@@ -53,6 +53,25 @@ export class DaemonClient {
     }
   }
 
+  /**
+   * Answer a held AskUserQuestion with one 0-based option index per question.
+   * Returns false when the hold is gone (expired or unknown) — the caller
+   * falls back to jump-to-terminal.
+   */
+  async answerQuestion(id: string, options: number[]): Promise<boolean> {
+    try {
+      const res = await fetch(`${this.httpBase}/questions/${id}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ options }),
+      });
+      return res.ok;
+    } catch (err) {
+      console.error("[answer] failed to send options:", err);
+      return false;
+    }
+  }
+
   start(): void {
     this.connect();
   }

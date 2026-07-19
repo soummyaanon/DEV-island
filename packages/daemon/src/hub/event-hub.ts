@@ -13,7 +13,7 @@ import {
 } from "@agent-island/shared";
 import { SessionRegistry } from "./session-registry";
 import { EventLog } from "./event-log";
-import { ApprovalRegistry, type ApprovalOutcome } from "./approval-registry";
+import { ApprovalRegistry, HoldRegistry, type ApprovalOutcome } from "./approval-registry";
 
 /** A live consumer of the stream (one WebSocket connection). */
 export type Subscriber = (message: WireMessage) => void;
@@ -27,6 +27,8 @@ export class EventHub {
   private readonly log: EventLog;
   private readonly subscribers = new Set<Subscriber>();
   private readonly approvals = new ApprovalRegistry();
+  /** Held AskUserQuestion hooks: resolves with one option index per question. */
+  private readonly questions = new HoldRegistry<number[]>();
   private usage: AgentUsage[] = [];
 
   constructor(
@@ -131,6 +133,27 @@ export class EventHub {
   /** Resolve a held approval from the UI. Returns false if unknown/expired. */
   resolveApproval(id: string, decision: ApprovalDecision): boolean {
     return this.approvals.resolve(id, decision);
+  }
+
+  /**
+   * Hold an AskUserQuestion hook open so the user can answer from the notch.
+   * Resolves with one chosen option index per question, or "timeout" — then
+   * Claude's own terminal picker takes over and the card stays for jump.
+   */
+  async requestQuestionAnswer(
+    agent: AgentKind,
+    sessionId: string,
+    question: PendingQuestion,
+  ): Promise<number[] | "timeout"> {
+    this.setPendingQuestion(agent, sessionId, question);
+    const outcome = await this.questions.await(question.id, this.approvalHoldMs);
+    if (outcome !== "timeout") this.setPendingQuestion(agent, sessionId, null);
+    return outcome;
+  }
+
+  /** Resolve a held question from the UI with one option index per question. */
+  answerQuestion(id: string, options: number[]): boolean {
+    return this.questions.resolve(id, options);
   }
 
   /** Surface (or clear) an AskUserQuestion the agent is waiting on. */

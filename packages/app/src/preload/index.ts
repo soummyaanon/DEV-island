@@ -1,9 +1,17 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { AgentKind, AgentUsage, ApprovalDecision, SessionSnapshot } from "@agent-island/shared";
 
+export interface SoundPrefsPayload {
+  on: boolean;
+  theme: string;
+  overrides: Record<string, string>;
+}
+
 export interface SettingsState {
   agents: Record<AgentKind, boolean>;
   sounds: boolean;
+  soundTheme: string;
+  soundOverrides: Record<string, string>;
   tray: boolean;
   updateCheck: boolean;
   openAtLogin: boolean;
@@ -53,10 +61,10 @@ const api = {
     return () => ipcRenderer.removeListener("agent-island:cursor-left", listener);
   },
 
-  getSounds: (): Promise<boolean> => ipcRenderer.invoke("agent-island:get-sounds"),
+  getSounds: (): Promise<SoundPrefsPayload> => ipcRenderer.invoke("agent-island:get-sounds"),
 
-  onSounds: (cb: (on: boolean) => void): (() => void) => {
-    const listener = (_e: unknown, on: boolean) => cb(on);
+  onSounds: (cb: (prefs: SoundPrefsPayload) => void): (() => void) => {
+    const listener = (_e: unknown, prefs: SoundPrefsPayload) => cb(prefs);
     ipcRenderer.on("agent-island:sounds", listener);
     return () => ipcRenderer.removeListener("agent-island:sounds", listener);
   },
@@ -74,9 +82,16 @@ const api = {
   /** Bring the session's terminal to the front. */
   jump: (session: SessionSnapshot): void => ipcRenderer.send("agent-island:jump", session),
 
-  /** Answer a pending question by typing its option number into the terminal. */
-  answer: (session: SessionSnapshot, digit: number): void =>
-    ipcRenderer.send("agent-island:answer", { session, digit }),
+  /** Answer a pending question: one 0-based option index per sub-question. */
+  answer: (session: SessionSnapshot, options: number[]): void =>
+    ipcRenderer.send("agent-island:answer", { session, options }),
+
+  /** One-shot chime pushed by main (e.g. "approve" after allowing something). */
+  onChime: (cb: (event: string) => void): (() => void) => {
+    const listener = (_e: unknown, event: string) => cb(event);
+    ipcRenderer.on("agent-island:chime", listener);
+    return () => ipcRenderer.removeListener("agent-island:chime", listener);
+  },
 
   /** Resolve a pending approval from the notch. */
   approve: (id: string, decision: ApprovalDecision): void =>
@@ -113,7 +128,7 @@ const api = {
       ipcRenderer.on("agent-island:settings-state", listener);
       return () => ipcRenderer.removeListener("agent-island:settings-state", listener);
     },
-    set: (key: string, value: boolean): void =>
+    set: (key: string, value: boolean | string): void =>
       ipcRenderer.send("agent-island:set-setting", { key, value }),
   },
 

@@ -156,7 +156,9 @@ describe("CodexRolloutReader", () => {
     await appendFile(rolloutPath(), ASK);
     await until(() => questions.length >= 1);
     expect(questions[0].sessionId).toBe(UUID);
-    expect(questions[0].question).toMatchObject({ question: "Which?", options: ["A"] });
+    expect(questions[0].question).toMatchObject({
+      questions: [{ question: "Which?", options: ["A"] }],
+    });
 
     await appendFile(rolloutPath(), TASK_STARTED);
     await until(() => questions.length >= 2);

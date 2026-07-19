@@ -1,6 +1,22 @@
 import { execFile } from "node:child_process";
+import { appendFile } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { systemPreferences } from "electron";
 import type { SessionSnapshot } from "@agent-island/shared";
+
+/**
+ * Menu-bar apps have no visible console; mirror jump diagnostics to a file so
+ * "clicked and nothing happened" is debuggable after the fact.
+ */
+function logJump(message: string): void {
+  console.log(`[jump] ${message}`);
+  appendFile(
+    join(homedir(), ".agent-island", "app.log"),
+    `${new Date().toISOString()} [jump] ${message}\n`,
+    () => {},
+  );
+}
 
 /** TERM_PROGRAM value -> macOS bundle id, for activate-app fallback. */
 const BUNDLE_IDS: Record<string, string> = {
@@ -18,7 +34,7 @@ const SAFE_TERM = /^[\w.]+$/;
 
 function osascript(script: string): void {
   execFile("osascript", ["-e", script], (err) => {
-    if (err) console.error("[jump] osascript failed:", err.message);
+    if (err) logJump(`osascript failed: ${err.message}`);
   });
 }
 
@@ -53,6 +69,14 @@ export function jumpToTerminal(session: SessionSnapshot): void {
     return;
   }
 
+  // VS Code and Cursor terminals are indistinguishable by TERM_PROGRAM; if the
+  // session's bundle id never reached the daemon, activate whichever editor is
+  // actually running rather than blindly launching VS Code.
+  if (term === "vscode") {
+    jumpVSCodeFamily();
+    return;
+  }
+
   const bundle = BUNDLE_IDS[term];
   if (bundle) {
     osascript(`tell application id "${bundle}" to activate`);
@@ -69,20 +93,52 @@ export function jumpToTerminal(session: SessionSnapshot): void {
  * terminal forward first, then use Accessibility-backed System Events.
  */
 export function answerInTerminal(session: SessionSnapshot, digit: string): void {
+  logJump(`answer ${digit} for ${session.key} (term=${metaString(session, "term_program") ?? ""})`);
   jumpToTerminal(session);
 
   // Without Accessibility, the jump still puts the user at the right prompt.
-  if (/^[1-9]$/.test(digit) && systemPreferences.isTrustedAccessibilityClient(false)) {
+  if (!systemPreferences.isTrustedAccessibilityClient(false)) {
+    logJump("Accessibility not granted — jumped without typing the answer");
+    return;
+  }
+  if (/^[1-9]$/.test(digit)) {
     const downPresses = Number(digit) - 1;
-    osascript(`
+    execFile(
+      "osascript",
+      [
+        "-e",
+        `
       delay 0.4
       tell application "System Events"
         repeat ${downPresses} times
           key code 125
         end repeat
         key code 36
-      end tell`);
+      end tell`,
+      ],
+      (err) => {
+        logJump(err ? `keystrokes failed: ${err.message}` : "keystrokes sent");
+      },
+    );
   }
+}
+
+/** True if an app with this bundle id is currently running (lsappinfo ships with macOS). */
+function isAppRunning(bundleId: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    execFile("lsappinfo", ["find", `bundleid=${bundleId}`], (err, stdout) => {
+      resolve(!err && typeof stdout === "string" && stdout.trim().length > 0);
+    });
+  });
+}
+
+function jumpVSCodeFamily(): void {
+  void Promise.all([isAppRunning(BUNDLE_IDS.vscode), isAppRunning(BUNDLE_IDS.Cursor)]).then(
+    ([codeRunning, cursorRunning]) => {
+      const bundle = !codeRunning && cursorRunning ? BUNDLE_IDS.Cursor : BUNDLE_IDS.vscode;
+      osascript(`tell application id "${bundle}" to activate`);
+    },
+  );
 }
 
 /** ITERM_SESSION_ID is "wNtNpN:GUID"; the AppleScript session id is the GUID. */
