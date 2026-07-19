@@ -57,9 +57,10 @@ body {
 }
 
 /* All widths derive from the measured hardware notch (--notch-width is set at
-   runtime by main via JXA/NSScreen; 196px is the fallback for unknown). */
+   runtime by main via JXA/NSScreen; 196px is the fallback for unknown). Wings
+   get generous room: sprite row on the left, count badge on the right. */
 .island {
-  width: calc(var(--notch-width, 196px) + 52px);
+  width: calc(var(--notch-width, 196px) + 68px);
   background: #000;
   border-radius: 0 0 12px 12px;
   overflow: hidden;
@@ -110,10 +111,10 @@ body {
 
 /* More agents on deck: widen the wings so every sprite fits beside the notch. */
 .island.spr-2:not(.expanded):not(.bare) {
-  width: calc(var(--notch-width, 196px) + 80px);
+  width: calc(var(--notch-width, 196px) + 100px);
 }
 .island.spr-3:not(.expanded):not(.bare) {
-  width: calc(var(--notch-width, 196px) + 108px);
+  width: calc(var(--notch-width, 196px) + 136px);
 }
 
 /* Concave top "ears" (quad-Bezier r=10 in the reference — a radial-gradient
