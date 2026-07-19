@@ -1,6 +1,6 @@
 # Agent Island — Session Memory / Resume Notes
 
-_Last updated: 2026-07-19 (late night session). Branch: `feat/agent-island-m1-m4` (pushed)._
+_Last updated: 2026-07-19 (afternoon session). Branch: `feat/agent-island-m1-m4`._
 
 ## What exists and WORKS (all committed)
 
@@ -12,6 +12,20 @@ _Last updated: 2026-07-19 (late night session). Branch: `feat/agent-island-m1-m4
 - **Claude adapter**: all 6 hooks via HTTP (SessionStart/Pre/PostToolUse/
   PermissionRequest/Notification/Stop), terminal identity headers for jump,
   permission_mode + rich activity titles, AskUserQuestion -> pending_question.
+- **Codex adapter (M3) — DONE**: read-only rollout tailer in the daemon
+  (`adapters/codex/rollout-reader.ts` + pure `event-mapper.ts`, 31 vitest
+  tests — the repo's first). Stat-polls `$CODEX_HOME/sessions` (1.5s/10s),
+  compact catch-up (session_started + latest state), live tool titles
+  ("Running…", "Editing…"), task_started/complete/aborted lifecycle,
+  request_user_input -> pending_question card, model+approval_policy in
+  meta. Zero Codex config, never writes to Codex, failures = log lines.
+  Design: docs/superpowers/specs/2026-07-19-codex-adapter-design.md.
+- **Notch dual sprites**: OpenAI blossom (official petal path, currentColor,
+  slow spin when live, reduced-motion aware) for Codex; crab for Claude;
+  both side by side when both agents run (island 248->276px "dual" mode).
+- **Quit crash FIXED**: "Object has been destroyed" on quit (late ws close ->
+  emit -> send to destroyed window). DaemonClient suppresses emits after
+  stop(); every webContents.send site guarded with isDestroyed().
 - **Electron app** (`packages/app`): TRUE notch hug — `type:"panel"` +
   `enableLargerThanScreen:true` -> windowY=0 over the menu-bar band (the
   breakthrough; see skill below). Island wraps the notch, animated 2-frame
@@ -33,12 +47,11 @@ _Last updated: 2026-07-19 (late night session). Branch: `feat/agent-island-m1-m4
 
 ## Next up (agreed backlog, in rough priority)
 
-1. **Codex adapter (M3)** — notify forwarder + rollout tailer. Research DONE:
-   rollout format mapped (`~/.codex/sessions/**/rollout-*.jsonl`, entries
-   `{timestamp,type,payload}`; session_meta has session_id+cwd; event_msg
-   task_started/task_complete; response_item tool calls). notify = argv[1]
-   JSON, config.toml needs `notify = [...]` PREPENDED (top-level keys before
-   tables). 128 real rollouts on this Mac to test against.
+1. **Stability + size reduction** (user's stated goal 2026-07-19): shrink
+   DMG/app further. Done so far: en-only electronLanguages, react/react-dom
+   out of the packed asar (renderer is vite-bundled), old release/ artifacts
+   cleaned (357MB). Remaining ideas: prune asar further, single target
+   (drop zip if unused), Electron upgrade, asar unpack audit.
 2. Homebrew cask (free no-warning distribution) — user deferred.
 3. Apple Developer ID ($99) -> real signing + notarization + electron-updater
    auto-update (zip artifact + blockmaps already produced). 15-min job in

@@ -15,11 +15,11 @@
   },
   "dependencies": {
     "@agent-island/shared": "workspace:*",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
     "@types/node": "^22.13.10",
     "@types/ws": "^8.18.0",
     "@types/react": "^19.0.12",
