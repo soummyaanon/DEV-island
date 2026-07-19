@@ -86,27 +86,6 @@ body {
     transform: scale(1.02);
   }
 }
-.demo-island::after {
-  content: "";
-  position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: 0;
-  height: 2px;
-  border-radius: 2px;
-  background: linear-gradient(90deg, transparent, var(--working) 40%, #dceeff 50%, var(--working) 60%, transparent)
-    no-repeat;
-  background-size: 38% 100%;
-  animation: demo-scan 1.4s ease-in-out infinite alternate;
-}
-@keyframes demo-scan {
-  from {
-    background-position: 0% 0;
-  }
-  to {
-    background-position: 100% 0;
-  }
-}
 .demo-band {
   height: 32px;
   display: flex;
@@ -348,7 +327,6 @@ body {
   .ob-start,
   .ob-hint,
   .demo-island,
-  .demo-island::after,
   .demo-sprites .pixel-sprite.live g.f1,
   .demo-sprites .pixel-sprite.live g.f2,
   .demo-sprites .openai-sprite.live {

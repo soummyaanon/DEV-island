@@ -75,33 +75,8 @@ body {
   transition-duration: 0.26s;
 }
 
-/* Electric scanline: a light sweeps along the bottom edge while agents work. */
 .island {
   position: relative;
-}
-.island.state-working::after,
-.island.state-starting::after {
-  content: "";
-  position: absolute;
-  left: 10px;
-  right: 10px;
-  bottom: 0;
-  height: 2px;
-  border-radius: 2px;
-  background: linear-gradient(90deg, transparent, var(--working) 40%, #dceeff 50%, var(--working) 60%, transparent)
-    no-repeat;
-  background-size: 38% 100%;
-  animation: island-scan 1.4s ease-in-out infinite alternate;
-  pointer-events: none;
-  opacity: 0.9;
-}
-@keyframes island-scan {
-  from {
-    background-position: 0% 0;
-  }
-  to {
-    background-position: 100% 0;
-  }
 }
 
 .island.bare:not(.expanded) {
@@ -712,9 +687,5 @@ body {
   .cursor-sprite.live,
   .notch-spacer.state-working .spacer-info {
     animation: none;
-  }
-  .island.state-working::after,
-  .island.state-starting::after {
-    display: none;
   }
 }
