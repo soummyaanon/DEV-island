@@ -170,6 +170,19 @@ describe("mapCodexEntry — tool activity titles", () => {
     expect(mapped).toMatchObject({ type: "tool_use", title: "Editing thing.ts" });
   });
 
+  it("custom exec unwraps the cmd from the JS-harness wrapper", () => {
+    const mapped = mapCodexEntry(
+      entry("response_item", {
+        type: "custom_tool_call",
+        name: "exec",
+        input:
+          'const r = await tools.exec_command({"cmd":"rg -n \\"crab|codex\\" .","workdir":"/x","yield_time_ms":1000})',
+      }),
+      ctxWithSession(),
+    );
+    expect(mapped).toMatchObject({ type: "tool_use", title: 'Running rg -n "crab|codex" .' });
+  });
+
   it("update_plan reads as planning", () => {
     const mapped = mapCodexEntry(
       entry("response_item", { type: "function_call", name: "update_plan", arguments: "{}" }),
