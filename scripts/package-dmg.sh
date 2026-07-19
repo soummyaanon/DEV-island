@@ -48,7 +48,9 @@ tiffutil -cathidpicheck "$ROOT/scripts/dmg/background.png" "$ROOT/scripts/dmg/ba
 echo "==> Styling the DMG window (Finder)"
 RW="$RELEASE/rw.dmg"
 rm -f "$RW"
-hdiutil create -volname "Agent Island" -srcfolder "$STAGE" -ov -format UDRW "$RW" >/dev/null
+# Versioned volume name: Finder remembers window geometry per volume, so a
+# fresh name per release guarantees every user's window opens at OUR size.
+hdiutil create -volname "Agent Island $VERSION" -srcfolder "$STAGE" -ov -format UDRW "$RW" >/dev/null
 MOUNT=$(hdiutil attach "$RW" -readwrite -noverify -noautoopen | awk -F'\t' '/\/Volumes\//{print $3}')
 # Style the volume we actually mounted — a stale "Agent Island" volume from a
 # user-opened DMG would otherwise steal the name (mounts as "Agent Island 1").
