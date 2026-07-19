@@ -102,6 +102,16 @@ const api = {
   setPromptComposing: (active: boolean): void =>
     ipcRenderer.send("agent-island:prompt-composing", active),
 
+  /** Result of the last send-prompt: "sent" | "no-accessibility" | "empty". */
+  onPromptStatus: (cb: (status: string) => void): (() => void) => {
+    const listener = (_e: unknown, status: string) => cb(status);
+    ipcRenderer.on("agent-island:prompt-status", listener);
+    return () => ipcRenderer.removeListener("agent-island:prompt-status", listener);
+  },
+
+  /** Prompt macOS for Accessibility and open the pane (shared with onboarding). */
+  openAccessibility: (): void => ipcRenderer.send("agent-island:enable-accessibility"),
+
   /** One-shot chime pushed by main (e.g. "approve" after allowing something). */
   onChime: (cb: (event: string) => void): (() => void) => {
     const listener = (_e: unknown, event: string) => cb(event);

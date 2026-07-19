@@ -438,6 +438,24 @@ body {
 .ctl.icon.prompt-send:disabled:hover {
   background: none;
 }
+.prompt-hint {
+  display: block;
+  width: calc(100% - 16px);
+  margin: 4px 8px 0;
+  padding: 4px 8px;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  text-align: left;
+  color: #ffcf70;
+  background: rgba(255, 176, 32, 0.12);
+  border: 1px solid rgba(255, 176, 32, 0.32);
+  border-radius: 7px;
+  cursor: pointer;
+}
+.prompt-hint:hover {
+  background: rgba(255, 176, 32, 0.2);
+}
 .panel-controls {
   display: flex;
   align-items: center;

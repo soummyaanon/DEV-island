@@ -29,6 +29,8 @@ export function App() {
   const [now, setNow] = useState(() => Date.now());
   const [promptText, setPromptText] = useState("");
   const [promptFocused, setPromptFocused] = useState(false);
+  // Set when a send was dropped for lack of Accessibility — shows a hint.
+  const [needsAccess, setNeedsAccess] = useState(false);
 
   const islandRef = useRef<HTMLDivElement>(null);
   const interactiveRef = useRef(false);
@@ -110,6 +112,16 @@ export function App() {
     void window.agentIsland.getSounds().then(apply);
     return window.agentIsland.onSounds(apply);
   }, []);
+
+  // A dropped-for-Accessibility send flips on a hint; a successful send clears it.
+  useEffect(
+    () =>
+      window.agentIsland.onPromptStatus((status) => {
+        if (status === "no-accessibility") setNeedsAccess(true);
+        else if (status === "sent") setNeedsAccess(false);
+      }),
+    [],
+  );
 
   // A newer release exists — surface a quiet chip in the panel footer.
   useEffect(() => window.agentIsland.onUpdate(setUpdate), []);
@@ -316,6 +328,19 @@ export function App() {
                     ↵
                   </button>
                 </form>
+              )}
+              {promptTarget && needsAccess && (
+                <button
+                  type="button"
+                  className="prompt-hint"
+                  title="Agent Island needs Accessibility permission to type into your terminal"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    window.agentIsland.openAccessibility();
+                  }}
+                >
+                  ⚠ Grant Accessibility to send prompts →
+                </button>
               )}
               <div className="panel-controls">
                 <button

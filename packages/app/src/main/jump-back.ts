@@ -136,22 +136,27 @@ export function answerInTerminal(session: SessionSnapshot, digit: string): void 
   }
 }
 
+/** Why a prompt did (or didn't) reach the terminal — so the notch can react. */
+export type SendPromptResult = "sent" | "no-accessibility" | "empty";
+
 /**
  * Type a free-form prompt into the session's terminal and press Enter. Brings
  * the owning terminal forward first, then uses Accessibility-backed System
  * Events — the same path as {@link answerInTerminal}. Single-line only; newlines
  * are flattened to spaces so a stray Enter never submits half a prompt.
+ * Returns "no-accessibility" when the keystroke was dropped for lack of
+ * permission, so the caller can surface a hint instead of failing silently.
  */
-export function sendPromptToTerminal(session: SessionSnapshot, text: string): void {
+export function sendPromptToTerminal(session: SessionSnapshot, text: string): SendPromptResult {
   const prompt = text.replace(/\s*\n\s*/g, " ").trim();
-  if (!prompt) return;
+  if (!prompt) return "empty";
   logJump(`send-prompt (${prompt.length} chars) for ${session.key}`);
   jumpToTerminal(session);
 
   if (!systemPreferences.isTrustedAccessibilityClient(false)) {
     logJump("Accessibility not granted — jumped without typing the prompt");
     requestAccessibilityOnce();
-    return;
+    return "no-accessibility";
   }
 
   // AppleScript string literal: escape backslashes first, then double quotes.
@@ -171,6 +176,7 @@ export function sendPromptToTerminal(session: SessionSnapshot, text: string): vo
       logJump(err ? `send-prompt failed: ${err.message}` : "prompt sent");
     },
   );
+  return "sent";
 }
 
 /** True if an app with this bundle id is currently running (lsappinfo ships with macOS). */

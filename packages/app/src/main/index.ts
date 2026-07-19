@@ -375,7 +375,9 @@ if (!app.requestSingleInstanceLock()) {
       "agent-island:send-prompt",
       (_e, { session, text }: { session: SessionSnapshot; text: string }) => {
         console.log(`[jump] send-prompt for ${session.key}`);
-        sendPromptToTerminal(session, text);
+        const result = sendPromptToTerminal(session, text);
+        // Tell the notch so it can show a hint instead of failing silently.
+        sendToNotch("agent-island:prompt-status", result);
       },
     );
 
