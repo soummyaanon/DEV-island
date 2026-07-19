@@ -1,10 +1,35 @@
 :root {
+  color-scheme: light dark;
   --text: rgba(255, 255, 255, 0.94);
   --text-dim: rgba(255, 255, 255, 0.5);
-  --accent: #ff8a5b;
-  --working: #5ba8ff;
+  --accent: #74b7ff;
+  --working: #74b7ff;
   --done: #4ecb8d;
+  --window-bg: linear-gradient(180deg, #171b22, #0c0f14 60%, #080a0d);
+  --window-edge: rgba(255, 255, 255, 0.09);
+  --group-bg: rgba(255, 255, 255, 0.04);
+  --group-edge: rgba(255, 255, 255, 0.07);
+  --divider: rgba(255, 255, 255, 0.06);
+  --switch-off: rgba(255, 255, 255, 0.14);
+  --thumb: #f8fbff;
   --spring: cubic-bezier(0.34, 1.2, 0.64, 1);
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --text: #182233;
+    --text-dim: rgba(24, 34, 51, 0.58);
+    --accent: #397fc9;
+    --working: #397fc9;
+    --done: #2f9464;
+    --window-bg: linear-gradient(180deg, #f8fbff, #edf3f9);
+    --window-edge: rgba(38, 71, 108, 0.16);
+    --group-bg: rgba(255, 255, 255, 0.72);
+    --group-edge: rgba(38, 71, 108, 0.13);
+    --divider: rgba(38, 71, 108, 0.1);
+    --switch-off: rgba(38, 71, 108, 0.2);
+    --thumb: #ffffff;
+  }
 }
 
 * {
@@ -32,8 +57,8 @@ body {
   position: relative;
   height: 100%;
   padding: 30px 30px 20px;
-  background: linear-gradient(180deg, #191b23, #0c0d11 60%, #08090b);
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: var(--window-bg);
+  border: 1px solid var(--window-edge);
   border-radius: 20px;
   overflow-y: auto;
   animation: card-in 0.4s var(--spring);
@@ -74,8 +99,8 @@ h2 {
   display: flex;
   flex-direction: column;
   border-radius: 13px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: var(--group-bg);
+  border: 1px solid var(--group-edge);
   overflow: hidden;
 }
 
@@ -86,7 +111,7 @@ h2 {
   padding: 11px 14px;
 }
 .s-row + .s-row {
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid var(--divider);
 }
 .s-icon {
   flex: none;
@@ -123,7 +148,7 @@ h2 {
   height: 22px;
   border-radius: 11px;
   border: none;
-  background: rgba(255, 255, 255, 0.14);
+  background: var(--switch-off);
   cursor: pointer;
   position: relative;
   transition: background 0.18s ease;
@@ -135,7 +160,7 @@ h2 {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--thumb);
   transition: transform 0.18s var(--spring);
 }
 .switch.on {
@@ -149,7 +174,7 @@ h2 {
   margin-top: 16px;
   text-align: center;
   font-size: 10px;
-  color: rgba(255, 255, 255, 0.3);
+  color: var(--text-dim);
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Build the distributable DMG: daemon + app -> packaged .app -> deep ad-hoc
-# sign (unsigned apps read "damaged" on Apple Silicon) -> DMG with first-launch
-# instructions inside. One command: pnpm package
+# Build the distributable DMG: daemon + app -> packaged .app -> DMG.
+# CI supplies Developer ID + notarization credentials. Local builds fall back
+# to ad-hoc signing so they remain launchable on the developer's own machine.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -20,15 +20,12 @@ pnpm --filter @agent-island/app build
 echo "==> Packaging .app (electron-builder --dir)"
 pnpm --filter @agent-island/app run pack
 
-# electron-builder's electronLanguages only trims app-level lproj on macOS;
-# the Electron Framework ships ~55 locale.pak (~42MB) that Chromium happily
-# lives without (missing locale falls back to en). Trim BEFORE signing.
-echo "==> Trimming Electron Framework locales (en only)"
-FW_RES="$APP/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources"
-find "$FW_RES" -maxdepth 1 -name "*.lproj" ! -name "en*.lproj" -exec rm -rf {} +
-
-echo "==> Deep ad-hoc signing the bundle"
-codesign --force --deep --sign - "$APP"
+# Never overwrite CI's Developer ID signature. Local builds have no signing
+# identity, so apply an ad-hoc signature only when CSC_LINK is absent.
+if [[ -z "${CSC_LINK:-}" ]]; then
+  echo "==> Ad-hoc signing local build"
+  codesign --force --deep --sign - "$APP"
+fi
 codesign --verify --deep --strict "$APP"
 echo "    signature OK"
 

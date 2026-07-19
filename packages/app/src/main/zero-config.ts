@@ -1,6 +1,13 @@
 import { Notification } from "electron";
 import { randomBytes } from "node:crypto";
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -16,6 +23,7 @@ import { dirname, join } from "node:path";
  */
 
 const OUR_MARKER = "/events/claude/";
+const CLAUDE_BRIDGE = "claude-hook.sh";
 const HOOK_EVENTS: Array<{ event: string; slug: string; matcher: boolean; timeout: number }> = [
   { event: "SessionStart", slug: "session-start", matcher: false, timeout: 5 },
   { event: "PreToolUse", slug: "pre-tool", matcher: true, timeout: 5 },
@@ -71,10 +79,34 @@ function buildHandler(slug: string, timeout: number, token: string): Json {
   };
 }
 
+function claudeBridgePath(): string {
+  return join(agentIslandHome(), "bin", CLAUDE_BRIDGE);
+}
+
+/** SessionStart does not support HTTP handlers, so forward its stdin with curl. */
+function claudeBridgeScript(): string {
+  return `#!/bin/zsh
+# Agent Island Claude bridge (auto-generated; safe to delete).
+EVENT="\${1:-session-start}"
+TOKEN="$(cat "$HOME/.agent-island/token" 2>/dev/null)"
+/usr/bin/curl -s -m 4 -X POST "http://127.0.0.1:7433/events/claude/\${EVENT}" \\
+  -H "content-type: application/json" \\
+  -H "x-agent-island-token: \${TOKEN}" \\
+  -H "X-Term-Program: \${TERM_PROGRAM:-}" \\
+  -H "X-Iterm-Session-Id: \${ITERM_SESSION_ID:-}" \\
+  -H "X-Term-Session-Id: \${TERM_SESSION_ID:-}" \\
+  -H "X-App-Bundle-Id: \${__CFBundleIdentifier:-}" \\
+  --data-binary @- >/dev/null 2>&1
+exit 0
+`;
+}
+
 function isOurHandler(handler: unknown): boolean {
   const h = handler as Json | null;
   return (
-    !!h && h.type === "http" && typeof h.url === "string" && h.url.includes(OUR_MARKER)
+    !!h &&
+    ((h.type === "http" && typeof h.url === "string" && h.url.includes(OUR_MARKER)) ||
+      (h.type === "command" && h.command === claudeBridgePath()))
   );
 }
 
@@ -127,7 +159,17 @@ export function setupZeroConfig(): ZeroConfigResult {
 
     for (const { event, slug, matcher, timeout } of HOOK_EVENTS) {
       const preserved = stripOurHandlers(hooks[event]);
-      const group: Json = { hooks: [buildHandler(slug, timeout, token)] };
+      let handler: Json;
+      if (event === "SessionStart") {
+        const bridgePath = claudeBridgePath();
+        mkdirSync(dirname(bridgePath), { recursive: true });
+        writeFileSync(bridgePath, claudeBridgeScript(), { mode: 0o755 });
+        chmodSync(bridgePath, 0o755);
+        handler = { type: "command", command: bridgePath, args: [slug], timeout };
+      } else {
+        handler = buildHandler(slug, timeout, token);
+      }
+      const group: Json = { hooks: [handler] };
       if (matcher) group.matcher = "*";
       hooks[event] = [...preserved, group];
     }

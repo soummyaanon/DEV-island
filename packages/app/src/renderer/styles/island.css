@@ -4,7 +4,7 @@
   --edge-top: rgba(255, 255, 255, 0.16);
   --text: rgba(255, 255, 255, 0.94);
   --text-dim: rgba(255, 255, 255, 0.46);
-  --accent: #ff8a5b; /* warm coral — the one brand accent */
+  --accent: #74b7ff;
   --working: #5ba8ff;
   --starting: #8fb8ff;
   --waiting: #ffb020;
@@ -355,7 +355,7 @@ body {
   font-variant-numeric: tabular-nums;
 }
 .row-context {
-  max-width: 98px;
+  max-width: 178px;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -434,7 +434,7 @@ body {
   font-weight: 700;
 }
 .ctl.update:hover {
-  background: rgba(255, 138, 91, 0.14);
+  background: rgba(116, 183, 255, 0.14);
   color: var(--accent);
 }
 
@@ -635,6 +635,8 @@ body {
   background: rgba(91, 168, 255, 0.06);
   border: 1px solid rgba(91, 168, 255, 0.22);
   cursor: pointer;
+  max-height: 285px;
+  overflow-y: auto;
 }
 .question:hover {
   background: rgba(91, 168, 255, 0.1);
@@ -657,20 +659,26 @@ body {
   gap: 4px;
   margin-bottom: 8px;
 }
-.q-options li {
+.q-option {
+  width: 100%;
   display: flex;
   align-items: center;
   gap: 8px;
+  font-family: inherit;
   font-size: 12px;
+  text-align: left;
   color: var(--text);
   background: rgba(255, 255, 255, 0.05);
+  border: 0;
   border-radius: 8px;
   padding: 5px 9px;
   cursor: pointer;
   transition: background 0.1s ease;
 }
-.q-options li:hover {
+.q-option:hover,
+.q-option:focus-visible {
   background: rgba(91, 168, 255, 0.16);
+  outline: 1px solid rgba(116, 183, 255, 0.55);
 }
 .q-options kbd {
   font: inherit;

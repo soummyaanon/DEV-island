@@ -26,7 +26,12 @@ function extractQuestion(input: Record<string, unknown> | undefined): PendingQue
   if (!first || typeof first.question !== "string") return null;
   const options = Array.isArray(first.options)
     ? (first.options as Array<Record<string, unknown>>)
-        .map((o) => (typeof o?.label === "string" ? o.label : null))
+        .map((o) => {
+          if (typeof o?.label !== "string") return null;
+          return typeof o.description === "string" && o.description.trim()
+            ? `${o.label} — ${o.description}`
+            : o.label;
+        })
         .filter((label): label is string => label !== null)
     : [];
   return {
@@ -97,14 +102,21 @@ export function registerClaudeRoutes(
       const meta = terminalMeta(request.headers);
       if (payload.permission_mode) meta.permission_mode = payload.permission_mode;
       if (Object.keys(meta).length > 0) {
-        mapped.detail = { ...(mapped.detail ?? {}), _meta: meta };
+        const mappedMeta =
+          mapped.detail?._meta && typeof mapped.detail._meta === "object"
+            ? (mapped.detail._meta as Record<string, unknown>)
+            : {};
+        mapped.detail = { ...(mapped.detail ?? {}), _meta: { ...mappedMeta, ...meta } };
       }
 
       hub.ingest(mapped);
 
       // "Claude asks": surface AskUserQuestion in the notch while Claude waits;
       // any subsequent activity means it was answered (or abandoned) — clear it.
-      if (eventName === "PreToolUse" && payload.tool_name === "AskUserQuestion") {
+      const isQuestion =
+        payload.tool_name === "AskUserQuestion" &&
+        (eventName === "PermissionRequest" || eventName === "PreToolUse");
+      if (isQuestion) {
         hub.setPendingQuestion(
           "claude-code",
           payload.session_id,
@@ -117,7 +129,7 @@ export function registerClaudeRoutes(
       // Interactive approval: hold the PermissionRequest open so the user can
       // decide from the notch. Only when a UI is connected — otherwise fall back
       // to Claude's own prompt immediately, so the session never hangs.
-      if (eventName === "PermissionRequest" && hub.subscriberCount() > 0) {
+      if (eventName === "PermissionRequest" && !isQuestion && hub.subscriberCount() > 0) {
         const outcome = await hub.requestApproval(
           "claude-code",
           payload.session_id,

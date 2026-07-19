@@ -95,6 +95,10 @@ export function mapClaudeHook(
           source: payload.source,
           model: payload.model,
           session_title: payload.session_title,
+          _meta: prune({
+            model: payload.model,
+            permission_mode: payload.permission_mode,
+          }),
         }),
         requires_action: false,
       };
@@ -128,6 +132,15 @@ export function mapClaudeHook(
       };
 
     case "PermissionRequest":
+      if (payload.tool_name === "AskUserQuestion") {
+        return {
+          ...base,
+          type: "notification",
+          title: "Claude asks a question",
+          detail: prune({ tool_name: payload.tool_name, tool_input: payload.tool_input }),
+          requires_action: true,
+        };
+      }
       return {
         ...base,
         type: "permission_request",

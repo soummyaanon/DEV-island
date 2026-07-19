@@ -1,12 +1,39 @@
 :root {
+  color-scheme: light dark;
   --bg: #101116;
   --edge: rgba(255, 255, 255, 0.09);
   --text: rgba(255, 255, 255, 0.94);
   --text-dim: rgba(255, 255, 255, 0.5);
-  --accent: #ff8a5b;
-  --working: #5ba8ff;
+  --accent: #74b7ff;
+  --working: #74b7ff;
   --done: #4ecb8d;
+  --window-bg: linear-gradient(180deg, #171b22, #0c0f14 60%, #080a0d);
+  --surface: rgba(255, 255, 255, 0.04);
+  --surface-edge: rgba(255, 255, 255, 0.07);
+  --key-bg: rgba(255, 255, 255, 0.09);
+  --button-text: #101923;
+  --button-bg: #e7f2ff;
+  --button-hover: #ffffff;
   --spring: cubic-bezier(0.34, 1.2, 0.64, 1);
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f2f6fb;
+    --edge: rgba(38, 71, 108, 0.16);
+    --text: #182233;
+    --text-dim: rgba(24, 34, 51, 0.58);
+    --accent: #397fc9;
+    --working: #397fc9;
+    --done: #2f9464;
+    --window-bg: linear-gradient(180deg, #f8fbff, #edf3f9);
+    --surface: rgba(255, 255, 255, 0.72);
+    --surface-edge: rgba(38, 71, 108, 0.13);
+    --key-bg: rgba(57, 127, 201, 0.11);
+    --button-text: #ffffff;
+    --button-bg: #397fc9;
+    --button-hover: #2f72ba;
+  }
 }
 
 * {
@@ -38,7 +65,7 @@ body {
   flex-direction: column;
   align-items: center;
   padding: 26px 44px 26px;
-  background: linear-gradient(180deg, #191b23, #0c0d11 60%, #08090b);
+  background: var(--window-bg);
   border: 1px solid var(--edge);
   border-radius: 22px;
   overflow: hidden;
@@ -214,7 +241,7 @@ body {
   font-size: 11px;
   font-weight: 650;
   color: var(--text);
-  background: rgba(255, 255, 255, 0.09);
+  background: var(--key-bg);
   border-radius: 5px;
   padding: 0 5px;
 }
@@ -242,8 +269,8 @@ body {
   gap: 14px;
   padding: 11px 14px;
   border-radius: 13px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: var(--surface);
+  border: 1px solid var(--surface-edge);
   transition: border-color 0.3s ease;
 }
 .ob-step.done {
@@ -267,8 +294,8 @@ body {
   font: inherit;
   font-size: 11.5px;
   font-weight: 650;
-  color: #111214;
-  background: #ececec;
+  color: var(--button-text);
+  background: var(--button-bg);
   border: none;
   border-radius: 9px;
   padding: 6px 14px;
@@ -277,7 +304,7 @@ body {
   transition: transform 0.08s ease;
 }
 .ob-btn:hover {
-  background: #fff;
+  background: var(--button-hover);
 }
 .ob-btn:active {
   transform: scale(0.97);
@@ -295,13 +322,13 @@ body {
   font: inherit;
   font-size: 13.5px;
   font-weight: 680;
-  color: #1b0d06;
-  background: linear-gradient(180deg, #ffa27b, var(--accent));
+  color: #f8fbff;
+  background: var(--accent);
   border: none;
   border-radius: 12px;
   padding: 11px 26px;
   cursor: pointer;
-  box-shadow: 0 4px 18px rgba(255, 138, 91, 0.35);
+  box-shadow: 0 4px 18px color-mix(in srgb, var(--accent) 30%, transparent);
   animation: rise 0.6s var(--spring) 0.4s backwards;
   transition: transform 0.1s var(--spring);
 }

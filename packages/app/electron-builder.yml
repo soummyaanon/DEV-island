@@ -2,18 +2,19 @@ appId: com.agentisland.app
 productName: Agent Island
 directories:
   output: release
+afterPack: build/after-pack.cjs
 mac:
   category: public.app-category.developer-tools
   icon: build/icon.icns
+  hardenedRuntime: true
+  notarize: true
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
   target:
     - dmg
     - zip
   extendInfo:
     LSUIElement: true
-  # No Developer ID yet — but do NOT set identity:null: that skips even the
-  # free ad-hoc signature, and unsigned+quarantined apps show "damaged" on
-  # Apple Silicon. Leaving identity unset lets electron-builder ad-hoc sign,
-  # so other Macs get the normal one-time Gatekeeper prompt instead.
 # Ship only English Electron locales — trims ~50 unused language packs.
 electronLanguages:
   - en

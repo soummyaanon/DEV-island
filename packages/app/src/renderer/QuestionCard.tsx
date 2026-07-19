@@ -47,16 +47,18 @@ export function QuestionCard({
       {q.options.length > 0 && (
         <ul className="q-options">
           {q.options.slice(0, 9).map((label, i) => (
-            <li
-              key={`${q.id}-${i}`}
-              className="q-option"
-              onClick={(e) => {
-                e.stopPropagation();
-                onAnswer(session, i + 1);
-              }}
-            >
-              <kbd>⌘{i + 1}</kbd>
-              <span>{label}</span>
+            <li key={`${q.id}-${i}`}>
+              <button
+                type="button"
+                className="q-option"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onAnswer(session, i + 1);
+                }}
+              >
+                <kbd>⌘{i + 1}</kbd>
+                <span>{label}</span>
+              </button>
             </li>
           ))}
         </ul>

@@ -25,7 +25,9 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - name: Build signed DMG
+      # Without Apple credentials this produces an ad-hoc signed build. Users
+      # must approve it once through Privacy & Security → Open Anyway.
+      - name: Build release DMG
         run: pnpm package
 
       - name: Publish release

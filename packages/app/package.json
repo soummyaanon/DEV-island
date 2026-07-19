@@ -1,6 +1,6 @@
 {
   "name": "@agent-island/app",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "private": true,
   "description": "Agent Island — menu bar / Dynamic Island for Claude Code and Codex sessions",
   "author": "Agent Island",
@@ -9,6 +9,7 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "pack": "electron-builder --dir",
     "dist": "electron-builder"
@@ -18,17 +19,18 @@
     "ws": "^8.18.0"
   },
   "devDependencies": {
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
     "@types/node": "^22.13.10",
-    "@types/ws": "^8.18.0",
     "@types/react": "^19.0.12",
     "@types/react-dom": "^19.0.4",
+    "@types/ws": "^8.18.0",
     "@vitejs/plugin-react": "^4.3.4",
     "electron": "^35.1.2",
     "electron-builder": "^25.1.8",
     "electron-vite": "^3.1.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
     "typescript": "^5.8.3",
-    "vite": "^6.2.3"
+    "vite": "^6.2.3",
+    "vitest": "^3.2.7"
   }
 }

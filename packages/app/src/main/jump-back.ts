@@ -64,45 +64,24 @@ export function jumpToTerminal(session: SessionSnapshot): void {
 }
 
 /**
- * Best-effort remote answer: type one digit into the session's terminal so the
- * agent's numbered prompt (AskUserQuestion / request_user_input) is selected
- * without leaving the notch. Only iTerm2 exposes safe per-session typing
- * (`write text`, no Accessibility permission needed); everywhere else we just
- * jump so the user can answer by hand. Always brings the terminal forward —
- * the user should see what got selected.
+ * Best-effort remote answer: Claude's question UI is navigated with arrow keys
+ * and confirmed with Enter (it does not accept number keys). Bring the owning
+ * terminal forward first, then use Accessibility-backed System Events.
  */
 export function answerInTerminal(session: SessionSnapshot, digit: string): void {
-  const term = metaString(session, "term_program");
-  const itermId = metaString(session, "iterm_session_id");
-
-  if (/^[1-9]$/.test(digit) && term === "iTerm.app" && itermId && SAFE_ID.test(itermId)) {
-    const guid = itermId.includes(":") ? (itermId.split(":").pop() ?? itermId) : itermId;
-    osascript(`
-      tell application "iTerm2"
-        repeat with w in windows
-          repeat with t in tabs of w
-            repeat with s in sessions of t
-              if (id of s) is "${guid}" then
-                tell s to write text "${digit}" newline NO
-                return
-              end if
-            end repeat
-          end repeat
-        end repeat
-      end tell`);
-    jumpToTerminal(session);
-    return;
-  }
-
   jumpToTerminal(session);
 
-  // Any other terminal: with the Accessibility permission we can press the key
-  // in the (now-frontmost) terminal via System Events. Without it, the jump
-  // above already put the user where they can answer by hand.
+  // Without Accessibility, the jump still puts the user at the right prompt.
   if (/^[1-9]$/.test(digit) && systemPreferences.isTrustedAccessibilityClient(false)) {
+    const downPresses = Number(digit) - 1;
     osascript(`
       delay 0.4
-      tell application "System Events" to keystroke "${digit}"`);
+      tell application "System Events"
+        repeat ${downPresses} times
+          key code 125
+        end repeat
+        key code 36
+      end tell`);
   }
 }
 

@@ -73,6 +73,7 @@ export function SessionRow({
 }) {
   const term = metaString(session, "term_program");
   const mode = metaString(session, "permission_mode");
+  const model = metaString(session, "model");
   const agent = AGENT_LABEL[session.agent] ?? session.agent;
   // Show the host app when it isn't obvious — "claude · cursor" tells you the
   // session lives in Cursor's terminal, and jump will bring Cursor back.
@@ -99,6 +100,7 @@ export function SessionRow({
           <span className="row-context">
             {agent}
             {showHost ? ` · ${host}` : ""}
+            {model ? ` · ${model}` : ""}
             {mode ? ` · ${MODE_LABEL[mode] ?? mode}` : ""}
           </span>
         </div>

@@ -12,7 +12,7 @@
     "dev": "pnpm --parallel --filter @agent-island/daemon --filter @agent-island/app dev",
     "build": "pnpm -r run build",
     "typecheck": "pnpm -r run typecheck",
-    "test": "pnpm --filter @agent-island/daemon test",
+    "test": "pnpm -r run test",
     "smoke": "node scripts/smoke.mjs",
     "package": "bash scripts/package-dmg.sh"
   },
