@@ -76,6 +76,16 @@ const api = {
   /** Toggle sound effects (persisted in main for this run). */
   setSounds: (on: boolean): void => ipcRenderer.send("agent-island:set-sounds", on),
 
+  /** A newer release exists on GitHub (update notifier, not auto-update). */
+  onUpdate: (cb: (info: { version: string }) => void): (() => void) => {
+    const listener = (_e: unknown, info: { version: string }) => cb(info);
+    ipcRenderer.on("agent-island:update", listener);
+    return () => ipcRenderer.removeListener("agent-island:update", listener);
+  },
+
+  /** Open the latest release's download page in the browser. */
+  openUpdate: (): void => ipcRenderer.send("agent-island:open-update"),
+
   quit: (): void => ipcRenderer.send("agent-island:quit"),
 
   /* ---- Onboarding (first-run window only) ---- */

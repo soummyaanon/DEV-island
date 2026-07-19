@@ -30,6 +30,7 @@ export function App() {
   const islandRef = useRef<HTMLDivElement>(null);
   const interactiveRef = useRef(false);
   const [soundsOn, setSoundsOn] = useState(true);
+  const [update, setUpdate] = useState<{ version: string } | null>(null);
   const prevStates = useRef<Map<string, { state: string; needsAction: boolean }> | null>(null);
 
   const pending = useMemo(() => sessions.filter((s) => s.pending_approval), [sessions]);
@@ -80,6 +81,9 @@ export function App() {
     void window.agentIsland.getSounds().then(setSoundsOn);
     return window.agentIsland.onSounds(setSoundsOn);
   }, []);
+
+  // A newer release exists — surface a quiet chip in the panel footer.
+  useEffect(() => window.agentIsland.onUpdate(setUpdate), []);
 
   // 8-bit alerts on state transitions: done -> success arpeggio, failure ->
   // buzz, needs-you -> double ping. The first snapshot only primes the map so
@@ -232,7 +236,20 @@ export function App() {
                 >
                   {soundsOn ? "♪ on" : "♪ off"}
                 </button>
-                <span className="ctl-brand">agent island</span>
+                {update ? (
+                  <button
+                    className="ctl update"
+                    title={`Download Agent Island ${update.version}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      window.agentIsland.openUpdate();
+                    }}
+                  >
+                    ↑ update {update.version}
+                  </button>
+                ) : (
+                  <span className="ctl-brand">agent island</span>
+                )}
                 <button
                   className="ctl"
                   title="Quit Agent Island"

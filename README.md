@@ -69,9 +69,13 @@ MacBook (Pro 14"/16", Air 13"/15", or no notch at all).
 
 Everything stays on your Mac. The daemon binds to `127.0.0.1` only, requests
 are token-authenticated, and there are **no accounts, no API keys, no
-telemetry, no network calls**. Codex integration never writes a single byte to
-Codex's files, and the Cursor bridge returns instantly so Cursor never waits
-on Agent Island.
+telemetry**. Codex integration never writes a single byte to Codex's files,
+and the Cursor bridge returns instantly so Cursor never waits on Agent Island.
+
+The single exception: an anonymous version check against the public GitHub
+Releases API (on launch and every six hours) so the island can show an
+"update available" chip. Nothing about you or your sessions is sent — disable
+it entirely with `AGENT_ISLAND_NO_UPDATE_CHECK=1`.
 
 ## Install
 
@@ -124,8 +128,8 @@ requests even in dev), `CODEX_HOME`, `AGENT_ISLAND_HOME`.
 ## Roadmap
 
 - Apple Developer ID signing + notarization → silent in-app auto-updates
-  (electron-updater needs a valid signature on macOS; until then, updates
-  ship through GitHub Releases).
+  (electron-updater needs a valid signature on macOS; until then, the app
+  notifies you when a new release is out and links to the download).
 - Homebrew cask.
 - Precise tab jump for more terminals.
 - More agents.

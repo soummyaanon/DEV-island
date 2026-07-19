@@ -424,6 +424,14 @@ body {
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.22);
 }
+.ctl.update {
+  color: var(--accent);
+  font-weight: 700;
+}
+.ctl.update:hover {
+  background: rgba(255, 138, 91, 0.14);
+  color: var(--accent);
+}
 
 /* ---- Approval / Permission request panel ---- */
 .approval {

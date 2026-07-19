@@ -7,6 +7,7 @@ import { createNotchWindow } from "./windows/notch-window";
 import { maybeShowOnboarding, registerOnboardingIpc } from "./windows/onboarding-window";
 import { createTray, updateTrayTitle } from "./tray";
 import { answerInTerminal, jumpToTerminal } from "./jump-back";
+import { openUpdatePage, startUpdateCheck, stopUpdateCheck } from "./update-check";
 
 // One instance only — two overlays fighting over the notch would be chaos.
 if (!app.requestSingleInstanceLock()) {
@@ -95,6 +96,12 @@ if (!app.requestSingleInstanceLock()) {
     registerOnboardingIpc();
     maybeShowOnboarding();
 
+    // Update NOTIFIER (no self-update without a Developer ID): one anonymous
+    // check against GitHub Releases; the island shows a chip, a notification
+    // links to the download. AGENT_ISLAND_NO_UPDATE_CHECK=1 disables.
+    startUpdateCheck((info) => sendToNotch("agent-island:update", info));
+    ipcMain.on("agent-island:open-update", () => openUpdatePage());
+
     // Zero Config: wire Claude Code and Cursor to the daemon (token + safe
     // hook merges; Codex needs nothing — its rollout logs are tailed directly).
     setupZeroConfig();
@@ -171,6 +178,7 @@ if (!app.requestSingleInstanceLock()) {
 
   app.on("before-quit", () => {
     globalShortcut.unregisterAll();
+    stopUpdateCheck();
     daemon.stop();
     stopDaemon();
   });
