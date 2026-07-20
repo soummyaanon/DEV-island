@@ -1,6 +1,6 @@
 import { app, BrowserWindow, dialog, globalShortcut, ipcMain, screen, type Tray } from "electron";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
-import { extname, join } from "node:path";
+import { basename, extname, join } from "node:path";
 import type { AgentUsage, ApprovalDecision, SessionSnapshot } from "@agent-island/shared";
 import { DaemonClient } from "./daemon-client";
 import { ensureDaemon, stopDaemon } from "./daemon-manager";
@@ -269,6 +269,7 @@ if (!app.requestSingleInstanceLock()) {
         return false;
       }
       settings.customSounds[event] = dest;
+      settings.customSoundNames[event] = basename(src);
       saveSettings(settings);
       sendToNotch("agent-island:sounds", soundPrefs());
       pushSettingsState(settingsState());
@@ -286,6 +287,7 @@ if (!app.requestSingleInstanceLock()) {
         }
       }
       delete settings.customSounds[event];
+      delete settings.customSoundNames[event];
       saveSettings(settings);
       sendToNotch("agent-island:sounds", soundPrefs());
       pushSettingsState(settingsState());

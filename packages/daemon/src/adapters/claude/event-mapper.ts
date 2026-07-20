@@ -13,8 +13,15 @@ const SLUG_TO_EVENT: Record<string, string> = {
   stop: "Stop",
 };
 
-/** Notification types that mean "the human needs to act". */
-const ATTENTION_NOTIFICATIONS = new Set(["permission_prompt", "idle_prompt"]);
+/**
+ * Notification types that mean "the human needs to act". Idle prompts
+ * ("Claude is waiting for your input") are NOT attention: the turn is over and
+ * no further hook will ever fire, so an attention state would pin the island
+ * open forever. Current CLIs omit `notification_type` entirely — for those,
+ * only a permission ask (matched on the message) blocks on the human.
+ */
+const ATTENTION_NOTIFICATIONS = new Set(["permission_prompt"]);
+const PERMISSION_MESSAGE = /\bpermission\b/i;
 
 function truncate(s: string, max: number): string {
   const clean = s.replace(/\s+/g, " ").trim();
@@ -152,7 +159,7 @@ export function mapClaudeHook(
     case "Notification": {
       const needsAction = payload.notification_type
         ? ATTENTION_NOTIFICATIONS.has(payload.notification_type)
-        : true;
+        : PERMISSION_MESSAGE.test(payload.message ?? "");
       return {
         ...base,
         type: "notification",

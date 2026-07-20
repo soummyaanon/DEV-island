@@ -19,6 +19,9 @@ export interface AppSettings {
   /** Per-event imported audio files (absolute paths under userData/sounds).
    *  A custom file, when present, wins over both the override and the theme. */
   customSounds: Partial<Record<SoundEvent, string>>;
+  /** Original file names of the imports above (the copy is renamed per event),
+   *  so Settings can show "goku-punch.mp3" instead of a generic "Custom". */
+  customSoundNames: Partial<Record<SoundEvent, string>>;
   /** Menu-bar icon (off by default — the island is the app). */
   tray: boolean;
   /** Anonymous GitHub Releases version check. */
@@ -31,6 +34,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   soundTheme: "8bit",
   soundOverrides: {},
   customSounds: {},
+  customSoundNames: {},
   tray: false,
   updateCheck: true,
 };
@@ -66,6 +70,7 @@ export function loadSettings(): AppSettings {
     soundTheme: isSoundTheme(stored.soundTheme) ? stored.soundTheme : DEFAULT_SETTINGS.soundTheme,
     soundOverrides: { ...(stored.soundOverrides ?? {}) },
     customSounds: { ...(stored.customSounds ?? {}) },
+    customSoundNames: { ...(stored.customSoundNames ?? {}) },
   };
   return cached;
 }

@@ -1,6 +1,7 @@
-import { app, BrowserWindow, ipcMain, shell, systemPreferences } from "electron";
+import { app, BrowserWindow, ipcMain, systemPreferences } from "electron";
 import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { requestAccessibility } from "../accessibility";
 
 /** First-run marker: onboarding shows once, then never again. */
 function flagPath(): string {
@@ -21,12 +22,10 @@ export function registerOnboardingIpc(): void {
   ipcMain.handle("agent-island:onboarding-state", () => onboardingState());
 
   ipcMain.on("agent-island:enable-accessibility", () => {
-    // Prompts macOS to add us to the Accessibility list, and opens the pane so
-    // the user can flip the switch. The poll below reflects it live.
-    systemPreferences.isTrustedAccessibilityClient(true);
-    void shell.openExternal(
-      "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
-    );
+    // Repairs a stale grant (ad-hoc updates invalidate it), prompts macOS to
+    // add us to the Accessibility list, and opens the pane so the user can
+    // flip the switch. The poll below reflects it live.
+    requestAccessibility();
   });
 
   ipcMain.on("agent-island:set-login", (_e, on: boolean) => {

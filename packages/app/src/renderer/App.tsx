@@ -333,7 +333,7 @@ export function App() {
                 <button
                   type="button"
                   className="prompt-hint"
-                  title="Agent Island needs Accessibility permission to type into your terminal"
+                  title="Agent Island needs Accessibility to type into your terminal. App updates invalidate an existing grant even when the toggle still shows on — clicking refreshes our entry; tick Agent Island in the list that opens."
                   onClick={(e) => {
                     e.stopPropagation();
                     window.agentIsland.openAccessibility();

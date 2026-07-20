@@ -2,8 +2,9 @@ import { execFile } from "node:child_process";
 import { appendFile } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { shell, systemPreferences } from "electron";
+import { systemPreferences } from "electron";
 import type { SessionSnapshot } from "@agent-island/shared";
+import { requestAccessibility } from "./accessibility";
 
 /** Open the Accessibility pane at most once per run so a blocked send guides,
  *  not spams. macOS only shows the grant dialog on the first request anyway. */
@@ -11,11 +12,7 @@ let accessibilityPromptShown = false;
 function requestAccessibilityOnce(): void {
   if (accessibilityPromptShown) return;
   accessibilityPromptShown = true;
-  // `true` asks macOS to add us to the list and show the grant dialog.
-  systemPreferences.isTrustedAccessibilityClient(true);
-  void shell.openExternal(
-    "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
-  );
+  requestAccessibility();
 }
 
 /**

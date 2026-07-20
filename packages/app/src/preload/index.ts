@@ -16,6 +16,8 @@ export interface SettingsState {
   soundOverrides: Record<string, string>;
   /** Per-event imported audio as data URLs (event -> data URL), for preview/display. */
   customSounds: Record<string, string>;
+  /** Original file names of the imports (event -> "goku-punch.mp3"). */
+  customSoundNames: Record<string, string>;
   tray: boolean;
   updateCheck: boolean;
   openAtLogin: boolean;

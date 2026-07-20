@@ -1,6 +1,6 @@
 {
   "name": "@agent-island/app",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "private": true,
   "description": "Agent Island — menu bar / Dynamic Island for Claude Code and Codex sessions",
   "author": "Agent Island",

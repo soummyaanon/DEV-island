@@ -24,6 +24,7 @@ interface SettingsState {
   soundTheme: string;
   soundOverrides: Record<string, string>;
   customSounds: Record<string, string>;
+  customSoundNames: Record<string, string>;
   tray: boolean;
   updateCheck: boolean;
   openAtLogin: boolean;
@@ -37,6 +38,7 @@ const DEFAULTS: SettingsState = {
   soundTheme: "8bit",
   soundOverrides: {},
   customSounds: {},
+  customSoundNames: {},
   tray: false,
   updateCheck: true,
   openAtLogin: false,
@@ -185,6 +187,7 @@ function Settings() {
         </div>
         {SOUND_EVENTS.map((event: SoundEvent) => {
           const custom = state.customSounds[event];
+          const customName = state.customSoundNames[event] || "Custom";
           return (
             <div className="s-row s-sub" key={event}>
               <div className="s-text">
@@ -201,8 +204,8 @@ function Settings() {
                 ▶
               </button>
               {custom ? (
-                <span className="s-custom" title="Playing your imported sound">
-                  <span className="s-custom-tag">Custom</span>
+                <span className="s-custom" title={`Playing your imported sound: ${customName}`}>
+                  <span className="s-custom-tag">{customName}</span>
                   <button
                     type="button"
                     className="s-play s-clear"
