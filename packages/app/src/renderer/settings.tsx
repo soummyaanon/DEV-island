@@ -46,6 +46,14 @@ const DEFAULTS: SettingsState = {
   update: null,
 };
 
+const NAV = [
+  { id: "integrations", label: "Integrations", icon: "❖" },
+  { id: "sounds", label: "Sounds", icon: "♪" },
+  { id: "general", label: "General", icon: "⚙" },
+  { id: "updates", label: "Updates", icon: "↑" },
+] as const;
+type SectionId = (typeof NAV)[number]["id"];
+
 function Toggle({ on, onChange }: { on: boolean; onChange: (next: boolean) => void }) {
   return (
     <button
@@ -88,6 +96,7 @@ function Settings() {
   const [state, setState] = useState<SettingsState>(DEFAULTS);
   const [checking, setChecking] = useState(false);
   const [installing, setInstalling] = useState(false);
+  const [section, setSection] = useState<SectionId>("integrations");
 
   useEffect(() => {
     if (!window.agentIsland?.settings) return; // plain-browser preview
@@ -126,197 +135,231 @@ function Settings() {
     custom: state.customSounds as SoundPrefs["custom"],
   };
 
+  const activeLabel = NAV.find((n) => n.id === section)?.label ?? "";
+
   return (
     <div className="settings">
-      <div className="drag-strip" />
-      <TrafficLights
-        onClose={() => window.agentIsland?.winClose()}
-        onMinimize={() => window.agentIsland?.winMinimize()}
-      />
-      <h1>Settings</h1>
-
-      <h2>Integrations</h2>
-      <div className="s-group">
-        <Row
-          icon={<PixelSprite live />}
-          title="Claude Code"
-          detail="Lifecycle hooks in ~/.claude/settings.json — removed cleanly when off."
-          on={state.agents["claude-code"] !== false}
-          onChange={(v) => set("agent:claude-code", v)}
+      <aside className="s-sidebar">
+        <div className="drag-strip" />
+        <TrafficLights
+          onClose={() => window.agentIsland?.winClose()}
+          onMinimize={() => window.agentIsland?.winMinimize()}
         />
-        <Row
-          icon={<OpenAiSprite live />}
-          title="Codex"
-          detail="Read-only tail of local session logs. Nothing to install."
-          on={state.agents.codex !== false}
-          onChange={(v) => set("agent:codex", v)}
-        />
-        <Row
-          icon={<CursorSprite live />}
-          title="Cursor"
-          detail="Bridge in ~/.cursor/hooks.json — removed cleanly when off."
-          on={state.agents.cursor !== false}
-          onChange={(v) => set("agent:cursor", v)}
-        />
-      </div>
-
-      <h2>Sounds</h2>
-      <div className="s-group">
-        <Row
-          title="Sound effects"
-          detail="Chimes when agents finish, ask, need you — and when you allow."
-          on={state.sounds}
-          onChange={(v) => set("sounds", v)}
-        />
-        <div className="s-row">
-          <div className="s-text">
-            <b>Theme</b>
-            <span>The sound set for all events.</span>
-          </div>
-          <select
-            className="s-select"
-            value={state.soundTheme}
-            onChange={(e) => set("soundTheme", e.target.value)}
-          >
-            {SOUND_THEMES.map((t) => (
-              <option key={t} value={t}>
-                {THEME_LABELS[t]}
-              </option>
-            ))}
-          </select>
-        </div>
-        {SOUND_EVENTS.map((event: SoundEvent) => {
-          const custom = state.customSounds[event];
-          const customName = state.customSoundNames[event] || "Custom";
-          return (
-            <div className="s-row s-sub" key={event}>
-              <div className="s-text">
-                <b>{EVENT_LABELS[event]}</b>
-              </div>
-              <button
-                type="button"
-                className="s-play"
-                title="Preview"
-                onClick={() =>
-                  custom ? previewCustom(custom) : previewSound(event, resolveTheme(event, soundPrefs))
-                }
-              >
-                ▶
-              </button>
-              {custom ? (
-                <span className="s-custom" title={`Playing your imported sound: ${customName}`}>
-                  <span className="s-custom-tag">{customName}</span>
-                  <button
-                    type="button"
-                    className="s-play s-clear"
-                    title="Remove custom sound"
-                    onClick={() => window.agentIsland?.settings?.clearSound(event)}
-                  >
-                    ✕
-                  </button>
-                </span>
-              ) : (
-                <select
-                  className="s-select"
-                  value={state.soundOverrides[event] ?? ""}
-                  onChange={(e) => set(`soundOverride:${event}`, e.target.value)}
-                >
-                  <option value="">Theme default</option>
-                  {SOUND_THEMES.map((t) => (
-                    <option key={t} value={t}>
-                      {THEME_LABELS[t]}
-                    </option>
-                  ))}
-                </select>
-              )}
-              <button
-                type="button"
-                className="s-import"
-                title="Import your own audio file (mp3, wav, m4a…)"
-                onClick={() => void window.agentIsland?.settings?.importSound(event)}
-              >
-                {custom ? "Replace" : "Import"}
-              </button>
-            </div>
-          );
-        })}
-      </div>
-
-      <h2>General</h2>
-      <div className="s-group">
-        <Row
-          title="Open at login"
-          detail="Start silently with your Mac — no Dock, no windows."
-          on={state.openAtLogin}
-          onChange={(v) => set("openAtLogin", v)}
-        />
-        <Row
-          title="Menu-bar icon"
-          detail="Optional 🏝 in the menu bar with a status count."
-          on={state.tray}
-          onChange={(v) => set("tray", v)}
-        />
-        <Row
-          title="Check for updates"
-          detail="One anonymous version check against GitHub Releases, hourly."
-          on={state.updateCheck}
-          onChange={(v) => set("updateCheck", v)}
-        />
-      </div>
-
-      <h2>Updates</h2>
-      <div className="s-group">
-        <div className="s-row">
-          <div className="s-text">
-            <b>{state.update ? `Update available — v${state.update.version}` : "Agent Island"}</b>
-            <span>
-              {state.update
-                ? `You're on v${state.version}. Installing replaces the app and relaunches.`
-                : checking
-                  ? "Checking for updates…"
-                  : `You're on v${state.version} — up to date.`}
-            </span>
-          </div>
-          {state.update ? (
+        <div className="s-brand">Agent Island</div>
+        <nav className="s-nav">
+          {NAV.map((n) => (
             <button
+              key={n.id}
               type="button"
-              className="s-import s-install"
-              disabled={installing}
-              onClick={() => {
-                setInstalling(true);
-                // On success the app quits and relaunches, so we only re-enable on failure.
-                void window.agentIsland?.settings?.installUpdate().then((ok) => {
-                  if (!ok) setInstalling(false);
-                });
-              }}
+              className={`s-nav-item${section === n.id ? " active" : ""}`}
+              onClick={() => setSection(n.id)}
             >
-              {installing ? "Installing…" : "Install & Restart"}
+              <span className="s-nav-ic" aria-hidden>
+                {n.icon}
+              </span>
+              {n.label}
+              {n.id === "updates" && state.update && <span className="s-nav-dot" aria-hidden />}
             </button>
-          ) : (
-            <button
-              type="button"
-              className="s-import"
-              disabled={checking}
-              onClick={() => {
-                setChecking(true);
-                void window.agentIsland?.settings
-                  ?.checkUpdates()
-                  .finally(() => setChecking(false));
-              }}
-            >
-              {checking ? "Checking…" : "Check now"}
-            </button>
-          )}
+          ))}
+        </nav>
+        <div className="s-side-foot">
+          {state.version && `v${state.version}`}
+          <span>everything stays on this Mac</span>
         </div>
-        {state.update && (
-          <div className="s-note">
-            After updating, re-enable Agent Island in System Settings → Privacy &amp; Security →
-            Accessibility (ad-hoc builds lose the grant on replace).
+      </aside>
+
+      <main className="s-detail">
+        <h1>{activeLabel}</h1>
+
+        {section === "integrations" && (
+          <div className="s-group">
+            <Row
+              icon={<PixelSprite live />}
+              title="Claude Code"
+              detail="Lifecycle hooks in ~/.claude/settings.json — removed cleanly when off."
+              on={state.agents["claude-code"] !== false}
+              onChange={(v) => set("agent:claude-code", v)}
+            />
+            <Row
+              icon={<OpenAiSprite live />}
+              title="Codex"
+              detail="Read-only tail of local session logs. Nothing to install."
+              on={state.agents.codex !== false}
+              onChange={(v) => set("agent:codex", v)}
+            />
+            <Row
+              icon={<CursorSprite live />}
+              title="Cursor"
+              detail="Bridge in ~/.cursor/hooks.json — removed cleanly when off."
+              on={state.agents.cursor !== false}
+              onChange={(v) => set("agent:cursor", v)}
+            />
           </div>
         )}
-      </div>
 
-      <div className="s-footer">Agent Island {state.version && `v${state.version}`} · everything stays on this Mac</div>
+        {section === "sounds" && (
+          <div className="s-group">
+            <Row
+              title="Sound effects"
+              detail="Chimes when agents finish, ask, need you — and when you allow."
+              on={state.sounds}
+              onChange={(v) => set("sounds", v)}
+            />
+            <div className="s-row">
+              <div className="s-text">
+                <b>Theme</b>
+                <span>The sound set for all events.</span>
+              </div>
+              <select
+                className="s-select"
+                value={state.soundTheme}
+                onChange={(e) => set("soundTheme", e.target.value)}
+              >
+                {SOUND_THEMES.map((t) => (
+                  <option key={t} value={t}>
+                    {THEME_LABELS[t]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {SOUND_EVENTS.map((event: SoundEvent) => {
+              const custom = state.customSounds[event];
+              const customName = state.customSoundNames[event] || "Custom";
+              return (
+                <div className="s-row s-sub" key={event}>
+                  <div className="s-text">
+                    <b>{EVENT_LABELS[event]}</b>
+                  </div>
+                  <button
+                    type="button"
+                    className="s-play"
+                    title="Preview"
+                    onClick={() =>
+                      custom
+                        ? previewCustom(custom)
+                        : previewSound(event, resolveTheme(event, soundPrefs))
+                    }
+                  >
+                    ▶
+                  </button>
+                  {custom ? (
+                    <span className="s-custom" title={`Playing your imported sound: ${customName}`}>
+                      <span className="s-custom-tag">{customName}</span>
+                      <button
+                        type="button"
+                        className="s-play s-clear"
+                        title="Remove custom sound"
+                        onClick={() => window.agentIsland?.settings?.clearSound(event)}
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  ) : (
+                    <select
+                      className="s-select"
+                      value={state.soundOverrides[event] ?? ""}
+                      onChange={(e) => set(`soundOverride:${event}`, e.target.value)}
+                    >
+                      <option value="">Theme default</option>
+                      {SOUND_THEMES.map((t) => (
+                        <option key={t} value={t}>
+                          {THEME_LABELS[t]}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  <button
+                    type="button"
+                    className="s-import"
+                    title="Import your own audio file (mp3, wav, m4a…)"
+                    onClick={() => void window.agentIsland?.settings?.importSound(event)}
+                  >
+                    {custom ? "Replace" : "Import"}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {section === "general" && (
+          <div className="s-group">
+            <Row
+              title="Open at login"
+              detail="Start silently with your Mac — no Dock, no windows."
+              on={state.openAtLogin}
+              onChange={(v) => set("openAtLogin", v)}
+            />
+            <Row
+              title="Menu-bar icon"
+              detail="Optional 🏝 in the menu bar with a status count."
+              on={state.tray}
+              onChange={(v) => set("tray", v)}
+            />
+            <Row
+              title="Check for updates"
+              detail="One anonymous version check against GitHub Releases, hourly."
+              on={state.updateCheck}
+              onChange={(v) => set("updateCheck", v)}
+            />
+          </div>
+        )}
+
+        {section === "updates" && (
+          <div className="s-group">
+            <div className="s-row">
+              <div className="s-text">
+                <b>
+                  {state.update ? `Update available — v${state.update.version}` : "Agent Island"}
+                </b>
+                <span>
+                  {state.update
+                    ? `You're on v${state.version}. Installing replaces the app and relaunches.`
+                    : checking
+                      ? "Checking for updates…"
+                      : `You're on v${state.version} — up to date.`}
+                </span>
+              </div>
+              {state.update ? (
+                <button
+                  type="button"
+                  className="s-import s-install"
+                  disabled={installing}
+                  onClick={() => {
+                    setInstalling(true);
+                    // On success the app quits and relaunches, so we only re-enable on failure.
+                    void window.agentIsland?.settings?.installUpdate().then((ok) => {
+                      if (!ok) setInstalling(false);
+                    });
+                  }}
+                >
+                  {installing ? "Installing…" : "Install & Restart"}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="s-import"
+                  disabled={checking}
+                  onClick={() => {
+                    setChecking(true);
+                    void window.agentIsland?.settings
+                      ?.checkUpdates()
+                      .finally(() => setChecking(false));
+                  }}
+                >
+                  {checking ? "Checking…" : "Check now"}
+                </button>
+              )}
+            </div>
+            {state.update && (
+              <div className="s-note">
+                After updating, re-enable Agent Island in System Settings → Privacy &amp; Security →
+                Accessibility (ad-hoc builds lose the grant on replace).
+              </div>
+            )}
+          </div>
+        )}
+      </main>
     </div>
   );
 }

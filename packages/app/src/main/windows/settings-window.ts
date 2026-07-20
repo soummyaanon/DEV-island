@@ -4,15 +4,22 @@ import { join } from "node:path";
 let win: BrowserWindow | null = null;
 
 /** Open (or focus) the Settings window. */
+const WIN_W = 700;
+const WIN_H = 390;
+
 export function showSettingsWindow(): void {
   if (win && !win.isDestroyed()) {
+    // Adopt the current size even when reusing an already-open window, so size
+    // changes across versions always apply instead of sticking at the old one.
+    win.setContentSize(WIN_W, WIN_H);
+    win.center();
     win.show();
     win.focus();
     return;
   }
   win = new BrowserWindow({
-    width: 470,
-    height: 700,
+    width: WIN_W,
+    height: WIN_H,
     show: false,
     frame: false,
     transparent: true,

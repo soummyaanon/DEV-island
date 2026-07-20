@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AgentUsage, SessionSnapshot } from "@agent-island/shared";
 import { SessionRow } from "./SessionRow";
 import { ApprovalCard } from "./ApprovalCard";
@@ -6,12 +6,16 @@ import { QuestionCard } from "./QuestionCard";
 import { PixelSprite } from "./PixelSprite";
 import { OpenAiSprite } from "./OpenAiSprite";
 import { CursorSprite } from "./CursorSprite";
+import { PacFeast } from "./PacFeast";
 import { UsageFooter } from "./UsageFooter";
 import { playSound } from "./sounds";
 import { DEFAULT_SOUND_PREFS, type SoundPrefs, type SoundTheme } from "./sound-prefs";
 
 const ACTIVE_STATES = new Set(["working", "starting", "waiting-for-approval"]);
 const MAX_ROWS = 5;
+
+/** Discrete moments the edge spark reacts to — each gets its own color/pattern. */
+type PulseKind = "done" | "failed" | "attention" | "question" | "approve";
 
 /** Wing order: one sprite per agent kind that has sessions. */
 const AGENT_SPRITES = [
@@ -31,6 +35,13 @@ export function App() {
   const [promptFocused, setPromptFocused] = useState(false);
   // Set when a send was dropped for lack of Accessibility — shows a hint.
   const [needsAccess, setNeedsAccess] = useState(false);
+  // One-shot edge-spark burst; `n` retriggers the CSS animation on repeats.
+  const [pulse, setPulse] = useState<{ kind: PulseKind; n: number } | null>(null);
+  const pulseSeq = useRef(0);
+  const firePulse = useCallback((kind: PulseKind) => {
+    pulseSeq.current += 1;
+    setPulse({ kind, n: pulseSeq.current });
+  }, []);
 
   const islandRef = useRef<HTMLDivElement>(null);
   const interactiveRef = useRef(false);
@@ -92,6 +103,11 @@ export function App() {
     return window.agentIsland.onCursorLeft(() => setHovering(false));
   }, []);
 
+  // Freeze animations while the Mac is locked/asleep (battery); resume on wake.
+  // Optional-chained so an older preload (mid dev-reload) can never crash render.
+  const [animated, setAnimated] = useState(true);
+  useEffect(() => window.agentIsland.onAnimationActive?.(setAnimated), []);
+
   // Sound prefs (on/off, theme, per-event overrides) live in main.
   useEffect(() => {
     const apply = (p: {
@@ -129,13 +145,17 @@ export function App() {
   // One-shot chimes pushed by main (allowing an approval, answering a question).
   useEffect(() => {
     return window.agentIsland.onChime((event) => {
-      if (event === "approve") playSound("approve", soundRef.current);
+      if (event === "approve") {
+        playSound("approve", soundRef.current);
+        firePulse("approve");
+      }
     });
-  }, []);
+  }, [firePulse]);
 
   // Alerts on state transitions: done -> success, failure -> fail, question ->
-  // question chime, other needs-you -> attention. The first snapshot only
-  // primes the map so relaunching the app never replays history.
+  // question chime, other needs-you -> attention. Each transition also fires an
+  // edge-spark burst (independent of the sound preference). The first snapshot
+  // only primes the map so relaunching the app never replays history.
   useEffect(() => {
     const next = new Map(
       sessions.map((s) => [
@@ -149,16 +169,31 @@ export function App() {
     );
     const prev = prevStates.current;
     prevStates.current = next;
-    if (!prev || !sound.on) return;
+    if (!prev) return;
 
     for (const [key, cur] of next) {
       const was = prev.get(key);
-      if (!was) continue; // brand-new session: no sound until it transitions
-      if (cur.state !== was.state && cur.state === "done") playSound("success", sound);
-      if (cur.hasQuestion && !was.hasQuestion) playSound("question", sound);
-      else if (cur.needsAction && !was.needsAction) playSound("attention", sound);
+      if (!was) continue; // brand-new session: no alert until it transitions
+      const becameDone = cur.state !== was.state && cur.state === "done";
+      const becameFailed = cur.state !== was.state && cur.state === "failed";
+      const newQuestion = cur.hasQuestion && !was.hasQuestion;
+      const newAction = cur.needsAction && !was.needsAction;
+
+      // Sound: unchanged behavior, still gated on the sound preference.
+      if (sound.on) {
+        if (becameDone) playSound("success", sound);
+        if (newQuestion) playSound("question", sound);
+        else if (newAction) playSound("attention", sound);
+      }
+
+      // Spark: always fires. One burst per session; done/failed win over
+      // needs-you cues when several land in the same snapshot.
+      if (becameDone) firePulse("done");
+      else if (becameFailed) firePulse("failed");
+      else if (newQuestion) firePulse("question");
+      else if (newAction) firePulse("attention");
     }
-  }, [sessions, sound]);
+  }, [sessions, sound, firePulse]);
 
   // Notch geometry, measured by main: the black body spans the band height so
   // the shape merges with the hardware notch, and every island width derives
@@ -221,9 +256,19 @@ export function App() {
   // (working / starting / waiting). Nothing running = an empty wing.
   const liveKinds = new Set(active.map((s) => s.agent));
   const shown = AGENT_SPRITES.filter((a) => liveKinds.has(a.kind));
+  // Active agent kinds in stable order — these become Pac's dots.
+  const activeKinds = shown.map((a) => a.kind);
+
+  // The compact working animation is Pac-Man chomping a line of agent logos
+  // (crab / blossom / cube) like dots — it takes over the whole sprite wing
+  // while work is live. Events are signalled separately by the edge glow.
+  const showFeast = !expanded && active.length > 0;
+  // At rest — sessions present but nothing running — the rim carries a very soft
+  // green-bluish breathing glow.
+  const showGlow = !expanded && sessions.length > 0 && active.length === 0;
 
   return (
-    <div className="app">
+    <div className={`app${animated ? "" : " paused"}`}>
       <div ref={islandRef} className="island-wrap">
         {(sessions.length > 0 || expanded) && (
           <>
@@ -234,13 +279,25 @@ export function App() {
         <div
           className={`island ${stateCls}${expanded ? " expanded" : ""}${
             sessions.length === 0 ? " bare" : ""
-          } spr-${shown.length}`}
+          }${showFeast ? " has-pac" : ""} spr-${showFeast ? 0 : shown.length}`}
         >
+          {showGlow && <div className="notch-glow" aria-hidden />}
+          {pulse && (
+            <div
+              className="edge-spark"
+              data-fx={pulse.kind}
+              key={pulse.n}
+              aria-hidden
+              onAnimationEnd={() => setPulse(null)}
+            />
+          )}
           <div className={`notch-spacer ${stateCls}`}>
             <span className="sprites">
-              {shown.map(({ kind, Sprite }) => (
-                <Sprite key={kind} live />
-              ))}
+              {showFeast ? (
+                <PacFeast kinds={activeKinds} />
+              ) : (
+                shown.map(({ kind, Sprite }) => <Sprite key={kind} live />)
+              )}
             </span>
             <span
               className="spacer-info"

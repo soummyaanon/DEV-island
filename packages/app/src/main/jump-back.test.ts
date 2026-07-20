@@ -13,6 +13,9 @@ vi.mock("electron", () => ({
   shell: { openExternal: vi.fn() },
 }));
 
+const CURSOR = "com.todesktop.230313mzl4w4u92";
+const VSCODE = "com.microsoft.VSCode";
+
 const session: SessionSnapshot = {
   key: "claude-code:session-1",
   agent: "claude-code",
@@ -25,7 +28,7 @@ const session: SessionSnapshot = {
   updated_at: "2026-07-19T10:00:01.000Z",
   last_event_type: "notification",
   event_count: 2,
-  meta: { app_bundle_id: "com.todesktop.230313mzl4w4u92" },
+  meta: { app_bundle_id: CURSOR },
   pending_approval: null,
   pending_question: {
     id: "question-1",
@@ -34,27 +37,75 @@ const session: SessionSnapshot = {
   },
 };
 
-describe("answerInTerminal", () => {
-  beforeEach(() => execFile.mockClear());
+/** The `open -b <bundle> <folder>` invocations, as arg arrays. */
+function openCalls(): unknown[][] {
+  return execFile.mock.calls.filter((call) => call[0] === "open").map((call) => call[1]);
+}
+function osascripts(): string[] {
+  return execFile.mock.calls
+    .filter((call) => call[0] === "osascript")
+    .map((call) => String(call[1]?.[1] ?? ""));
+}
 
-  it("navigates to the selected Claude option and confirms it with Enter", async () => {
+describe("answerInTerminal", () => {
+  beforeEach(() => {
+    execFile.mockReset();
+    execFile.mockImplementation((_file, _args, callback) => callback?.(null, "", ""));
+  });
+
+  it("focuses the project's editor window, then navigates + confirms with Enter", async () => {
     const { answerInTerminal } = await import("./jump-back");
     answerInTerminal(session, "2");
 
-    const scripts = execFile.mock.calls.map((call) => String(call[1]?.[1] ?? ""));
-    expect(scripts[0]).toContain('tell application id "com.todesktop.230313mzl4w4u92" to activate');
-    expect(scripts[1]).toContain("key code 125");
-    expect(scripts[1]).toContain("key code 36");
-    expect(scripts[1]).not.toContain('keystroke "2"');
+    // Jump focuses the exact project window via `open -b` (no Accessibility needed).
+    expect(openCalls()[0]).toEqual(["-b", CURSOR, "/Users/me/project"]);
+    // Then arrow-key navigation + Enter — never a number key.
+    const keys = osascripts()[0] ?? "";
+    expect(keys).toContain("key code 125");
+    expect(keys).toContain("key code 36");
+    expect(keys).not.toContain('keystroke "2"');
+  });
+});
+
+describe("jumpToTerminal focuses the specific project window", () => {
+  beforeEach(() => {
+    execFile.mockReset();
+    execFile.mockImplementation((_file, _args, callback) => callback?.(null, "", ""));
+  });
+
+  // Two projects in the same editor can only be told apart by their folder;
+  // `open -b <bundle> <cwd>` brings THIS project's window forward.
+  it("opens the project folder in Cursor for a Cursor session", async () => {
+    const cursorSession: SessionSnapshot = {
+      ...session,
+      agent: "cursor",
+      cwd: "/Users/me/Apex-HealthIQ",
+      meta: {},
+    };
+    const { jumpToTerminal } = await import("./jump-back");
+    jumpToTerminal(cursorSession);
+    expect(openCalls()[0]).toEqual(["-b", CURSOR, "/Users/me/Apex-HealthIQ"]);
+  });
+
+  it("opens the project folder for a Claude session hosted in Cursor", async () => {
+    const hosted: SessionSnapshot = {
+      ...session,
+      cwd: "/Users/me/DEV island",
+      meta: { app_bundle_id: CURSOR },
+    };
+    const { jumpToTerminal } = await import("./jump-back");
+    jumpToTerminal(hosted);
+    expect(openCalls()[0]).toEqual(["-b", CURSOR, "/Users/me/DEV island"]);
   });
 });
 
 describe("jumpToTerminal with TERM_PROGRAM=vscode and no bundle id", () => {
   // VS Code and Cursor's terminals are indistinguishable by TERM_PROGRAM; when
-  // the session's own bundle id never reached the daemon, jump must pick the
-  // editor that is actually running instead of blindly launching VS Code.
+  // the session's own bundle id never reached the daemon, jump must open the
+  // project in the editor that is actually running instead of blindly using VS Code.
   const vscodeSession: SessionSnapshot = {
     ...session,
+    cwd: "/Users/me/project",
     meta: { term_program: "vscode" },
   };
 
@@ -70,31 +121,21 @@ describe("jumpToTerminal with TERM_PROGRAM=vscode and no bundle id", () => {
     });
   }
 
-  function osascripts(): string[] {
-    return execFile.mock.calls
-      .filter((call) => call[0] === "osascript")
-      .map((call) => String(call[1]?.[1] ?? ""));
-  }
-
-  it("activates Cursor when only Cursor is running", async () => {
-    mockRunningApps({ "com.todesktop.230313mzl4w4u92": true });
+  it("opens the project in Cursor when only Cursor is running", async () => {
+    mockRunningApps({ [CURSOR]: true });
     const { jumpToTerminal } = await import("./jump-back");
     jumpToTerminal(vscodeSession);
-
     await vi.waitFor(() => {
-      expect(osascripts()[0]).toContain(
-        'tell application id "com.todesktop.230313mzl4w4u92" to activate',
-      );
+      expect(openCalls()[0]).toEqual(["-b", CURSOR, "/Users/me/project"]);
     });
   });
 
-  it("still prefers VS Code when it is running", async () => {
-    mockRunningApps({ "com.microsoft.VSCode": true, "com.todesktop.230313mzl4w4u92": true });
+  it("prefers VS Code when it is running", async () => {
+    mockRunningApps({ [VSCODE]: true, [CURSOR]: true });
     const { jumpToTerminal } = await import("./jump-back");
     jumpToTerminal(vscodeSession);
-
     await vi.waitFor(() => {
-      expect(osascripts()[0]).toContain('tell application id "com.microsoft.VSCode" to activate');
+      expect(openCalls()[0]).toEqual(["-b", VSCODE, "/Users/me/project"]);
     });
   });
 
@@ -102,9 +143,8 @@ describe("jumpToTerminal with TERM_PROGRAM=vscode and no bundle id", () => {
     mockRunningApps({});
     const { jumpToTerminal } = await import("./jump-back");
     jumpToTerminal(vscodeSession);
-
     await vi.waitFor(() => {
-      expect(osascripts()[0]).toContain('tell application id "com.microsoft.VSCode" to activate');
+      expect(openCalls()[0]).toEqual(["-b", VSCODE, "/Users/me/project"]);
     });
   });
 });

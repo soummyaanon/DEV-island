@@ -1,4 +1,13 @@
-import { app, BrowserWindow, dialog, globalShortcut, ipcMain, screen, type Tray } from "electron";
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  globalShortcut,
+  ipcMain,
+  powerMonitor,
+  screen,
+  type Tray,
+} from "electron";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { basename, extname, join } from "node:path";
 import type { AgentUsage, ApprovalDecision, SessionSnapshot } from "@agent-island/shared";
@@ -104,6 +113,15 @@ if (!app.requestSingleInstanceLock()) {
   app.whenReady().then(async () => {
     app.dock?.hide(); // menu-bar app, no Dock icon
     notch = createNotchWindow();
+
+    // Battery saver: freeze the overlay's animations while the Mac is locked or
+    // asleep — a long agent run shouldn't keep compositing the notch when nobody
+    // can see it. Resume the moment the screen comes back.
+    const setAnimating = (active: boolean) => sendToNotch("agent-island:animation-active", active);
+    powerMonitor.on("lock-screen", () => setAnimating(false));
+    powerMonitor.on("suspend", () => setAnimating(false));
+    powerMonitor.on("unlock-screen", () => setAnimating(true));
+    powerMonitor.on("resume", () => setAnimating(true));
 
     const settings = loadSettings();
 

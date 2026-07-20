@@ -42,9 +42,36 @@ const BUNDLE_IDS: Record<string, string> = {
 const SAFE_ID = /^[\w:.-]+$/;
 const SAFE_TERM = /^[\w.]+$/;
 
+/** Editors that host multiple projects in separate windows — activating the app
+ *  alone lands on whichever window is frontmost, so we must focus the project's
+ *  own window instead. */
+const EDITOR_BUNDLES = new Set([BUNDLE_IDS.vscode, BUNDLE_IDS.Cursor]);
+
 function osascript(script: string): void {
   execFile("osascript", ["-e", script], (err) => {
     if (err) logJump(`osascript failed: ${err.message}`);
+  });
+}
+
+/**
+ * Focus a specific project's editor window. `open -b <bundle> <folder>` tells
+ * VS Code / Cursor to bring the window already showing that folder to the front
+ * (or open it if it isn't) — precise per project, and, crucially, it needs NO
+ * Accessibility grant (the AX-based approach silently fell back to a plain
+ * activate whenever the grant was missing, which is what made two projects in
+ * the same editor jump to the same window). Falls back to activate on error.
+ */
+function raiseEditorWindow(bundleId: string, cwd: string): void {
+  if (!cwd) {
+    osascript(`tell application id "${bundleId}" to activate`);
+    return;
+  }
+  logJump(`open ${bundleId} at "${cwd}"`);
+  execFile("open", ["-b", bundleId, cwd], (err) => {
+    if (err) {
+      logJump(`open failed: ${err.message} — activating instead`);
+      osascript(`tell application id "${bundleId}" to activate`);
+    }
   });
 }
 
@@ -68,22 +95,24 @@ export function jumpToTerminal(session: SessionSnapshot): void {
   // TERM_PROGRAM mapping: Claude in Cursor's terminal reports
   // TERM_PROGRAM=vscode, but this points at Cursor itself.
   if (hostBundleId && SAFE_ID.test(hostBundleId)) {
-    osascript(`tell application id "${hostBundleId}" to activate`);
+    // For a multi-window editor, raise this project's window, not just the app.
+    if (EDITOR_BUNDLES.has(hostBundleId)) raiseEditorWindow(hostBundleId, session.cwd);
+    else osascript(`tell application id "${hostBundleId}" to activate`);
     return;
   }
 
-  // Cursor sessions come from the IDE's hooks (no terminal identity): jump
-  // means bringing Cursor itself to the front.
+  // Cursor sessions come from the IDE's hooks (no terminal identity): jump means
+  // bringing Cursor's window for THIS project — not just Cursor — to the front.
   if (!term && session.agent === "cursor") {
-    osascript(`tell application id "${BUNDLE_IDS.Cursor}" to activate`);
+    raiseEditorWindow(BUNDLE_IDS.Cursor, session.cwd);
     return;
   }
 
   // VS Code and Cursor terminals are indistinguishable by TERM_PROGRAM; if the
-  // session's bundle id never reached the daemon, activate whichever editor is
-  // actually running rather than blindly launching VS Code.
+  // session's bundle id never reached the daemon, raise this project's window in
+  // whichever editor is actually running rather than blindly launching VS Code.
   if (term === "vscode") {
-    jumpVSCodeFamily();
+    jumpVSCodeFamily(session.cwd);
     return;
   }
 
@@ -185,11 +214,11 @@ function isAppRunning(bundleId: string): Promise<boolean> {
   });
 }
 
-function jumpVSCodeFamily(): void {
+function jumpVSCodeFamily(cwd: string): void {
   void Promise.all([isAppRunning(BUNDLE_IDS.vscode), isAppRunning(BUNDLE_IDS.Cursor)]).then(
     ([codeRunning, cursorRunning]) => {
       const bundle = !codeRunning && cursorRunning ? BUNDLE_IDS.Cursor : BUNDLE_IDS.vscode;
-      osascript(`tell application id "${bundle}" to activate`);
+      raiseEditorWindow(bundle, cwd);
     },
   );
 }

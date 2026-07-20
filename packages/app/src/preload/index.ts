@@ -69,6 +69,17 @@ const api = {
     return () => ipcRenderer.removeListener("agent-island:cursor-left", listener);
   },
 
+  /**
+   * Whether the overlay should be animating. Main flips this off when the Mac
+   * locks or sleeps (nobody's watching) and on when it wakes — so a long agent
+   * run doesn't keep compositing the notch on a screen no one can see.
+   */
+  onAnimationActive: (cb: (active: boolean) => void): (() => void) => {
+    const listener = (_e: unknown, active: boolean) => cb(active);
+    ipcRenderer.on("agent-island:animation-active", listener);
+    return () => ipcRenderer.removeListener("agent-island:animation-active", listener);
+  },
+
   getSounds: (): Promise<SoundPrefsPayload> => ipcRenderer.invoke("agent-island:get-sounds"),
 
   onSounds: (cb: (prefs: SoundPrefsPayload) => void): (() => void) => {
