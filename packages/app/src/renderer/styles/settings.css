@@ -385,3 +385,37 @@ h1 {
   color: var(--text);
   border-color: var(--text-dim);
 }
+
+/* Accessibility section: the VoiceOver shortcut, shown the way macOS writes it. */
+.s-kbd {
+  flex: none;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--group-bg);
+  border: 1px solid var(--group-edge);
+  border-radius: 7px;
+  padding: 4px 9px;
+  letter-spacing: 0.04em;
+}
+
+/* Weather section: free-text coordinates. */
+.s-input {
+  flex: none;
+  width: 132px;
+  font: inherit;
+  font-size: 11.5px;
+  color: var(--text);
+  background: var(--group-bg);
+  border: 1px solid var(--group-edge);
+  border-radius: 7px;
+  padding: 4px 9px;
+  outline: none;
+}
+.s-input:focus {
+  border-color: var(--accent);
+}
+.s-input::placeholder {
+  color: var(--text-dim);
+}

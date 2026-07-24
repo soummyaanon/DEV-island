@@ -15,13 +15,27 @@ mac:
     - zip
   extendInfo:
     LSUIElement: true
+    # The sidecar asks CoreLocation for a fix, but TCC attributes the request to
+    # the RESPONSIBLE process — this app — so the usage description has to live
+    # here too, not only in the sidecar's embedded plist. Weather still works
+    # without any grant (timezone fallback); this only enables the precise path.
+    NSLocationWhenInUseUsageDescription: >-
+      Agent Island uses your approximate location to show local weather in the
+      notch. Coordinates are rounded to about a kilometre and sent only to
+      open-meteo.com.
 # Ship only English Electron locales — trims ~50 unused language packs.
 electronLanguages:
   - en
 files:
   - out/**/*
   - package.json
-# Bundle the self-contained daemon so the packaged app can spawn it.
+# Bundle the self-contained daemon so the packaged app can spawn it, plus the
+# native sidecar (haptics). The helper is optional by design — a build without
+# swiftc simply omits it and the features that need it go inert.
 extraResources:
   - from: ../daemon/dist/main.cjs
     to: daemon/main.cjs
+  # Directory, not the file: a checkout built without swiftc leaves this empty
+  # rather than making the pack step fail on a missing path.
+  - from: native
+    to: native

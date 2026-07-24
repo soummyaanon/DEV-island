@@ -65,21 +65,47 @@ MacBook (Pro 14"/16", Air 13"/15", or no notch at all).
   Quick toggle in the panel footer.
 - **Codex usage footer** — your plan's remaining quota, read locally from
   Codex's own logs.
+- **Weather in the quiet moments** — with nothing running, the island becomes a
+  small live weather scene: drifting clouds, falling rain, lightning in a
+  thunderstorm, a crescent and stars at night, sunrise and sunset, a rainbow
+  after the rain clears. Agents always take priority, so it never competes with
+  work. Off by default; see [Privacy](#privacy).
+- **Sized to what it's showing** — the expanded panel measures its content and
+  grows to fit, up to 720px, so a long diff is readable instead of scrolled.
+- **Accessible on purpose** — <kbd>⌃⌥⌘I</kbd> hands the island keyboard focus
+  for VoiceOver (Escape gives it back), every row is a real button, and Reduce
+  Motion, Increase Contrast, and Reduce Transparency are all followed. Text size
+  is adjustable in Settings. On a Force Touch trackpad, each kind of event has
+  its own haptic rhythm.
 - **Feels like a system app** — no Dock icon, no menu-bar icon; the island
   *is* the app. Sounds, quit, and everything else live in the expanded panel.
   A one-time onboarding sets up Accessibility and open-at-login.
 
 ## Privacy
 
-Everything stays on your Mac. The daemon binds to `127.0.0.1` only, requests
-are token-authenticated, and there are **no accounts, no API keys, no
-telemetry**. Codex integration never writes a single byte to Codex's files,
-and the Cursor bridge returns instantly so Cursor never waits on Agent Island.
+Everything about your sessions stays on your Mac. The daemon binds to
+`127.0.0.1` only, requests are token-authenticated, and there are **no
+accounts, no API keys, no telemetry**. Codex integration never writes a single
+byte to Codex's files, and the Cursor bridge returns instantly so Cursor never
+waits on Agent Island.
 
-The single exception: an anonymous version check against the public GitHub
-Releases API (on launch and every six hours) so the island can show an
-"update available" chip. Nothing about you or your sessions is sent — disable
-it entirely with `AGENT_ISLAND_NO_UPDATE_CHECK=1`.
+Exactly two things ever leave your machine, both listed here in full:
+
+| | What is sent | When | Turn it off |
+| --- | --- | --- | --- |
+| **Update check** | Nothing but the request itself, to the public GitHub Releases API | On launch, then hourly | Settings → General, or `AGENT_ISLAND_NO_UPDATE_CHECK=1` |
+| **Weather** (off by default) | A latitude and longitude rounded to 2 decimals (~1km), to `open-meteo.com`. No account, no API key, no identifier | Every 15 minutes while enabled | Settings → Weather (it ships off) |
+
+**Nothing about your sessions, prompts, projects, or agents is ever
+transmitted**, to either endpoint.
+
+On weather specifically: it is off until you switch it on, and while it's off
+no weather request is made at all. Your location is resolved locally, in this
+order — whatever you typed in Settings, then a device location fix if you've
+granted one, then a guess from your Mac's time zone (read from the tz database
+already on your disk: no permission, no network, accurate to the nearest large
+city). The coordinates are rounded before the request, so even with a precise
+device fix, what's transmitted is city-scale.
 
 ## Install
 
@@ -127,7 +153,15 @@ pnpm package      # signed DMG in packages/app/release/
 
 Useful env vars: `AGENT_ISLAND_PORT` (default 7433), `AGENT_ISLAND_TRAY=1`
 (restore the menu-bar icon), `AGENT_ISLAND_STRICT=1` (reject unauthenticated
-requests even in dev), `CODEX_HOME`, `AGENT_ISLAND_HOME`.
+requests even in dev), `CODEX_HOME`, `AGENT_ISLAND_HOME`,
+`AGENT_ISLAND_WEATHER=<condition>` (force a weather scene without waiting for
+the real sky — `clear-day`, `clear-night`, `cloudy`, `fog`, `rain`, `snow`,
+`thunder`, `sunrise`, `sunset`, `rainbow`; skips the network entirely).
+
+The native sidecar (`native/AgentIslandNative.swift`, haptics + CoreLocation) is
+built by `scripts/build-native.sh` as part of `pnpm build`. It needs `swiftc`;
+without Xcode Command Line Tools the script skips it and the app runs with
+haptics inert and weather on its time-zone fallback.
 
 ## Roadmap
 

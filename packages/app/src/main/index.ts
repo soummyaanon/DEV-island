@@ -22,7 +22,17 @@ import {
 import { createNotchWindow } from "./windows/notch-window";
 import { maybeShowOnboarding, registerOnboardingIpc } from "./windows/onboarding-window";
 import { pushSettingsState, showSettingsWindow } from "./windows/settings-window";
-import { isSoundEvent, isSoundTheme, loadSettings, saveSettings } from "./settings";
+import {
+  isSoundEvent,
+  isSoundTheme,
+  isTemperatureUnit,
+  isTextSize,
+  loadSettings,
+  saveSettings,
+} from "./settings";
+import { haptic, hapticsSupported, isHapticPattern, setHapticsEnabled } from "./haptics";
+import { stopHelper } from "./native-helper";
+import { getWeather, onWeather, startWeather, updateWeatherSettings } from "./weather";
 import { createTray, updateTrayTitle } from "./tray";
 import { answerInTerminal, jumpToTerminal, sendPromptToTerminal } from "./jump-back";
 import {
@@ -48,9 +58,16 @@ if (!app.requestSingleInstanceLock()) {
   const daemon = new DaemonClient();
 
   // During quit the window object outlives its native counterpart; sending to a
-  // destroyed webContents throws "Object has been destroyed".
+  // destroyed webContents throws "Object has been destroyed". The isDestroyed
+  // check races with teardown — an interval that fires mid-quit can pass it and
+  // still throw from inside send — so the guard is belt and braces.
   function sendToNotch(channel: string, ...args: unknown[]): void {
-    if (notch && !notch.isDestroyed()) notch.webContents.send(channel, ...args);
+    if (!notch || notch.isDestroyed()) return;
+    try {
+      notch.webContents.send(channel, ...args);
+    } catch {
+      /* window went away between the check and the send */
+    }
   }
 
   // ⌘Y / ⌘N resolve a pending approval. The notch window is non-focusable, so we
@@ -66,10 +83,15 @@ if (!app.requestSingleInstanceLock()) {
       globalShortcut.register("CommandOrControl+Y", () => {
         if (!pendingApprovalId) return;
         sendToNotch("agent-island:chime", "approve");
+        haptic("commit");
         void daemon.resolveApproval(pendingApprovalId, "allow");
       });
       globalShortcut.register("CommandOrControl+N", () => {
-        if (pendingApprovalId) void daemon.resolveApproval(pendingApprovalId, "deny");
+        if (!pendingApprovalId) return;
+        // Denying is silent by design, but it still deserves confirmation that
+        // the keystroke landed — that's exactly what a single tap is for.
+        haptic("commit");
+        void daemon.resolveApproval(pendingApprovalId, "deny");
       });
     }
   }
@@ -110,6 +132,32 @@ if (!app.requestSingleInstanceLock()) {
     }
   }
 
+  /**
+   * VoiceOver reach-in. The overlay is created non-focusable so it never steals
+   * focus from your terminal — but a non-focusable NSPanel is effectively
+   * invisible to VoiceOver, and no amount of ARIA fixes that. This shortcut
+   * flips focusable on, focuses the window, and puts the renderer into a focus
+   * trap; pressing it again (or Escape in the renderer) hands focus back.
+   *
+   * Four modifiers on purpose: ⌥⌘I is the browser devtools shortcut, and a
+   * global registration would shadow it for exactly this app's audience.
+   */
+  const A11Y_FOCUS_SHORTCUT = "Control+Alt+Command+I";
+  let a11yShortcutRegistered = false;
+  let a11yFocused = false;
+
+  function setA11yFocus(on: boolean): void {
+    if (!notch || notch.isDestroyed() || a11yFocused === on) return;
+    a11yFocused = on;
+    notch.setFocusable(on);
+    if (on) notch.focus();
+    sendToNotch("agent-island:a11y-focus", on);
+    console.log(`[a11y] island focus=${on}`);
+  }
+
+  /** Latest island rectangle in window coordinates, reported by the renderer. */
+  let islandRect: { x: number; y: number; width: number; height: number } | null = null;
+
   app.whenReady().then(async () => {
     app.dock?.hide(); // menu-bar app, no Dock icon
     notch = createNotchWindow();
@@ -124,6 +172,7 @@ if (!app.requestSingleInstanceLock()) {
     powerMonitor.on("resume", () => setAnimating(true));
 
     const settings = loadSettings();
+    setHapticsEnabled(settings.haptics);
 
     // Disabled integrations disappear everywhere the UI looks.
     const filterSessions = (sessions: SessionSnapshot[]): SessionSnapshot[] =>
@@ -185,8 +234,21 @@ if (!app.requestSingleInstanceLock()) {
         openAtLogin: app.getLoginItemSettings().openAtLogin,
         version: app.getVersion(),
         update: getPendingUpdate(),
+        // So Settings can explain why the haptics toggle may do nothing.
+        hapticsSupported: hapticsSupported(),
+        a11yShortcut: a11yShortcutRegistered ? A11Y_FOCUS_SHORTCUT : null,
       };
     }
+
+    /** Presentation prefs the overlay itself needs (text scale). */
+    const uiPrefs = () => ({ textSize: settings.textSize });
+
+    const weatherOptions = () => ({
+      enabled: settings.weather,
+      units: settings.weatherUnits,
+      location: settings.weatherLocation,
+    });
+    const applyWeatherSettings = (): void => updateWeatherSettings(weatherOptions());
 
     function pushFiltered(): void {
       sendToNotch("agent-island:sessions", {
@@ -231,6 +293,31 @@ if (!app.requestSingleInstanceLock()) {
           settings.soundOverrides = {};
           sendToNotch("agent-island:sounds", soundPrefs());
           break;
+        case "haptics":
+          settings.haptics = value === true;
+          setHapticsEnabled(settings.haptics);
+          // Confirm the change through the sense being changed.
+          if (settings.haptics) haptic("commit");
+          break;
+        case "textSize":
+          if (!isTextSize(value)) return;
+          settings.textSize = value;
+          sendToNotch("agent-island:ui-prefs", uiPrefs());
+          break;
+        case "weather":
+          settings.weather = value === true;
+          applyWeatherSettings();
+          break;
+        case "weatherLocation":
+          if (typeof value !== "string") return;
+          settings.weatherLocation = value;
+          applyWeatherSettings();
+          break;
+        case "weatherUnits":
+          if (!isTemperatureUnit(value)) return;
+          settings.weatherUnits = value;
+          applyWeatherSettings();
+          break;
         case "tray":
           settings.tray = value === true;
           syncTray();
@@ -257,6 +344,43 @@ if (!app.requestSingleInstanceLock()) {
       pushSettingsState(settingsState());
       pushFiltered();
     }
+
+    a11yShortcutRegistered = globalShortcut.register(A11Y_FOCUS_SHORTCUT, () =>
+      setA11yFocus(!a11yFocused),
+    );
+    if (!a11yShortcutRegistered) {
+      console.warn(`[a11y] could not register ${A11Y_FOCUS_SHORTCUT} — another app holds it`);
+    }
+    // Escape inside the trap hands focus back to whatever had it.
+    ipcMain.on("agent-island:a11y-release", () => setA11yFocus(false));
+
+    ipcMain.handle("agent-island:get-ui-prefs", () => uiPrefs());
+    ipcMain.handle("agent-island:get-weather", () => getWeather());
+
+    // Weather changes are ambient, so they get the subtlest tap available —
+    // never anything that could be mistaken for an agent needing you. Thunder
+    // arriving is the one exception worth feeling.
+    onWeather((state) => {
+      sendToNotch("agent-island:weather", state);
+      if (!state || state.stale) return;
+      haptic(state.condition === "thunder" ? "rumble" : "whisper");
+    });
+    startWeather(weatherOptions());
+
+    // Renderer-initiated haptics (row clicks, control presses). Guarded because
+    // this crosses the contextBridge.
+    ipcMain.on("agent-island:haptic", (_e, pattern: unknown) => {
+      if (isHapticPattern(pattern)) haptic(pattern);
+    });
+
+    // The island is much narrower than its window, so the renderer reports
+    // where it actually is; see the cursor watcher below.
+    ipcMain.on(
+      "agent-island:island-rect",
+      (_e, rect: { x: number; y: number; width: number; height: number }) => {
+        islandRect = rect;
+      },
+    );
 
     ipcMain.handle("agent-island:get-sounds", () => soundPrefs());
     ipcMain.on("agent-island:set-sounds", (_e, on: boolean) => applySetting("sounds", on));
@@ -381,14 +505,29 @@ if (!app.requestSingleInstanceLock()) {
       if (interactive) {
         cursorWatch = setInterval(() => {
           if (!notch || notch.isDestroyed()) return;
+          // While VoiceOver holds the island open the pointer is irrelevant —
+          // and is almost certainly nowhere near it.
+          if (a11yFocused) return;
           const p = screen.getCursorScreenPoint();
           const b = notch.getBounds();
+          // Test the ISLAND, not the window: the window is deliberately far
+          // wider than the visible pill (room for the expanded panel), so
+          // window bounds would keep the island open with the pointer a couple
+          // of hundred px away from anything drawn.
+          const r = islandRect
+            ? {
+                x: b.x + islandRect.x,
+                y: b.y + islandRect.y,
+                width: islandRect.width,
+                height: islandRect.height,
+              }
+            : b;
           const margin = 10;
           const inside =
-            p.x >= b.x - margin &&
-            p.x <= b.x + b.width + margin &&
-            p.y >= b.y - margin &&
-            p.y <= b.y + b.height + margin;
+            p.x >= r.x - margin &&
+            p.x <= r.x + r.width + margin &&
+            p.y >= r.y - margin &&
+            p.y <= r.y + r.height + margin;
           if (!inside) sendToNotch("agent-island:cursor-left");
         }, 250);
       }
@@ -423,7 +562,9 @@ if (!app.requestSingleInstanceLock()) {
     ipcMain.on("agent-island:prompt-composing", (_e, active: boolean) => {
       if (!notch || notch.isDestroyed()) return;
       console.log(`[notch] prompt-composing=${active}`);
-      notch.setFocusable(active);
+      // Blurring the prompt must not yank focusability out from under an active
+      // VoiceOver session, which holds it for its own reasons.
+      notch.setFocusable(active || a11yFocused);
       if (active) notch.focus();
     });
 
@@ -431,6 +572,7 @@ if (!app.requestSingleInstanceLock()) {
       "agent-island:approve",
       (_e, { id, decision }: { id: string; decision: ApprovalDecision }) => {
         if (decision === "allow") sendToNotch("agent-island:chime", "approve");
+        haptic("commit");
         void daemon.resolveApproval(id, decision);
       },
     );
@@ -446,6 +588,7 @@ if (!app.requestSingleInstanceLock()) {
   app.on("before-quit", () => {
     globalShortcut.unregisterAll();
     stopUpdateCheck();
+    stopHelper();
     // Remove our hooks before we go: the HTTP hooks point at the daemon we're
     // about to stop, so leaving them behind makes every subsequent Claude/Cursor
     // tool call error against a dead port. They're re-installed on next launch.

@@ -2,9 +2,19 @@ import { BrowserWindow, ipcMain, screen } from "electron";
 import { execFile } from "node:child_process";
 import { join } from "node:path";
 
-/** Overlay window size (logical px). Wide/tall enough for the expanded panel. */
-const WIN_WIDTH = 460;
-const WIN_HEIGHT = 400;
+/**
+ * Overlay window size (logical px) — deliberately far larger than the visible
+ * island. The expanded panel sizes itself to its content up to
+ * MAX_ISLAND_WIDTH, and the window has to be able to contain the widest case;
+ * everything outside the island is transparent and click-through, so the spare
+ * area costs nothing. Height allows a tall question card at the largest text
+ * scale.
+ */
+const WIN_WIDTH = 820;
+const WIN_HEIGHT = 560;
+
+/** Ceiling for the expanded island, before the per-display clamp. */
+const MAX_ISLAND_WIDTH = 720;
 
 /**
  * Measure the hardware notch width in logical px. Electron has no API for it,
@@ -44,20 +54,32 @@ function measureNotchWidth(): Promise<number> {
  * capsule by exactly that much — so the black body merges with the notch and
  * the content starts flush under it, on any display, no magic numbers.
  */
-export function createNotchWindow(): BrowserWindow {
+/**
+ * Where the window belongs right now. Recomputed rather than captured, because
+ * a resolution change, a display swap, or docking moves the notch — and the
+ * origin used to be calculated once at creation, which left the island
+ * permanently off-centre after any of those.
+ */
+function targetOrigin(): { x: number; y: number } {
   const primary = screen.getPrimaryDisplay();
-  const x = Math.round(primary.bounds.x + (primary.bounds.width - WIN_WIDTH) / 2);
-  // Full screen frame, NOT workArea: the shape must cover the menu-bar band so
-  // it merges with the hardware notch. A normal NSWindow gets clamped below
-  // the menu bar (the source of our floating gaps) — an NSPanel does not,
-  // which is why `type: "panel"` below is load-bearing.
-  const y = primary.bounds.y;
+  return {
+    x: Math.round(primary.bounds.x + (primary.bounds.width - WIN_WIDTH) / 2),
+    // Full screen frame, NOT workArea: the shape must cover the menu-bar band
+    // so it merges with the hardware notch. A normal NSWindow gets clamped
+    // below the menu bar (the source of our floating gaps) — an NSPanel does
+    // not, which is why `type: "panel"` below is load-bearing.
+    y: primary.bounds.y,
+  };
+}
+
+export function createNotchWindow(): BrowserWindow {
+  const origin = targetOrigin();
 
   const win = new BrowserWindow({
     width: WIN_WIDTH,
     height: WIN_HEIGHT,
-    x,
-    y,
+    x: origin.x,
+    y: origin.y,
     type: "panel",
     enableLargerThanScreen: true,
     frame: false,
@@ -103,19 +125,27 @@ export function createNotchWindow(): BrowserWindow {
     // Menu bar bottom (= the notch's bottom line) relative to where the window
     // actually ended up. macOS sometimes nudges non-focusable overlay windows,
     // so measure rather than assume.
+    const primary = screen.getPrimaryDisplay();
     const actualY = win.getBounds().y;
     const menuBarBottom = primary.workArea.y;
-    return { inset: Math.max(0, menuBarBottom - actualY), notchWidth };
+    return {
+      inset: Math.max(0, menuBarBottom - actualY),
+      notchWidth,
+      // The renderer grows the island to fit its content; this is the ceiling,
+      // kept here because it depends on the display we're centred on.
+      maxIslandWidth: Math.min(MAX_ISLAND_WIDTH, primary.bounds.width - 80),
+    };
   };
 
   const pushLayout = () => {
-    // Re-assert the requested position (macOS can shift it on show), then tell
-    // the renderer the real geometry.
+    // Re-assert the requested position (macOS can shift it on show, and the
+    // display geometry may have changed), then tell the renderer the reality.
     if (win.isDestroyed()) return;
+    const { x, y } = targetOrigin();
     win.setPosition(x, y);
     const l = layout();
     console.log(
-      `[notch] windowY=${win.getBounds().y} menuBarBottom=${primary.workArea.y} inset=${l.inset} notchWidth=${l.notchWidth}`,
+      `[notch] windowY=${win.getBounds().y} inset=${l.inset} notchWidth=${l.notchWidth} maxIsland=${l.maxIslandWidth}`,
     );
     win.webContents.send("agent-island:layout", l);
   };
@@ -125,6 +155,26 @@ export function createNotchWindow(): BrowserWindow {
     pushLayout();
     // Once more after the window settles — the first show can reposition it.
     setTimeout(pushLayout, 400);
+  });
+
+  // Display changes move the notch: re-measure it and re-centre. Without this
+  // the island stays wherever the boot-time geometry put it.
+  const onDisplayChange = (): void => {
+    if (win.isDestroyed()) return;
+    void measureNotchWidth().then((width) => {
+      if (width > 0) notchWidth = width;
+      pushLayout();
+    });
+  };
+  // Listed one by one: Electron types `screen.on` as overloads per event name,
+  // so a loop over a union of names doesn't type-check.
+  screen.on("display-metrics-changed", onDisplayChange);
+  screen.on("display-added", onDisplayChange);
+  screen.on("display-removed", onDisplayChange);
+  win.on("closed", () => {
+    screen.removeListener("display-metrics-changed", onDisplayChange);
+    screen.removeListener("display-added", onDisplayChange);
+    screen.removeListener("display-removed", onDisplayChange);
   });
 
   if (process.env.ELECTRON_RENDERER_URL) {

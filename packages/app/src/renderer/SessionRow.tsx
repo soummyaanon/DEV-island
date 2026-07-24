@@ -1,4 +1,5 @@
 import type { SessionSnapshot, SessionState } from "@agent-island/shared";
+import { describeSession } from "./a11y";
 
 const AGENT_LABEL: Record<string, string> = {
   "claude-code": "claude",
@@ -80,31 +81,41 @@ export function SessionRow({
   const host = hostLabel(session);
   const showHost = host !== "" && host !== agent;
 
+  const elapsedLabel = elapsed(session.started_at, now);
+  const context =
+    agent +
+    (showHost ? ` · ${host}` : "") +
+    (model ? ` · ${model}` : "") +
+    (mode ? ` · ${MODE_LABEL[mode] ?? mode}` : "");
+
+  // A <button>, not a clickable <li>: this row was previously unreachable by
+  // keyboard or VoiceOver entirely. The inner spans are aria-hidden because the
+  // composed label reads better than four fragments in DOM order.
   return (
-    <li
-      className={`row state-${session.state}`}
-      title={term ? `Jump to ${projectName(session.cwd)} in ${term}` : "Jump to terminal"}
-      onClick={(e) => {
-        e.stopPropagation();
-        onJump(session);
-      }}
-    >
-      <StatusDot state={session.state} />
-      <div className="row-main">
-        <div className="row-heading">
-          <span className="project">{projectName(session.cwd)}</span>
-          <span className="elapsed">{elapsed(session.started_at, now)}</span>
+    <li>
+      <button
+        type="button"
+        className={`row state-${session.state}`}
+        title={term ? `Jump to ${projectName(session.cwd)} in ${term}` : "Jump to terminal"}
+        aria-label={describeSession(session, elapsedLabel)}
+        onClick={(e) => {
+          e.stopPropagation();
+          window.agentIsland.haptic("tick");
+          onJump(session);
+        }}
+      >
+        <StatusDot state={session.state} />
+        <div className="row-main" aria-hidden>
+          <div className="row-heading">
+            <span className="project">{projectName(session.cwd)}</span>
+            <span className="elapsed">{elapsedLabel}</span>
+          </div>
+          <div className="row-detail">
+            <span className="activity">{session.title}</span>
+            <span className="row-context">{context}</span>
+          </div>
         </div>
-        <div className="row-detail">
-          <span className="activity">{session.title}</span>
-          <span className="row-context">
-            {agent}
-            {showHost ? ` · ${host}` : ""}
-            {model ? ` · ${model}` : ""}
-            {mode ? ` · ${MODE_LABEL[mode] ?? mode}` : ""}
-          </span>
-        </div>
-      </div>
+      </button>
     </li>
   );
 }
