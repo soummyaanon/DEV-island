@@ -1,0 +1,526 @@
+/* Weather scenes.
+ *
+ * Its own stylesheet because island.css is already over a thousand lines and
+ * this would nearly double it. Every rule below obeys the overlay's budget:
+ * `transform` and `opacity` are the ONLY animated properties, because the
+ * window composites over the menu bar all day with hardware acceleration off,
+ * and anything that repaints is a cost the user pays continuously.
+ *
+ * Everything here is decorative — the scene is aria-hidden and the summary text
+ * beside it carries the meaning. */
+
+.wx {
+  position: relative;
+  display: block;
+  flex: none;
+  overflow: hidden;
+  border-radius: 5px;
+  /* Own compositing layer: the scene animates constantly and shouldn't drag
+     the rest of the panel into a repaint with it. */
+  contain: strict;
+}
+
+/* --wx-orb sizes the sun and moon EXPLICITLY per variant. A percentage won't
+   do: both boxes are far wider than they are tall, so a width-relative circle
+   overflows the height and clips into unrecognisable wedges. */
+
+/* The strip beside the notch when no agent is running. Small on purpose: it's
+   a sign of life, not a weather app. */
+.wx-ambient {
+  width: 46px;
+  height: 14px;
+  --wx-orb: 10px;
+}
+
+/* The panel version — a band behind the summary text. */
+.wx-card {
+  width: 100%;
+  height: 46px;
+  border-radius: 9px;
+  --wx-orb: 30px;
+}
+
+/* Per-condition backdrop. Static gradients: painted once, never animated. */
+.wx[data-condition="clear-day"] {
+  background: linear-gradient(180deg, #3f7fd0 0%, #78b4ec 100%);
+}
+.wx[data-condition="clear-night"] {
+  background: linear-gradient(180deg, #0a1130 0%, #1d2b57 100%);
+}
+.wx[data-condition="cloudy"] {
+  background: linear-gradient(180deg, #55606e 0%, #808b98 100%);
+}
+.wx[data-condition="fog"] {
+  background: linear-gradient(180deg, #6b7078 0%, #9aa0a7 100%);
+}
+.wx[data-condition="rain"] {
+  background: linear-gradient(180deg, #37414f 0%, #5b6875 100%);
+}
+.wx[data-condition="snow"] {
+  background: linear-gradient(180deg, #5d6879 0%, #93a0b1 100%);
+}
+.wx[data-condition="thunder"] {
+  background: linear-gradient(180deg, #23262f 0%, #3d4350 100%);
+}
+.wx[data-condition="sunrise"] {
+  background: linear-gradient(180deg, #2b3f6b 0%, #f2a45c 100%);
+}
+.wx[data-condition="sunset"] {
+  background: linear-gradient(180deg, #43356b 0%, #f0764f 100%);
+}
+.wx[data-condition="rainbow"] {
+  background: linear-gradient(180deg, #4a83c4 0%, #9fc9ea 100%);
+}
+
+/* ---- Sun: a static disc plus one slowly turning ray group ---- */
+.wx-sun {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--wx-orb);
+  height: var(--wx-orb);
+  /* Safe to use transform here: the disc and rays animate, this wrapper doesn't. */
+  transform: translate(-50%, -50%);
+}
+.wx-sun-disc,
+.wx-sun-rays {
+  position: absolute;
+  inset: 0;
+}
+.wx-sun-disc {
+  border-radius: 50%;
+  background: radial-gradient(circle at 42% 38%, #fff6d0 0%, #ffd257 58%, #f7a933 100%);
+  animation: wx-sun-breathe 5s ease-in-out infinite alternate;
+}
+/* Eight spokes from one element: two crossed conic gradients would repaint, so
+   this is a static background that only ever rotates. */
+.wx-sun-rays {
+  background:
+    conic-gradient(
+      from 0deg,
+      rgba(255, 226, 138, 0.55) 0deg 6deg,
+      transparent 6deg 45deg,
+      rgba(255, 226, 138, 0.55) 45deg 51deg,
+      transparent 51deg 90deg,
+      rgba(255, 226, 138, 0.55) 90deg 96deg,
+      transparent 96deg 135deg,
+      rgba(255, 226, 138, 0.55) 135deg 141deg,
+      transparent 141deg 180deg,
+      rgba(255, 226, 138, 0.55) 180deg 186deg,
+      transparent 186deg 225deg,
+      rgba(255, 226, 138, 0.55) 225deg 231deg,
+      transparent 231deg 270deg,
+      rgba(255, 226, 138, 0.55) 270deg 276deg,
+      transparent 276deg 315deg,
+      rgba(255, 226, 138, 0.55) 315deg 321deg,
+      transparent 321deg 360deg
+    );
+  border-radius: 50%;
+  transform: scale(1.55);
+  animation: wx-spin 60s linear infinite;
+}
+@keyframes wx-spin {
+  to {
+    transform: scale(1.55) rotate(360deg);
+  }
+}
+@keyframes wx-sun-breathe {
+  from {
+    opacity: 0.86;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ---- Moon and stars. Stars animate opacity only: the cheapest motion there
+   is, which is why there can be seven of them. ---- */
+.wx-moon {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--wx-orb);
+  height: var(--wx-orb);
+  margin: calc(var(--wx-orb) / -2) 0 0 calc(var(--wx-orb) / -2);
+  border-radius: 50%;
+  /* The crescent is an offset radial gradient, not a mask — one paint, no
+     second element, and it scales with the box. */
+  background: radial-gradient(
+    circle at 118% 32%,
+    transparent 0 52%,
+    #f2f3e0 53% 100%
+  );
+}
+.wx-stars {
+  position: absolute;
+  inset: 0;
+}
+.wx-star {
+  position: absolute;
+  width: 1.5px;
+  height: 1.5px;
+  border-radius: 50%;
+  background: #fff;
+  opacity: 0.35;
+  animation: wx-twinkle 3.4s ease-in-out infinite alternate;
+}
+@keyframes wx-twinkle {
+  from {
+    opacity: 0.2;
+  }
+  to {
+    opacity: 0.95;
+  }
+}
+
+/* ---- Clouds: three blobs drifting on translateX ---- */
+.wx-clouds {
+  position: absolute;
+  inset: 0;
+}
+.wx-cloud {
+  position: absolute;
+  border-radius: 999px;
+  animation: wx-drift linear infinite;
+}
+.wx-clouds-light .wx-cloud {
+  background: rgba(255, 255, 255, 0.82);
+}
+.wx-clouds-dark .wx-cloud {
+  background: rgba(190, 199, 212, 0.5);
+}
+/* A puff above the slab makes the silhouette read as a cloud, not a pill. */
+.wx-cloud::before {
+  content: "";
+  position: absolute;
+  left: 26%;
+  bottom: 42%;
+  width: 52%;
+  height: 116%;
+  border-radius: 50%;
+  background: inherit;
+}
+@keyframes wx-drift {
+  from {
+    transform: translateX(-40px);
+  }
+  to {
+    transform: translateX(140px);
+  }
+}
+
+/* ---- Rain ---- */
+.wx-rain {
+  position: absolute;
+  inset: 0;
+}
+.wx-drop {
+  position: absolute;
+  top: -6px;
+  width: 1px;
+  height: 6px;
+  border-radius: 1px;
+  background: linear-gradient(180deg, rgba(200, 224, 255, 0) 0%, rgba(200, 224, 255, 0.95) 100%);
+  animation: wx-fall linear infinite;
+}
+@keyframes wx-fall {
+  from {
+    transform: translate3d(0, -6px, 0);
+  }
+  to {
+    /* Past the bottom of both variants; overflow clips it. */
+    transform: translate3d(-4px, 52px, 0);
+  }
+}
+
+/* ---- Snow: fall and sway in one keyframe, so one animated property ---- */
+.wx-snow {
+  position: absolute;
+  inset: 0;
+}
+.wx-flake {
+  position: absolute;
+  top: -4px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.94);
+  animation: wx-flutter linear infinite;
+}
+@keyframes wx-flutter {
+  0% {
+    transform: translate3d(0, -4px, 0);
+  }
+  25% {
+    transform: translate3d(4px, 10px, 0);
+  }
+  50% {
+    transform: translate3d(-3px, 24px, 0);
+  }
+  75% {
+    transform: translate3d(3px, 38px, 0);
+  }
+  100% {
+    transform: translate3d(0, 52px, 0);
+  }
+}
+
+/* ---- Thunder: a triple-stab flash and a bolt, fired from JS every 6-14s ---- */
+.wx-flash {
+  position: absolute;
+  inset: 0;
+  background: #fdfbe8;
+  opacity: 0;
+  animation: wx-flash 0.62s ease-out both;
+}
+@keyframes wx-flash {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  4% {
+    opacity: 0.92;
+  }
+  12% {
+    opacity: 0.08;
+  }
+  22% {
+    opacity: 0.78;
+  }
+  34% {
+    opacity: 0.05;
+  }
+  46% {
+    opacity: 0.55;
+  }
+  70% {
+    opacity: 0.02;
+  }
+}
+.wx-bolt {
+  position: absolute;
+  left: 50%;
+  top: 34%;
+  width: 22%;
+  height: 52%;
+  margin-left: -11%;
+  fill: #ffe98a;
+  opacity: 0;
+  animation: wx-bolt 0.62s ease-out both;
+}
+@keyframes wx-bolt {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  6% {
+    opacity: 1;
+  }
+  24% {
+    opacity: 0.15;
+  }
+  40% {
+    opacity: 0.9;
+  }
+  62% {
+    opacity: 0;
+  }
+}
+
+/* ---- Fog: two slow bands ---- */
+.wx-fog {
+  position: absolute;
+  inset: 0;
+}
+.wx-fog-band {
+  position: absolute;
+  left: -50%;
+  width: 200%;
+  height: 34%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.42) 30%,
+    rgba(255, 255, 255, 0.42) 70%,
+    transparent 100%
+  );
+  animation: wx-fog-drift linear infinite;
+}
+.wx-fog-band:nth-child(1) {
+  top: 26%;
+  animation-duration: 26s;
+}
+.wx-fog-band:nth-child(2) {
+  top: 56%;
+  animation-duration: 38s;
+  animation-direction: reverse;
+}
+@keyframes wx-fog-drift {
+  from {
+    transform: translateX(-18%);
+  }
+  to {
+    transform: translateX(18%);
+  }
+}
+
+/* ---- Sunrise / sunset: cross-fade two static skies, raise or drop the sun ---- */
+.wx-golden {
+  position: absolute;
+  inset: 0;
+}
+.wx-sky {
+  position: absolute;
+  inset: 0;
+}
+.wx-sky-a {
+  background: linear-gradient(180deg, rgba(43, 63, 107, 0.9) 0%, rgba(242, 164, 92, 0.2) 100%);
+  animation: wx-cross-a 9s ease-in-out infinite alternate;
+}
+.wx-sky-b {
+  background: linear-gradient(180deg, rgba(120, 70, 130, 0.55) 0%, rgba(255, 196, 120, 0.55) 100%);
+  opacity: 0;
+  animation: wx-cross-b 9s ease-in-out infinite alternate;
+}
+@keyframes wx-cross-a {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.25;
+  }
+}
+@keyframes wx-cross-b {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.wx-horizon-sun {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--wx-orb) / -3);
+  width: var(--wx-orb);
+  height: var(--wx-orb);
+  /* Centred with a margin, not a transform: the rise animation owns transform. */
+  margin-left: calc(var(--wx-orb) / -2);
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff1c4 0%, #ffb457 60%, #f8813c 100%);
+  animation: wx-rise 9s ease-in-out infinite alternate;
+}
+.wx-sunset .wx-horizon-sun {
+  animation-direction: alternate-reverse;
+}
+@keyframes wx-rise {
+  from {
+    transform: translateY(6px);
+  }
+  to {
+    transform: translateY(-5px);
+  }
+}
+
+/* ---- Rainbow: a static arc revealed by opacity, plus the sun behind it ---- */
+.wx-rainbow {
+  position: absolute;
+  inset: 0;
+}
+.wx-rainbow svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  animation: wx-arc 2.6s ease-out both;
+  /* Above the sun, so the arc reads as being in front of the sky. */
+  z-index: 1;
+}
+/* Stroke width is in device px (non-scaling-stroke), so it's set per variant:
+   six 2px bands would fill the 14px ambient strip entirely. */
+.wx-card .wx-rainbow path {
+  stroke-width: 2.4;
+}
+.wx-ambient .wx-rainbow path {
+  stroke-width: 1;
+}
+@keyframes wx-arc {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 0.92;
+    transform: scale(1);
+  }
+}
+/* Low and to the side, so the arc is the subject and the sun just lights it. */
+.wx-rainbow .wx-sun {
+  left: 14%;
+  top: 66%;
+  width: calc(var(--wx-orb) * 0.62);
+  height: calc(var(--wx-orb) * 0.62);
+}
+
+/* ---- Reduced motion ----
+   Every scene becomes a still illustration. Lightning's timer is never armed in
+   the first place (see WeatherScene.tsx) — this only handles the declarative
+   half, since a media query can stop an animation but not a setTimeout. */
+@media (prefers-reduced-motion: reduce) {
+  .wx-sun-disc,
+  .wx-sun-rays,
+  .wx-star,
+  .wx-cloud,
+  .wx-drop,
+  .wx-flake,
+  .wx-fog-band,
+  .wx-sky-a,
+  .wx-sky-b,
+  .wx-horizon-sun,
+  .wx-flash,
+  .wx-bolt {
+    animation: none;
+  }
+  /* Parked mid-scene rather than off-screen, so each condition still reads. */
+  .wx-drop {
+    transform: translate3d(0, 16px, 0);
+  }
+  .wx-flake {
+    transform: translate3d(0, 18px, 0);
+  }
+  .wx-star,
+  .wx-sky-b {
+    opacity: 0.7;
+  }
+  .wx-bolt {
+    opacity: 1;
+  }
+  .wx-rainbow svg {
+    animation: none;
+    opacity: 0.92;
+  }
+  /* Only the leading raindrops and flakes: a static crowd looks like noise. */
+  .wx-drop:nth-child(n + 7),
+  .wx-flake:nth-child(n + 5) {
+    display: none;
+  }
+}
+
+/* ---- Increased contrast ----
+   Weather is decoration over which text sits. At high contrast the text wins:
+   the scene dims hard and the busiest layers stop competing. */
+@media (prefers-contrast: more) {
+  .wx {
+    filter: saturate(0.55);
+  }
+  .wx-card::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+  }
+  .wx-drop:nth-child(n + 5),
+  .wx-flake:nth-child(n + 4),
+  .wx-star:nth-child(n + 4) {
+    display: none;
+  }
+}

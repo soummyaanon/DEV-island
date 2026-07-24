@@ -19,6 +19,21 @@ let proc: ChildProcessWithoutNullStreams | null = null;
 /** Spawn is attempted at most twice per run; a second death disables us. */
 let spawnsLeft = 2;
 
+/** Subscribers to whole reply lines (used by the async `location` command). */
+const listeners = new Set<(line: string) => void>();
+
+/**
+ * Subscribe to the sidecar's reply lines. Returns an unsubscribe function.
+ *
+ * The protocol is one-reply-per-command for everything except `location`, which
+ * answers out of band once CoreLocation settles — hence a subscription rather
+ * than a request/response helper.
+ */
+export function onLine(callback: (line: string) => void): () => void {
+  listeners.add(callback);
+  return () => listeners.delete(callback);
+}
+
 /** Path to the compiled helper (dev vs packaged). */
 function helperPath(): string {
   if (app.isPackaged) {
@@ -44,11 +59,20 @@ function spawnHelper(): ChildProcessWithoutNullStreams | null {
     const child = spawn(path, [], { stdio: ["pipe", "pipe", "pipe"] });
     child.stdout.setEncoding("utf8");
     child.stderr.setEncoding("utf8");
-    // The helper only ever answers "ok" / "pong" / "err ..."; surface errors
-    // only, so a working install logs nothing.
+    // Buffered: a pipe splits wherever it likes, so a reply can arrive in two
+    // chunks (or two replies in one). Only whole lines are dispatched.
+    let pending = "";
     child.stdout.on("data", (chunk: string) => {
-      for (const line of chunk.split("\n")) {
+      pending += chunk;
+      let newline = pending.indexOf("\n");
+      while (newline !== -1) {
+        const line = pending.slice(0, newline).trim();
+        pending = pending.slice(newline + 1);
+        newline = pending.indexOf("\n");
+        if (line === "") continue;
+        // A working install logs nothing; only complaints are worth the console.
         if (line.startsWith("err ")) console.warn(`[native] ${line}`);
+        for (const listener of listeners) listener(line);
       }
     });
     child.on("error", (err) => {

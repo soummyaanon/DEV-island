@@ -17,6 +17,9 @@ export type SoundEvent = (typeof SOUND_EVENTS)[number];
 export const TEXT_SIZES = ["default", "large", "larger"] as const;
 export type TextSize = (typeof TEXT_SIZES)[number];
 
+export const TEMPERATURE_UNITS = ["auto", "c", "f"] as const;
+export type TemperatureUnit = (typeof TEMPERATURE_UNITS)[number];
+
 /** Everything the Settings window can change, persisted across launches. */
 export interface AppSettings {
   agents: Record<AgentKind, boolean>;
@@ -38,6 +41,15 @@ export interface AppSettings {
   haptics: boolean;
   /** UI text scale (accessibility). */
   textSize: TextSize;
+  /**
+   * Local weather in the idle island. OFF by default: it is the only ongoing
+   * network request the app makes besides the update check, so it stays an
+   * explicit choice rather than something to discover after the fact.
+   */
+  weather: boolean;
+  /** "lat, lon" typed by the user. Empty = fall back to the timezone guess. */
+  weatherLocation: string;
+  weatherUnits: TemperatureUnit;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -51,6 +63,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   updateCheck: true,
   haptics: true,
   textSize: "default",
+  weather: false,
+  weatherLocation: "",
+  weatherUnits: "auto",
 };
 
 export function isSoundTheme(value: unknown): value is SoundTheme {
@@ -63,6 +78,10 @@ export function isSoundEvent(value: unknown): value is SoundEvent {
 
 export function isTextSize(value: unknown): value is TextSize {
   return typeof value === "string" && (TEXT_SIZES as readonly string[]).includes(value);
+}
+
+export function isTemperatureUnit(value: unknown): value is TemperatureUnit {
+  return typeof value === "string" && (TEMPERATURE_UNITS as readonly string[]).includes(value);
 }
 
 function settingsPath(): string {
@@ -87,6 +106,9 @@ export function loadSettings(): AppSettings {
     agents: { ...DEFAULT_SETTINGS.agents, ...(stored.agents ?? {}) },
     soundTheme: isSoundTheme(stored.soundTheme) ? stored.soundTheme : DEFAULT_SETTINGS.soundTheme,
     textSize: isTextSize(stored.textSize) ? stored.textSize : DEFAULT_SETTINGS.textSize,
+    weatherUnits: isTemperatureUnit(stored.weatherUnits)
+      ? stored.weatherUnits
+      : DEFAULT_SETTINGS.weatherUnits,
     soundOverrides: { ...(stored.soundOverrides ?? {}) },
     customSounds: { ...(stored.customSounds ?? {}) },
     customSoundNames: { ...(stored.customSoundNames ?? {}) },

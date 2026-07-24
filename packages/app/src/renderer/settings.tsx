@@ -31,6 +31,9 @@ interface SettingsState {
   textSize: string;
   hapticsSupported: boolean;
   a11yShortcut: string | null;
+  weather: boolean;
+  weatherLocation: string;
+  weatherUnits: string;
   openAtLogin: boolean;
   version: string;
   update: { version: string } | null;
@@ -49,6 +52,9 @@ const DEFAULTS: SettingsState = {
   textSize: "default",
   hapticsSupported: false,
   a11yShortcut: null,
+  weather: false,
+  weatherLocation: "",
+  weatherUnits: "auto",
   openAtLogin: false,
   version: "",
   update: null,
@@ -57,11 +63,25 @@ const DEFAULTS: SettingsState = {
 const NAV = [
   { id: "integrations", label: "Integrations", icon: "❖" },
   { id: "sounds", label: "Sounds", icon: "♪" },
+  { id: "weather", label: "Weather", icon: "☂" },
   { id: "accessibility", label: "Accessibility", icon: "◍" },
   { id: "general", label: "General", icon: "⚙" },
   { id: "updates", label: "Updates", icon: "↑" },
 ] as const;
 type SectionId = (typeof NAV)[number]["id"];
+
+const TEMPERATURE_UNITS = [
+  { value: "auto", label: "Automatic" },
+  { value: "c", label: "Celsius" },
+  { value: "f", label: "Fahrenheit" },
+] as const;
+
+/** How the coordinates were obtained, said plainly — a guess shouldn't look like a fix. */
+const LOCATION_SOURCE_LABEL: Record<string, string> = {
+  manual: "the location you entered",
+  device: "your device location",
+  timezone: "your time zone (approximate)",
+};
 
 const TEXT_SIZES = [
   { value: "default", label: "Default" },
@@ -128,6 +148,15 @@ function Settings() {
   const [checking, setChecking] = useState(false);
   const [installing, setInstalling] = useState(false);
   const [section, setSection] = useState<SectionId>("integrations");
+  // Which location layer actually answered, so the panel can say so rather than
+  // implying a precision it doesn't have.
+  const [locationSource, setLocationSource] = useState<string | null>(null);
+  const weatherSource = locationSource ? LOCATION_SOURCE_LABEL[locationSource] : null;
+
+  useEffect(() => {
+    void window.agentIsland.getWeather?.().then((w) => setLocationSource(w?.locationSource ?? null));
+    return window.agentIsland.onWeather?.((w) => setLocationSource(w?.locationSource ?? null));
+  }, []);
 
   useEffect(() => {
     if (!window.agentIsland?.settings) return; // plain-browser preview
@@ -310,6 +339,75 @@ function Settings() {
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {section === "weather" && (
+          <div className="s-group">
+            <Row
+              title="Local weather"
+              detail="Animates in the island whenever no agent is working. Off by default."
+              on={state.weather}
+              onChange={(v) => set("weather", v)}
+            />
+            <div className="s-row s-sub">
+              <div className="s-text">
+                <b>Location</b>
+                <span>
+                  Blank uses your time zone — no permission needed, accurate to the nearest big
+                  city. Enter “latitude, longitude” to be exact.
+                </span>
+              </div>
+              <input
+                className="s-input"
+                type="text"
+                placeholder="22.57, 88.36"
+                aria-label="Weather location as latitude, longitude"
+                defaultValue={state.weatherLocation}
+                spellCheck={false}
+                // On blur, not per keystroke: every change is a network request.
+                onBlur={(e) => set("weatherLocation", e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") e.currentTarget.blur();
+                }}
+              />
+            </div>
+            <div className="s-row s-sub">
+              <div className="s-text">
+                <b>Units</b>
+                <span>Automatic follows your Mac’s region.</span>
+              </div>
+              <select
+                className="s-select"
+                value={state.weatherUnits}
+                onChange={(e) => set("weatherUnits", e.target.value)}
+              >
+                {TEMPERATURE_UNITS.map((u) => (
+                  <option key={u.value} value={u.value}>
+                    {u.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="s-row s-sub">
+              <div className="s-text">
+                <span>
+                  {state.weather ? (
+                    <>
+                      Weather comes from open-meteo.com — no account, no API key. Your coordinates
+                      are rounded to about a kilometre before the request, and nothing else about
+                      you or your sessions is sent.
+                      {weatherSource ? ` Currently using ${weatherSource}.` : ""}
+                    </>
+                  ) : (
+                    <>
+                      While this is off, Agent Island makes no weather requests at all. Turning it
+                      on adds one request to open-meteo.com every 15 minutes.
+                    </>
+                  )}
+                </span>
+              </div>
+            </div>
           </div>
         )}
 

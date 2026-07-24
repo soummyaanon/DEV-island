@@ -1170,3 +1170,56 @@ body {
     background-color: #16161a;
   }
 }
+
+/* ---- Weather: ambient wing + panel card ----
+   The idle island widens to make room for the scene on the left and the
+   temperature on the right. This is what replaces the previously invisible
+   resting state — with weather on, the island is always at least a small
+   living thing. */
+.island.has-weather:not(.expanded):not(.bare) {
+  width: calc(var(--notch-width, 196px) + 104px);
+}
+
+.weather-card {
+  position: relative;
+  margin: 4px 8px 0;
+  border-radius: 9px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+}
+/* Text sits over the scene, with a scrim so it stays readable against a bright
+   sky or a lightning flash. */
+.weather-text {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 11px;
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0.18) 100%);
+}
+.weather-text b {
+  font-size: var(--fs-title);
+  font-weight: 650;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+.weather-text > span {
+  min-width: 0;
+  font-size: var(--fs-tiny);
+  color: rgba(255, 255, 255, 0.86);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The prompt toggle. The bar itself is transient — this is how you summon it
+   when no agent is currently asking you anything. */
+.ctl.icon.prompt-toggle {
+  font-size: calc(var(--fs-body) * 1.1);
+}
+.ctl.icon.prompt-toggle.on {
+  color: var(--accent);
+  background: rgba(116, 183, 255, 0.14);
+}

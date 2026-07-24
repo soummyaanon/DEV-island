@@ -12,6 +12,7 @@ import { playSound } from "./sounds";
 import { DEFAULT_SOUND_PREFS, type SoundPrefs, type SoundTheme } from "./sound-prefs";
 import { summarizeTransitions, useAnnouncer, useFocusTrap } from "./a11y";
 import { clampIslandWidth, isSignificantChange, minIslandWidth } from "./island-width";
+import { WeatherScene, type WeatherCondition } from "./weather/WeatherScene";
 
 const ACTIVE_STATES = new Set(["working", "starting", "waiting-for-approval"]);
 const MAX_ROWS = 5;
@@ -35,6 +36,10 @@ export function App() {
   const [now, setNow] = useState(() => Date.now());
   const [promptText, setPromptText] = useState("");
   const [promptFocused, setPromptFocused] = useState(false);
+  // The prompt bar is not permanent furniture: it appears when an agent is
+  // actually waiting on an answer, or when you deliberately open it.
+  const [promptOpen, setPromptOpen] = useState(false);
+  const promptInputRef = useRef<HTMLInputElement>(null);
   // Set when a send was dropped for lack of Accessibility — shows a hint.
   const [needsAccess, setNeedsAccess] = useState(false);
   // One-shot edge-spark burst; `n` retriggers the CSS animation on repeats.
@@ -55,6 +60,12 @@ export function App() {
   // Widest the island may grow on this display, from main.
   const [maxIslandWidth, setMaxIslandWidth] = useState(720);
   const [notchWidth, setNotchWidth] = useState(196);
+  const [weather, setWeather] = useState<{
+    condition: string;
+    temperature: string;
+    summary: string;
+    stale: boolean;
+  } | null>(null);
   const [sound, setSound] = useState<SoundPrefs>(DEFAULT_SOUND_PREFS);
   // Mirror for once-registered listeners (chimes) that must not go stale.
   const soundRef = useRef<SoundPrefs>(DEFAULT_SOUND_PREFS);
@@ -259,6 +270,12 @@ export function App() {
     return window.agentIsland.onUiPrefs?.(apply);
   }, []);
 
+  // Local weather (off unless the user enabled it).
+  useEffect(() => {
+    void window.agentIsland.getWeather?.().then((w) => setWeather(w ?? null));
+    return window.agentIsland.onWeather?.((w) => setWeather(w ?? null));
+  }, []);
+
   // VoiceOver reach-in from the global shortcut.
   useEffect(() => window.agentIsland.onA11yFocus?.(setA11yFocused), []);
   const releaseA11yFocus = useCallback(() => window.agentIsland.releaseA11yFocus?.(), []);
@@ -362,6 +379,29 @@ export function App() {
     setPromptText("");
   };
 
+  /**
+   * When the prompt bar is visible. An agent waiting on a question gets it
+   * automatically — that's the moment you actually need to type. Otherwise it
+   * stays out of the way until you ask for it, and never disappears from under
+   * you mid-sentence.
+   */
+  const showPrompt =
+    promptTarget !== null && (promptOpen || promptFocused || asking.length > 0 || promptText !== "");
+
+  const togglePrompt = () => {
+    window.agentIsland.haptic?.("tick");
+    setPromptOpen((open) => {
+      if (open) {
+        setPromptText("");
+        promptInputRef.current?.blur();
+        return false;
+      }
+      // Focus once it has actually rendered.
+      requestAnimationFrame(() => promptInputRef.current?.focus());
+      return true;
+    });
+  };
+
   // Sprites are strictly live: one per agent kind that is ACTIVELY running
   // (working / starting / waiting). Nothing running = an empty wing.
   const liveKinds = new Set(active.map((s) => s.agent));
@@ -376,6 +416,13 @@ export function App() {
   // At rest — sessions present but nothing running — the rim carries a very soft
   // green-bluish breathing glow.
   const showGlow = !expanded && sessions.length > 0 && active.length === 0;
+
+  // Weather fills the collapsed island only when no agent is working: agents
+  // always preempt it, so it never competes with the thing you're waiting on.
+  // Note this replaces the previously INVISIBLE resting state — with weather on,
+  // the island is always at least a small live scene.
+  const ambientWeather = weather !== null && !expanded && active.length === 0;
+  const condition = (weather?.condition ?? "clear-day") as WeatherCondition;
 
   return (
     <div className={`app${animated ? "" : " paused"}${a11yFocused ? " a11y-focus" : ""}`}>
@@ -396,8 +443,10 @@ export function App() {
         )}
         <div
           className={`island ${stateCls}${expanded ? " expanded" : ""}${
-            sessions.length === 0 ? " bare" : ""
-          }${showFeast ? " has-pac" : ""} spr-${showFeast ? 0 : shown.length}`}
+            sessions.length === 0 && !ambientWeather ? " bare" : ""
+          }${showFeast ? " has-pac" : ""}${ambientWeather ? " has-weather" : ""} spr-${
+            showFeast ? 0 : shown.length
+          }`}
           role="region"
           aria-label="Agent Island"
         >
@@ -415,6 +464,8 @@ export function App() {
             <span className="sprites">
               {showFeast ? (
                 <PacFeast kinds={activeKinds} />
+              ) : ambientWeather ? (
+                <WeatherScene condition={condition} variant="ambient" />
               ) : (
                 shown.map(({ kind, Sprite }) => <Sprite key={kind} live />)
               )}
@@ -424,10 +475,18 @@ export function App() {
               aria-label={
                 needsYou.length > 0
                   ? `${needsYou.length} sessions need attention`
-                  : `${active.length} active sessions`
+                  : ambientWeather
+                    ? weather?.summary
+                    : `${active.length} active sessions`
               }
             >
-              {needsYou.length > 0 ? `${needsYou.length}!` : active.length > 0 ? active.length : ""}
+              {needsYou.length > 0
+                ? `${needsYou.length}!`
+                : active.length > 0
+                  ? active.length
+                  : ambientWeather
+                    ? weather?.temperature
+                    : ""}
             </span>
           </div>
 
@@ -465,8 +524,22 @@ export function App() {
                   <li className="empty">{connected ? "no sessions" : "offline"}</li>
                 )}
               </ul>
+              {weather && (
+                <div className="weather-card">
+                  <WeatherScene condition={condition} variant="card" />
+                  {/* The scene is decorative; this text is the whole meaning of
+                      it for anyone using VoiceOver. */}
+                  <span className="weather-text">
+                    <b>{weather.temperature}</b>
+                    <span>
+                      {weather.summary}
+                      {weather.stale ? " · offline" : ""}
+                    </span>
+                  </span>
+                </div>
+              )}
               <UsageFooter usage={usage} />
-              {promptTarget && (
+              {showPrompt && (
                 <form
                   className="prompt-bar"
                   onSubmit={(e) => {
@@ -475,12 +548,16 @@ export function App() {
                   }}
                 >
                   <input
+                    ref={promptInputRef}
                     className="prompt-input"
                     type="text"
                     value={promptText}
-                    placeholder="Ask the agent…"
+                    placeholder={
+                      asking.length > 0 ? "Reply to the agent…" : "Ask the agent…"
+                    }
                     aria-label="Send a prompt to the agent"
                     spellCheck={false}
+                    autoFocus={promptOpen}
                     onChange={(e) => setPromptText(e.target.value)}
                     onFocus={() => {
                       setPromptFocused(true);
@@ -494,6 +571,7 @@ export function App() {
                     onKeyDown={(e) => {
                       if (e.key === "Escape") {
                         setPromptText("");
+                        setPromptOpen(false);
                         e.currentTarget.blur();
                       }
                     }}
@@ -510,7 +588,7 @@ export function App() {
                   </button>
                 </form>
               )}
-              {promptTarget && needsAccess && (
+              {showPrompt && needsAccess && (
                 <button
                   type="button"
                   className="prompt-hint"
@@ -524,19 +602,35 @@ export function App() {
                 </button>
               )}
               <div className="panel-controls">
-                <button
-                  className={`ctl icon${sound.on ? "" : " off"}`}
-                  title={sound.on ? "Sound on" : "Sound off"}
-                  aria-label={sound.on ? "Sound on" : "Sound off"}
-                  aria-pressed={sound.on}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    window.agentIsland.haptic?.("tick");
-                    window.agentIsland.setSounds(!sound.on);
-                  }}
-                >
-                  ♪
-                </button>
+                <span className="ctl-cluster">
+                  <button
+                    className={`ctl icon${sound.on ? "" : " off"}`}
+                    title={sound.on ? "Sound on" : "Sound off"}
+                    aria-label={sound.on ? "Sound on" : "Sound off"}
+                    aria-pressed={sound.on}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      window.agentIsland.haptic?.("tick");
+                      window.agentIsland.setSounds(!sound.on);
+                    }}
+                  >
+                    ♪
+                  </button>
+                  {promptTarget && (
+                    <button
+                      className={`ctl icon prompt-toggle${promptOpen ? " on" : ""}`}
+                      title={promptOpen ? "Close the prompt" : "Send a prompt to the agent"}
+                      aria-label={promptOpen ? "Close the prompt" : "Send a prompt to the agent"}
+                      aria-expanded={showPrompt}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        togglePrompt();
+                      }}
+                    >
+                      ✎
+                    </button>
+                  )}
+                </span>
                 {update ? (
                   <button
                     className="ctl update"

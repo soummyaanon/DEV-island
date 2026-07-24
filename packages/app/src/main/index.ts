@@ -22,9 +22,17 @@ import {
 import { createNotchWindow } from "./windows/notch-window";
 import { maybeShowOnboarding, registerOnboardingIpc } from "./windows/onboarding-window";
 import { pushSettingsState, showSettingsWindow } from "./windows/settings-window";
-import { isSoundEvent, isSoundTheme, isTextSize, loadSettings, saveSettings } from "./settings";
+import {
+  isSoundEvent,
+  isSoundTheme,
+  isTemperatureUnit,
+  isTextSize,
+  loadSettings,
+  saveSettings,
+} from "./settings";
 import { haptic, hapticsSupported, isHapticPattern, setHapticsEnabled } from "./haptics";
 import { stopHelper } from "./native-helper";
+import { getWeather, onWeather, startWeather, updateWeatherSettings } from "./weather";
 import { createTray, updateTrayTitle } from "./tray";
 import { answerInTerminal, jumpToTerminal, sendPromptToTerminal } from "./jump-back";
 import {
@@ -235,6 +243,13 @@ if (!app.requestSingleInstanceLock()) {
     /** Presentation prefs the overlay itself needs (text scale). */
     const uiPrefs = () => ({ textSize: settings.textSize });
 
+    const weatherOptions = () => ({
+      enabled: settings.weather,
+      units: settings.weatherUnits,
+      location: settings.weatherLocation,
+    });
+    const applyWeatherSettings = (): void => updateWeatherSettings(weatherOptions());
+
     function pushFiltered(): void {
       sendToNotch("agent-island:sessions", {
         sessions: filterSessions(daemon.list()),
@@ -289,6 +304,20 @@ if (!app.requestSingleInstanceLock()) {
           settings.textSize = value;
           sendToNotch("agent-island:ui-prefs", uiPrefs());
           break;
+        case "weather":
+          settings.weather = value === true;
+          applyWeatherSettings();
+          break;
+        case "weatherLocation":
+          if (typeof value !== "string") return;
+          settings.weatherLocation = value;
+          applyWeatherSettings();
+          break;
+        case "weatherUnits":
+          if (!isTemperatureUnit(value)) return;
+          settings.weatherUnits = value;
+          applyWeatherSettings();
+          break;
         case "tray":
           settings.tray = value === true;
           syncTray();
@@ -326,6 +355,17 @@ if (!app.requestSingleInstanceLock()) {
     ipcMain.on("agent-island:a11y-release", () => setA11yFocus(false));
 
     ipcMain.handle("agent-island:get-ui-prefs", () => uiPrefs());
+    ipcMain.handle("agent-island:get-weather", () => getWeather());
+
+    // Weather changes are ambient, so they get the subtlest tap available —
+    // never anything that could be mistaken for an agent needing you. Thunder
+    // arriving is the one exception worth feeling.
+    onWeather((state) => {
+      sendToNotch("agent-island:weather", state);
+      if (!state || state.stale) return;
+      haptic(state.condition === "thunder" ? "rumble" : "whisper");
+    });
+    startWeather(weatherOptions());
 
     // Renderer-initiated haptics (row clicks, control presses). Guarded because
     // this crosses the contextBridge.

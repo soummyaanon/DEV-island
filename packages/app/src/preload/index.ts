@@ -26,6 +26,9 @@ export interface SettingsState {
   hapticsSupported: boolean;
   /** The registered VoiceOver focus shortcut, or null if another app holds it. */
   a11yShortcut: string | null;
+  weather: boolean;
+  weatherLocation: string;
+  weatherUnits: string;
   openAtLogin: boolean;
   version: string;
   /** Newest available version, or null when up to date / not yet checked. */
@@ -49,6 +52,18 @@ export interface NotchLayout {
 export interface UiPrefs {
   /** "default" | "large" | "larger" — drives --ui-scale. */
   textSize: string;
+}
+
+export interface WeatherPayload {
+  /** One of the ten scenes; see weather-conditions.ts. */
+  condition: string;
+  temperature: string;
+  /** Spoken summary — the animation itself is decorative and aria-hidden. */
+  summary: string;
+  locationLabel: string;
+  locationSource: string;
+  /** A cached reading we couldn't refresh. */
+  stale: boolean;
 }
 
 /** The only surface the renderer can touch — locked down via contextBridge. */
@@ -92,6 +107,15 @@ const api = {
 
   /** Presentation prefs the overlay needs (text scale). */
   getUiPrefs: (): Promise<UiPrefs> => ipcRenderer.invoke("agent-island:get-ui-prefs"),
+
+  /** Current local weather, or null when it's off or has no reading yet. */
+  getWeather: (): Promise<WeatherPayload | null> => ipcRenderer.invoke("agent-island:get-weather"),
+
+  onWeather: (cb: (weather: WeatherPayload | null) => void): (() => void) => {
+    const listener = (_e: unknown, weather: WeatherPayload | null) => cb(weather);
+    ipcRenderer.on("agent-island:weather", listener);
+    return () => ipcRenderer.removeListener("agent-island:weather", listener);
+  },
 
   onUiPrefs: (cb: (prefs: UiPrefs) => void): (() => void) => {
     const listener = (_e: unknown, prefs: UiPrefs) => cb(prefs);

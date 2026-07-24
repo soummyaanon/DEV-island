@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Embedded into the sidecar binary's __TEXT,__info_plist section by
+  scripts/build-native.sh. CoreLocation refuses to run without a usage
+  description in Bundle.main, and a bare Mach-O tool has no bundle to read one
+  from — this section IS its Info.plist.
+-->
+<plist version="1.0">
+  <dict>
+    <key>CFBundleIdentifier</key>
+    <string>com.agentisland.app.native</string>
+    <key>CFBundleName</key>
+    <string>Agent Island</string>
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>Agent Island uses your approximate location to show local weather in the notch. Coordinates are rounded to about a kilometre and sent only to open-meteo.com.</string>
+  </dict>
+</plist>

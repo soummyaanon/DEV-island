@@ -9,6 +9,7 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SRC="$ROOT/native/AgentIslandNative.swift"
+PLIST="$ROOT/native/Info.plist"
 OUT_DIR="$ROOT/packages/app/native"
 OUT="$OUT_DIR/AgentIslandNative"
 
@@ -27,14 +28,19 @@ if ! command -v swiftc >/dev/null 2>&1; then
   exit 0
 fi
 
-# Skip the ~2s compile when the source hasn't changed since the last build.
-if [[ -f "$OUT" && "$OUT" -nt "$SRC" ]]; then
+# Skip the ~2s compile when neither input has changed since the last build.
+if [[ -f "$OUT" && "$OUT" -nt "$SRC" && "$OUT" -nt "$PLIST" ]]; then
   echo "==> Native helper up to date"
   exit 0
 fi
 
+# The embedded __info_plist section IS this binary's Info.plist: CoreLocation
+# refuses to run without a usage description in Bundle.main, and a bare Mach-O
+# tool has no bundle directory to read one from.
 echo "==> Building native helper (arm64)"
-if ! swiftc -O -target arm64-apple-macos12 -o "$OUT" "$SRC"; then
+if ! swiftc -O -target arm64-apple-macos12 \
+  -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __info_plist -Xlinker "$PLIST" \
+  -o "$OUT" "$SRC"; then
   echo "==> Native helper failed to build — haptics will be inert" >&2
   rm -f "$OUT"
   exit 0

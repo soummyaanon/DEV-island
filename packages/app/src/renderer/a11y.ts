@@ -9,10 +9,30 @@ import type { SessionSnapshot } from "@agent-island/shared";
  * needed to reach in deliberately lives here rather than scattered through
  * components.
  *
- * Reduced motion is handled entirely in CSS for now — every animation in the
- * island is declarative, so the media query is sufficient. A JS-side hook only
- * becomes necessary once something *schedules* motion from a timer.
+ * Most reduced-motion handling is CSS, because the island's animations are
+ * declarative. The hook below exists for the exception: motion started from a
+ * timer, which a media query cannot cancel.
  */
+
+/**
+ * Whether the user has asked for reduced motion.
+ *
+ * CSS covers anything declarative. This is for code that *schedules* motion —
+ * lightning arms a timer, and `@media (prefers-reduced-motion)` can stop the
+ * flash from animating but not the timer from firing. Anything that starts
+ * motion itself has to ask.
+ */
+export function useReducedMotion(): boolean {
+  const query = "(prefers-reduced-motion: reduce)";
+  const [reduced, setReduced] = useState(() => window.matchMedia(query).matches);
+  useEffect(() => {
+    const list = window.matchMedia(query);
+    const onChange = (e: MediaQueryListEvent) => setReduced(e.matches);
+    list.addEventListener("change", onChange);
+    return () => list.removeEventListener("change", onChange);
+  }, []);
+  return reduced;
+}
 
 /** Everything focusable inside a container, in tab order. */
 function focusableWithin(root: HTMLElement): HTMLElement[] {
