@@ -5,6 +5,7 @@ import {
   locationFromTimezone,
   parseIso6709,
   parseManualLocation,
+  resolveZoneCoordinates,
   zoneCandidates,
   zoneFromLocaltimeLink,
 } from "./location";
@@ -156,19 +157,54 @@ describe("zoneCandidates", () => {
   });
 });
 
-describe("locationFromTimezone", () => {
-  // Regression: Intl reports the deprecated alias "Asia/Calcutta" on this
-  // machine while zone.tab lists only "Asia/Kolkata", so looking up Intl's
-  // answer alone silently found nothing. Same for Europe/Kiev, Asia/Saigon,
-  // America/Buenos_Aires and every other backward link.
-  it("resolves a real location despite Intl possibly reporting an alias", () => {
-    const result = locationFromTimezone();
-    expect(result).not.toBeNull();
+describe("resolveZoneCoordinates", () => {
+  // The regression this guards: Intl reports the DEPRECATED alias
+  // "Asia/Calcutta" while zone.tab lists only the canonical "Asia/Kolkata", so
+  // consulting Intl's answer alone silently found nothing. Same story for
+  // Europe/Kiev, Asia/Saigon, America/Buenos_Aires and every other backward
+  // link. Tested through candidate lists rather than the machine's own clock,
+  // which is why this survives a CI runner set to UTC.
+  it("finds nothing when only the deprecated alias is offered", () => {
+    expect(resolveZoneCoordinates(TABLE, ["Asia/Calcutta"])).toBeNull();
+  });
+
+  it("resolves once the canonical name is also a candidate", () => {
+    const result = resolveZoneCoordinates(TABLE, ["Asia/Calcutta", "Asia/Kolkata"]);
+    expect(result?.label).toBe("Asia/Kolkata");
     expect(result?.source).toBe("timezone");
-    expect(Math.abs(result!.lat)).toBeLessThanOrEqual(90);
-    expect(Math.abs(result!.lon)).toBeLessThanOrEqual(180);
-    // Coarsened to ~1km: at most two decimal places.
+    expect(result?.lat).toBe(22.53);
+    expect(result?.lon).toBe(88.37);
+  });
+
+  it("takes the first candidate that is actually listed", () => {
+    expect(resolveZoneCoordinates(TABLE, ["America/New_York", "Asia/Kolkata"])?.label).toBe(
+      "America/New_York",
+    );
+  });
+
+  it("returns coarsened coordinates", () => {
+    const result = resolveZoneCoordinates(TABLE, ["America/New_York"]);
     expect(result!.lat).toBe(coarsen(result!.lat));
     expect(result!.lon).toBe(coarsen(result!.lon));
+  });
+
+  it("returns null for a UTC-only machine — there is no city to point at", () => {
+    // Exactly the CI runner's situation: a legitimate null, not a failure.
+    expect(resolveZoneCoordinates(TABLE, ["UTC"])).toBeNull();
+    expect(resolveZoneCoordinates(TABLE, [])).toBeNull();
+  });
+});
+
+describe("locationFromTimezone", () => {
+  // Deliberately tolerant: the result depends on how the machine's clock is
+  // configured, and null is correct on a UTC box. Only the shape is asserted.
+  it("returns either null or sane, coarsened coordinates", () => {
+    const result = locationFromTimezone();
+    if (result === null) return;
+    expect(result.source).toBe("timezone");
+    expect(Math.abs(result.lat)).toBeLessThanOrEqual(90);
+    expect(Math.abs(result.lon)).toBeLessThanOrEqual(180);
+    expect(result.lat).toBe(coarsen(result.lat));
+    expect(result.lon).toBe(coarsen(result.lon));
   });
 });

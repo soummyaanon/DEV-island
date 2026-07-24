@@ -124,26 +124,44 @@ export function zoneCandidates(): string[] {
 }
 
 /**
+ * First candidate zone that appears in the table, with its coordinates.
+ *
+ * Pure, and separate from the disk and environment reads so the alias handling
+ * can be tested without depending on how the running machine's clock happens to
+ * be configured. Returns null when none of the candidates is listed — which is
+ * the correct answer for "UTC" or "GMT", where there is no city to point at.
+ */
+export function resolveZoneCoordinates(
+  table: string,
+  candidates: readonly string[],
+): Coordinates | null {
+  for (const zone of candidates) {
+    const found = findZoneCoordinates(table, zone);
+    if (found) {
+      return { lat: coarsen(found.lat), lon: coarsen(found.lon), source: "timezone", label: zone };
+    }
+  }
+  return null;
+}
+
+/**
  * Best-effort coordinates from the timezone alone. No permission, no network,
  * no bundled dataset — the tz database is public domain and already installed.
+ *
+ * Null is a legitimate result (a machine set to UTC has no meaningful city);
+ * callers fall through to asking the user.
  */
 export function locationFromTimezone(): Coordinates | null {
   const candidates = zoneCandidates();
   if (candidates.length === 0) return null;
 
   for (const path of ZONE_TAB_PATHS) {
-    let table: string;
     try {
       if (!existsSync(path)) continue;
-      table = readFileSync(path, "utf8");
+      const resolved = resolveZoneCoordinates(readFileSync(path, "utf8"), candidates);
+      if (resolved) return resolved;
     } catch {
       continue; // unreadable -> try the next path
-    }
-    for (const zone of candidates) {
-      const found = findZoneCoordinates(table, zone);
-      if (found) {
-        return { lat: coarsen(found.lat), lon: coarsen(found.lon), source: "timezone", label: zone };
-      }
     }
   }
   return null;
