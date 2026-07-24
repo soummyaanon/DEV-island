@@ -82,12 +82,20 @@ Stage B is nearly additive.
   **Not verified by machine:** whether the trackpad physically taps (needs a
   hand on a Force Touch trackpad) and the ⌃⌥⌘I keystroke end-to-end (no input
   injection available in the dev sandbox; registration itself is confirmed).
-- **Stage B — not started**: weather. Adds the first ongoing network call
-  (Open-Meteo, no API key), CoreLocation via the same sidecar with a
-  timezone-table fallback (`/var/db/timezone/zoneinfo/zone.tab`), and ten
-  animated conditions. **Blocks on rewriting the README privacy section** —
-  README.md:72-82 currently promises the GitHub version check is the single
-  network exception, which Stage B makes false.
+- **Stage B — DONE 2026-07-25**: weather. Open-Meteo (no API key), ten animated
+  conditions, location resolved manual → device → timezone (with the timezone
+  layer as the synchronous default so a missing grant costs nothing). Weather
+  ships OFF; README's privacy section now tabulates both outbound requests.
+  Also made the prompt bar transient — it appears when an agent asks or via the
+  ✎ control, instead of sitting there permanently.
+  Fixed while building: `Intl` reports deprecated tz aliases (`Asia/Calcutta`)
+  that `zone.tab` doesn't list, silently breaking the whole timezone layer for
+  those users; and Open-Meteo's zone-less ISO timestamps were parsed in the
+  Mac's timezone, skewing sunrise/rainbow windows for a location elsewhere (now
+  `timeformat=unixtime`).
+  **Confirmed:** CoreLocation from the unbundled sidecar never receives its
+  prompt and times out — the timezone layer carries it invisibly. May work in a
+  signed packaged build; unverified there.
 
 ## Next up (agreed backlog, in rough priority)
 
