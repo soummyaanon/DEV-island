@@ -64,10 +64,37 @@ _Last updated: 2026-07-19 (afternoon session). Branch: `feat/agent-island-m1-m4`
 - Re-AirDrop the NEW DMG to the other Mac (old copy showed "damaged"; new one
   shows normal prompt -> Settings > Privacy & Security > Open Anyway).
 
+## Living Island (spec: docs/superpowers/specs/2026-07-25-living-island-design.md)
+
+Staged deliberately: Stage A carries everything that touches existing behavior,
+Stage B is nearly additive.
+
+- **Stage A — DONE 2026-07-25** (branch `feat/living-island`): adaptive expanded
+  width (measured content, 360–720px), the native Swift sidecar
+  (`native/AgentIslandNative.swift`, built by `scripts/build-native.sh`),
+  trackpad haptics with 8 rhythms + 250ms coalescing, VoiceOver reach-in via
+  ⌃⌥⌘I with a focus trap, keyboard-reachable session rows, polite/assertive live
+  regions, `prefers-contrast` + `prefers-reduced-transparency` support, and a
+  text-size setting over 9 type tokens in `styles/tokens.css`.
+  Fixed two pre-existing bugs it exposed: the cursor watcher tested the *window*
+  rect rather than the island's, and the window origin was computed once so
+  display changes left it off-centre.
+  **Not verified by machine:** whether the trackpad physically taps (needs a
+  hand on a Force Touch trackpad) and the ⌃⌥⌘I keystroke end-to-end (no input
+  injection available in the dev sandbox; registration itself is confirmed).
+- **Stage B — not started**: weather. Adds the first ongoing network call
+  (Open-Meteo, no API key), CoreLocation via the same sidecar with a
+  timezone-table fallback (`/var/db/timezone/zoneinfo/zone.tab`), and ten
+  animated conditions. **Blocks on rewriting the README privacy section** —
+  README.md:72-82 currently promises the GitHub version check is the single
+  network exception, which Stage B makes false.
+
 ## Next up (agreed backlog, in rough priority)
 
 1. **Stability + size reduction** (user's stated goal 2026-07-19): shrink
-   DMG/app further. Done so far: en-only electronLanguages + framework
+   DMG/app further. NOTE: Stage A above works against this — it adds a ~94KB
+   Swift binary and ~400 lines of CSS. Accepted knowingly; no image or font
+   assets were added. Done so far: en-only electronLanguages + framework
    locale trim (114->100MB), react/react-dom out of the packed asar, old
    release/ artifacts cleaned (357MB). Remaining ideas: prune asar further,
    Electron upgrade, asar unpack audit.

@@ -10,6 +10,8 @@ import { PacFeast } from "./PacFeast";
 import { UsageFooter } from "./UsageFooter";
 import { playSound } from "./sounds";
 import { DEFAULT_SOUND_PREFS, type SoundPrefs, type SoundTheme } from "./sound-prefs";
+import { summarizeTransitions, useAnnouncer, useFocusTrap } from "./a11y";
+import { clampIslandWidth, isSignificantChange, minIslandWidth } from "./island-width";
 
 const ACTIVE_STATES = new Set(["working", "starting", "waiting-for-approval"]);
 const MAX_ROWS = 5;
@@ -44,7 +46,15 @@ export function App() {
   }, []);
 
   const islandRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const measureRef = useRef<HTMLDivElement>(null);
   const interactiveRef = useRef(false);
+  // VoiceOver reached in via the global shortcut; holds the panel open and traps Tab.
+  const [a11yFocused, setA11yFocused] = useState(false);
+  const { polite, assertive, announce } = useAnnouncer();
+  // Widest the island may grow on this display, from main.
+  const [maxIslandWidth, setMaxIslandWidth] = useState(720);
+  const [notchWidth, setNotchWidth] = useState(196);
   const [sound, setSound] = useState<SoundPrefs>(DEFAULT_SOUND_PREFS);
   // Mirror for once-registered listeners (chimes) that must not go stale.
   const soundRef = useRef<SoundPrefs>(DEFAULT_SOUND_PREFS);
@@ -66,6 +76,7 @@ export function App() {
     hovering ||
     pinned ||
     promptFocused ||
+    a11yFocused ||
     pending.length > 0 ||
     asking.length > 0 ||
     needsYou.length > 0;
@@ -171,6 +182,8 @@ export function App() {
     prevStates.current = next;
     if (!prev) return;
 
+    const counts = { done: 0, failed: 0, questions: 0, actions: 0, only: "" };
+
     for (const [key, cur] of next) {
       const was = prev.get(key);
       if (!was) continue; // brand-new session: no alert until it transitions
@@ -192,21 +205,118 @@ export function App() {
       else if (becameFailed) firePulse("failed");
       else if (newQuestion) firePulse("question");
       else if (newAction) firePulse("attention");
+
+      // Haptics: the same events, felt instead of heard. Every applicable
+      // pattern is requested and main picks the most urgent — which is also
+      // what collapses a ten-session snapshot into a single pulse.
+      if (becameDone) window.agentIsland.haptic?.("success");
+      if (becameFailed) window.agentIsland.haptic?.("failure");
+      if (newQuestion) window.agentIsland.haptic?.("inquiry");
+      if (newAction) window.agentIsland.haptic?.("attention");
+
+      if (becameDone) counts.done += 1;
+      if (becameFailed) counts.failed += 1;
+      if (newQuestion) counts.questions += 1;
+      if (newAction) counts.actions += 1;
+      if (becameDone || becameFailed || newQuestion || newAction) {
+        const cwd = sessions.find((s) => s.key === key)?.cwd ?? "";
+        counts.only = cwd.split("/").filter(Boolean).pop() ?? "";
+      }
     }
-  }, [sessions, sound, firePulse]);
+
+    // One spoken sentence per snapshot, not one per session.
+    const summary = summarizeTransitions(counts);
+    if (summary) announce(summary.message, summary.urgency);
+  }, [sessions, sound, firePulse, announce]);
 
   // Notch geometry, measured by main: the black body spans the band height so
   // the shape merges with the hardware notch, and every island width derives
   // from the real notch width — so the same build hugs a 14" Pro or a 13" Air.
   useEffect(() => {
-    const apply = (l: { inset: number; notchWidth: number }) => {
+    const apply = (l: { inset: number; notchWidth: number; maxIslandWidth?: number }) => {
       document.documentElement.style.setProperty("--notch-inset", `${l.inset}px`);
       if (l.notchWidth > 0) {
         document.documentElement.style.setProperty("--notch-width", `${l.notchWidth}px`);
+        setNotchWidth(l.notchWidth);
+      }
+      // Optional-chained: an older preload mid dev-reload won't send it.
+      if (l.maxIslandWidth && l.maxIslandWidth > 0) {
+        setMaxIslandWidth(l.maxIslandWidth);
+        // Also caps .panel-measure, so over-long strings ellipsise instead of
+        // asking for an island wider than the display.
+        document.documentElement.style.setProperty("--island-max", `${l.maxIslandWidth}px`);
       }
     };
     void window.agentIsland.getLayout().then(apply);
     return window.agentIsland.onLayout(apply);
+  }, []);
+
+  // Text scale (our stand-in for Dynamic Type, which macOS doesn't expose).
+  useEffect(() => {
+    const apply = (p: { textSize: string }) =>
+      document.documentElement.setAttribute("data-text-size", p.textSize);
+    void window.agentIsland.getUiPrefs?.().then(apply);
+    return window.agentIsland.onUiPrefs?.(apply);
+  }, []);
+
+  // VoiceOver reach-in from the global shortcut.
+  useEffect(() => window.agentIsland.onA11yFocus?.(setA11yFocused), []);
+  const releaseA11yFocus = useCallback(() => window.agentIsland.releaseA11yFocus?.(), []);
+  useFocusTrap(panelRef, a11yFocused, releaseA11yFocus);
+
+  /**
+   * Grow the island to fit its content. `.panel-measure` is `width: max-content`
+   * so it reports the panel's natural width independent of the island's current
+   * width — without that decoupling this feeds itself and oscillates.
+   */
+  useEffect(() => {
+    const target = measureRef.current;
+    if (!target || !expanded) return;
+
+    let frame = 0;
+    let applied = 0;
+    const measure = () => {
+      frame = 0;
+      const next = clampIslandWidth(
+        target.scrollWidth,
+        minIslandWidth(notchWidth),
+        maxIslandWidth,
+      );
+      // Sub-pixel churn from font rendering would thrash the transition.
+      if (!isSignificantChange(applied, next)) return;
+      applied = next;
+      document.documentElement.style.setProperty("--island-w", `${next}px`);
+    };
+
+    const observer = new ResizeObserver(() => {
+      if (frame === 0) frame = requestAnimationFrame(measure);
+    });
+    observer.observe(target);
+    measure();
+    return () => {
+      observer.disconnect();
+      if (frame !== 0) cancelAnimationFrame(frame);
+    };
+  }, [expanded, notchWidth, maxIslandWidth]);
+
+  // Main polls the cursor against the ISLAND, not the window — the window is
+  // far wider, so it needs to know where the pill actually is.
+  useEffect(() => {
+    const report = () => {
+      const el = islandRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      window.agentIsland.reportIslandRect?.({
+        x: Math.round(r.left),
+        y: Math.round(r.top),
+        width: Math.round(r.width),
+        height: Math.round(r.height),
+      });
+    };
+    report();
+    // The rect changes as the island expands and as its width settles.
+    const id = window.setInterval(report, 300);
+    return () => window.clearInterval(id);
   }, []);
 
   // The window is click-through with forwarded mouse-move; detect when the
@@ -268,7 +378,15 @@ export function App() {
   const showGlow = !expanded && sessions.length > 0 && active.length === 0;
 
   return (
-    <div className={`app${animated ? "" : " paused"}`}>
+    <div className={`app${animated ? "" : " paused"}${a11yFocused ? " a11y-focus" : ""}`}>
+      {/* Spoken, never drawn. Two urgencies because a blocked agent can't wait
+          for a gap in speech and a finished one can. */}
+      <div className="sr-only" role="status" aria-live="polite">
+        {polite}
+      </div>
+      <div className="sr-only" role="alert" aria-live="assertive">
+        {assertive}
+      </div>
       <div ref={islandRef} className="island-wrap">
         {(sessions.length > 0 || expanded) && (
           <>
@@ -280,6 +398,8 @@ export function App() {
           className={`island ${stateCls}${expanded ? " expanded" : ""}${
             sessions.length === 0 ? " bare" : ""
           }${showFeast ? " has-pac" : ""} spr-${showFeast ? 0 : shown.length}`}
+          role="region"
+          aria-label="Agent Island"
         >
           {showGlow && <div className="notch-glow" aria-hidden />}
           {pulse && (
@@ -312,7 +432,11 @@ export function App() {
           </div>
 
           <div className="panel-wrap">
-            <div className="panel">
+            <div className="panel" ref={panelRef}>
+              {/* `max-content` here is what makes the island content-sized: it
+                  reports the panel's natural width independent of the width the
+                  island currently has, so the measurement can't feed itself. */}
+              <div className="panel-measure" ref={measureRef}>
               {pending.map((s) => (
                 <ApprovalCard
                   key={`ap-${s.key}`}
@@ -404,8 +528,10 @@ export function App() {
                   className={`ctl icon${sound.on ? "" : " off"}`}
                   title={sound.on ? "Sound on" : "Sound off"}
                   aria-label={sound.on ? "Sound on" : "Sound off"}
+                  aria-pressed={sound.on}
                   onClick={(e) => {
                     e.stopPropagation();
+                    window.agentIsland.haptic?.("tick");
                     window.agentIsland.setSounds(!sound.on);
                   }}
                 >
@@ -417,6 +543,7 @@ export function App() {
                     title={`Download Agent Island ${update.version}`}
                     onClick={(e) => {
                       e.stopPropagation();
+                      window.agentIsland.haptic?.("tick");
                       window.agentIsland.openUpdate();
                     }}
                   >
@@ -430,6 +557,7 @@ export function App() {
                     aria-label="Settings"
                     onClick={(e) => {
                       e.stopPropagation();
+                      window.agentIsland.haptic?.("tick");
                       window.agentIsland.openSettings();
                     }}
                   >
@@ -441,12 +569,14 @@ export function App() {
                     aria-label="Quit"
                     onClick={(e) => {
                       e.stopPropagation();
+                      window.agentIsland.haptic?.("tick");
                       window.agentIsland.quit();
                     }}
                   >
                     ⏻
                   </button>
                 </span>
+              </div>
               </div>
             </div>
           </div>

@@ -6,8 +6,9 @@
   "author": "Agent Island",
   "main": "./out/main/index.js",
   "scripts": {
-    "dev": "electron-vite dev",
-    "build": "electron-vite build",
+    "dev": "bash ../../scripts/build-native.sh && electron-vite dev",
+    "build": "bash ../../scripts/build-native.sh && electron-vite build",
+    "build:native": "bash ../../scripts/build-native.sh",
     "preview": "electron-vite preview",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",

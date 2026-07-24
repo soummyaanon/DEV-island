@@ -27,6 +27,10 @@ interface SettingsState {
   customSoundNames: Record<string, string>;
   tray: boolean;
   updateCheck: boolean;
+  haptics: boolean;
+  textSize: string;
+  hapticsSupported: boolean;
+  a11yShortcut: string | null;
   openAtLogin: boolean;
   version: string;
   update: { version: string } | null;
@@ -41,6 +45,10 @@ const DEFAULTS: SettingsState = {
   customSoundNames: {},
   tray: false,
   updateCheck: true,
+  haptics: true,
+  textSize: "default",
+  hapticsSupported: false,
+  a11yShortcut: null,
   openAtLogin: false,
   version: "",
   update: null,
@@ -49,10 +57,33 @@ const DEFAULTS: SettingsState = {
 const NAV = [
   { id: "integrations", label: "Integrations", icon: "❖" },
   { id: "sounds", label: "Sounds", icon: "♪" },
+  { id: "accessibility", label: "Accessibility", icon: "◍" },
   { id: "general", label: "General", icon: "⚙" },
   { id: "updates", label: "Updates", icon: "↑" },
 ] as const;
 type SectionId = (typeof NAV)[number]["id"];
+
+const TEXT_SIZES = [
+  { value: "default", label: "Default" },
+  { value: "large", label: "Large" },
+  { value: "larger", label: "Larger" },
+] as const;
+
+/** "Control+Alt+Command+I" -> "⌃⌥⌘I", the way macOS writes it. */
+function prettyShortcut(accelerator: string): string {
+  const glyphs: Record<string, string> = {
+    Control: "⌃",
+    Alt: "⌥",
+    Option: "⌥",
+    Shift: "⇧",
+    Command: "⌘",
+    CommandOrControl: "⌘",
+  };
+  return accelerator
+    .split("+")
+    .map((part) => glyphs[part] ?? part)
+    .join("");
+}
 
 function Toggle({ on, onChange }: { on: boolean; onChange: (next: boolean) => void }) {
   return (
@@ -279,6 +310,59 @@ function Settings() {
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {section === "accessibility" && (
+          <div className="s-group">
+            <Row
+              title="Haptic feedback"
+              detail={
+                state.hapticsSupported
+                  ? "A distinct tap for finishing, failing, asking, and deciding. Force Touch trackpads only."
+                  : "Unavailable on this install — the native helper wasn't built, so there's nothing to tap."
+              }
+              on={state.haptics && state.hapticsSupported}
+              onChange={(v) => set("haptics", v)}
+            />
+            <div className="s-row">
+              <div className="s-text">
+                <b>Text size</b>
+                <span>Scales everything in the island. macOS has no system setting we can read.</span>
+              </div>
+              <select
+                className="s-select"
+                value={state.textSize}
+                onChange={(e) => set("textSize", e.target.value)}
+              >
+                {TEXT_SIZES.map((t) => (
+                  <option key={t.value} value={t.value}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="s-row">
+              <div className="s-text">
+                <b>Focus the island</b>
+                <span>
+                  {state.a11yShortcut
+                    ? "The island never takes focus on its own, so VoiceOver can't reach it. This hands it focus; Escape gives it back."
+                    : "Unavailable — another app already holds this shortcut."}
+                </span>
+              </div>
+              {state.a11yShortcut ? (
+                <kbd className="s-kbd">{prettyShortcut(state.a11yShortcut)}</kbd>
+              ) : null}
+            </div>
+            <div className="s-row s-sub">
+              <div className="s-text">
+                <span>
+                  Reduce motion, Increase contrast, and Reduce transparency are followed
+                  automatically from System Settings → Accessibility → Display.
+                </span>
+              </div>
+            </div>
           </div>
         )}
 

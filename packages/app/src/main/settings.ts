@@ -9,6 +9,14 @@ export type SoundTheme = (typeof SOUND_THEMES)[number];
 export const SOUND_EVENTS = ["success", "attention", "question", "approve"] as const;
 export type SoundEvent = (typeof SOUND_EVENTS)[number];
 
+/**
+ * Text scale. macOS has no Dynamic Type API and doesn't expose the
+ * Accessibility text-size setting to Chromium, so the honest equivalent is our
+ * own scale driving --ui-scale over the type tokens.
+ */
+export const TEXT_SIZES = ["default", "large", "larger"] as const;
+export type TextSize = (typeof TEXT_SIZES)[number];
+
 /** Everything the Settings window can change, persisted across launches. */
 export interface AppSettings {
   agents: Record<AgentKind, boolean>;
@@ -26,6 +34,10 @@ export interface AppSettings {
   tray: boolean;
   /** Anonymous GitHub Releases version check. */
   updateCheck: boolean;
+  /** Trackpad haptics. Inert on hardware without a Force Touch trackpad. */
+  haptics: boolean;
+  /** UI text scale (accessibility). */
+  textSize: TextSize;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -37,6 +49,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   customSoundNames: {},
   tray: false,
   updateCheck: true,
+  haptics: true,
+  textSize: "default",
 };
 
 export function isSoundTheme(value: unknown): value is SoundTheme {
@@ -45,6 +59,10 @@ export function isSoundTheme(value: unknown): value is SoundTheme {
 
 export function isSoundEvent(value: unknown): value is SoundEvent {
   return typeof value === "string" && (SOUND_EVENTS as readonly string[]).includes(value);
+}
+
+export function isTextSize(value: unknown): value is TextSize {
+  return typeof value === "string" && (TEXT_SIZES as readonly string[]).includes(value);
 }
 
 function settingsPath(): string {
@@ -68,6 +86,7 @@ export function loadSettings(): AppSettings {
     ...stored,
     agents: { ...DEFAULT_SETTINGS.agents, ...(stored.agents ?? {}) },
     soundTheme: isSoundTheme(stored.soundTheme) ? stored.soundTheme : DEFAULT_SETTINGS.soundTheme,
+    textSize: isTextSize(stored.textSize) ? stored.textSize : DEFAULT_SETTINGS.textSize,
     soundOverrides: { ...(stored.soundOverrides ?? {}) },
     customSounds: { ...(stored.customSounds ?? {}) },
     customSoundNames: { ...(stored.customSoundNames ?? {}) },

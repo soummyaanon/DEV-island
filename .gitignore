@@ -15,3 +15,6 @@ release/
 packages/app/dist/
 packages/daemon/dist/
 packages/shared/dist/
+
+# Compiled native sidecar (rebuilt by scripts/build-native.sh).
+packages/app/native/AgentIslandNative

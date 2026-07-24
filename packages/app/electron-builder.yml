@@ -21,7 +21,13 @@ electronLanguages:
 files:
   - out/**/*
   - package.json
-# Bundle the self-contained daemon so the packaged app can spawn it.
+# Bundle the self-contained daemon so the packaged app can spawn it, plus the
+# native sidecar (haptics). The helper is optional by design — a build without
+# swiftc simply omits it and the features that need it go inert.
 extraResources:
   - from: ../daemon/dist/main.cjs
     to: daemon/main.cjs
+  # Directory, not the file: a checkout built without swiftc leaves this empty
+  # rather than making the pack step fail on a missing path.
+  - from: native
+    to: native

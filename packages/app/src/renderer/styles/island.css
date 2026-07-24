@@ -76,8 +76,12 @@ body {
     border-radius 0.12s var(--motion);
 }
 
+/* Expanded width is measured from the content (see island-width.ts) and handed
+   over as --island-w. The fallback is the old fixed width, so a render before
+   the first measurement — or with the measurement disabled — looks exactly like
+   it used to. */
 .island.expanded {
-  width: max(360px, calc(var(--notch-width, 196px) + 110px));
+  width: var(--island-w, max(360px, calc(var(--notch-width, 196px) + 110px)));
   border-radius: 0 0 16px 16px;
   transition-duration: 0.26s;
 }
@@ -235,7 +239,7 @@ body {
 
 /* Right wing: compact status count ("2" active, "1!" needs you). */
 .spacer-info {
-  font-size: 10.5px;
+  font-size: var(--fs-small);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   min-width: 12px;
@@ -310,6 +314,16 @@ body {
   transition-delay: 0.035s;
 }
 
+/* Natural-width probe for the adaptive island. `max-content` decouples the
+   measurement from the island's current width — measuring the panel itself
+   would feed the observer its own output. --island-max caps it so long strings
+   fall back to ellipsis instead of demanding the whole display. */
+.panel-measure {
+  width: max-content;
+  max-width: var(--island-max, 720px);
+  min-width: 100%;
+}
+
 .rows {
   list-style: none;
   padding: 3px 6px 7px;
@@ -319,6 +333,14 @@ body {
 }
 
 .row {
+  /* A real <button> — it was a clickable <li>, unreachable by keyboard and
+     invisible to VoiceOver. These resets strip the UA chrome only. */
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  text-align: left;
   display: flex;
   align-items: flex-start;
   gap: 8px;
@@ -350,7 +372,8 @@ body {
   gap: 8px;
 }
 .project {
-  font-size: 12.5px;
+  max-width: 30ch; /* see .activity — keeps the natural width bounded */
+  font-size: var(--fs-strong);
   font-weight: 550;
   color: var(--text);
   white-space: nowrap;
@@ -360,7 +383,10 @@ body {
 .activity {
   min-width: 0;
   flex: 1;
-  font-size: 11px;
+  /* Bounded so a 200-character activity string can't demand the widest island
+     on every render — past this it ellipsises as it always did. */
+  max-width: 52ch;
+  font-size: var(--fs-body-sm);
   color: var(--text-dim);
   white-space: nowrap;
   overflow: hidden;
@@ -369,7 +395,7 @@ body {
 .elapsed,
 .row-context {
   flex: none;
-  font-size: 9.5px;
+  font-size: var(--fs-micro);
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
 }
@@ -383,7 +409,7 @@ body {
 .empty {
   list-style: none;
   padding: 10px 12px 14px;
-  font-size: 12px;
+  font-size: var(--fs-body);
   color: var(--text-dim);
   text-align: center;
 }
@@ -403,7 +429,7 @@ body {
   display: flex;
   align-items: baseline;
   gap: 5px;
-  font-size: 9.5px;
+  font-size: var(--fs-micro);
   color: var(--text-dim);
   white-space: nowrap;
 }
@@ -431,7 +457,7 @@ body {
   flex: 1;
   min-width: 0;
   font: inherit;
-  font-size: 11px;
+  font-size: var(--fs-body-sm);
   color: var(--text);
   background: none;
   border: none;
@@ -443,11 +469,11 @@ body {
 }
 .ctl.icon.prompt-send {
   color: var(--accent);
-  font-size: 16px;
+  font-size: var(--fs-icon);
 }
 /* The power glyph renders heavier than the others — knock it down to match. */
 .ctl.icon.quit {
-  font-size: 12px;
+  font-size: var(--fs-body);
 }
 .ctl.icon.prompt-send:disabled {
   color: var(--text-dim);
@@ -463,7 +489,7 @@ body {
   margin: 4px 8px 0;
   padding: 4px 8px;
   font: inherit;
-  font-size: 10px;
+  font-size: var(--fs-tiny);
   font-weight: 600;
   text-align: left;
   color: #ffcf70;
@@ -486,7 +512,7 @@ body {
 }
 .ctl {
   font: inherit;
-  font-size: 9.5px;
+  font-size: var(--fs-micro);
   font-weight: 600;
   color: var(--text-dim);
   background: none;
@@ -505,7 +531,7 @@ body {
   gap: 2px;
 }
 .ctl.icon {
-  font-size: 16px;
+  font-size: var(--fs-icon);
   line-height: 1;
   padding: 4px 7px;
 }
@@ -542,7 +568,7 @@ body {
   display: flex;
   align-items: center;
   gap: 7px;
-  font-size: 10px;
+  font-size: var(--fs-tiny);
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -556,29 +582,29 @@ body {
   box-shadow: 0 0 7px var(--accent);
 }
 .approval-title {
-  font-size: 13.5px;
+  font-size: var(--fs-title);
   font-weight: 650;
   color: var(--text);
   margin-bottom: 9px;
 }
 .approval-project {
-  font-size: 10.5px;
+  font-size: var(--fs-small);
   color: var(--text-dim);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .approval-body {
-  max-height: 150px;
+  max-height: var(--max-approval-body);
   overflow-y: auto;
-  font-size: 12px;
+  font-size: var(--fs-body);
   line-height: 1.5;
   color: var(--text);
   margin-bottom: 11px;
 }
 .diff {
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 11px;
+  font-size: var(--fs-body-sm);
   line-height: 1.55;
   background: rgba(0, 0, 0, 0.4);
   border: 1px solid rgba(255, 255, 255, 0.06);
@@ -599,7 +625,7 @@ body {
 }
 .diff-stat {
   margin-top: 5px;
-  font-size: 10.5px;
+  font-size: var(--fs-small);
   font-variant-numeric: tabular-nums;
 }
 .diff-stat .add {
@@ -610,7 +636,7 @@ body {
 }
 .cmd {
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 11px;
+  font-size: var(--fs-body-sm);
   line-height: 1.5;
   background: rgba(0, 0, 0, 0.4);
   border: 1px solid rgba(255, 255, 255, 0.06);
@@ -624,7 +650,7 @@ body {
 .approval-body h2,
 .approval-body h3,
 .approval-body h4 {
-  font-size: 12.5px;
+  font-size: var(--fs-strong);
   font-weight: 650;
   margin: 8px 0 3px;
 }
@@ -640,7 +666,7 @@ body {
 }
 .approval-body code {
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 11px;
+  font-size: var(--fs-body-sm);
   background: rgba(255, 255, 255, 0.08);
   padding: 1px 4px;
   border-radius: 4px;
@@ -672,7 +698,7 @@ body {
 .btn {
   flex: 1;
   font: inherit;
-  font-size: 12.5px;
+  font-size: var(--fs-strong);
   font-weight: 600;
   padding: 8px 14px;
   border-radius: 10px;
@@ -691,7 +717,7 @@ body {
 }
 .btn kbd {
   font: inherit;
-  font-size: 10px;
+  font-size: var(--fs-tiny);
   opacity: 0.55;
   font-variant-numeric: tabular-nums;
 }
@@ -719,7 +745,7 @@ body {
   background: rgba(91, 168, 255, 0.06);
   border: 1px solid rgba(91, 168, 255, 0.22);
   cursor: pointer;
-  max-height: 285px;
+  max-height: var(--max-question);
   overflow-y: auto;
 }
 .question:hover {
@@ -730,7 +756,7 @@ body {
   box-shadow: 0 0 7px var(--working);
 }
 .question-text {
-  font-size: 13px;
+  font-size: var(--fs-title-sm);
   font-weight: 600;
   color: var(--text);
   margin-bottom: 8px;
@@ -749,7 +775,7 @@ body {
   align-items: center;
   gap: 8px;
   font-family: inherit;
-  font-size: 12px;
+  font-size: var(--fs-body);
   text-align: left;
   color: var(--text);
   background: rgba(255, 255, 255, 0.05);
@@ -766,7 +792,7 @@ body {
 }
 .q-options kbd {
   font: inherit;
-  font-size: 10px;
+  font-size: var(--fs-tiny);
   font-weight: 700;
   color: var(--working);
   background: rgba(91, 168, 255, 0.14);
@@ -775,7 +801,7 @@ body {
   flex: none;
 }
 .q-hint {
-  font-size: 10px;
+  font-size: var(--fs-tiny);
   color: var(--text-dim);
   text-align: right;
 }
@@ -1053,5 +1079,94 @@ body {
   }
   .edge-spark {
     animation-name: spark-life;
+  }
+}
+
+/* ---- Keyboard focus ----
+   The overlay is normally non-focusable, so these rings only ever appear once
+   someone has deliberately reached in (⌃⌥⌘I) or tabbed into the prompt. They
+   must be unmissable when they do — this is the only cue a keyboard user gets
+   about where they are. */
+.row:focus-visible,
+.ctl:focus-visible,
+.btn:focus-visible,
+.prompt-hint:focus-visible,
+.question:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.prompt-bar:has(.prompt-input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+/* While VoiceOver holds the island, make the whole panel read as active. */
+.app.a11y-focus .island {
+  box-shadow: 0 0 0 1px rgba(116, 183, 255, 0.55);
+}
+
+/* ---- Increased contrast ----
+   macOS "Increase contrast". Translucency and hairline borders are the first
+   things to fail here, so surfaces go opaque, every edge becomes a real line,
+   and decorative glows give way to solid colour. */
+@media (prefers-contrast: more) {
+  :root {
+    --bg: #000;
+    --edge: rgba(255, 255, 255, 0.5);
+    --edge-top: rgba(255, 255, 255, 0.7);
+    --text: #fff;
+    --text-dim: rgba(255, 255, 255, 0.82);
+    --idle: rgba(255, 255, 255, 0.75);
+  }
+  .approval,
+  .question,
+  .prompt-bar {
+    background: #000;
+    border-width: 1px;
+    border-color: var(--edge);
+  }
+  .q-option,
+  .diff,
+  .cmd,
+  .approval-body pre {
+    background: #000;
+    border: 1px solid var(--edge);
+  }
+  .row:hover,
+  .ctl:hover {
+    background: rgba(255, 255, 255, 0.22);
+  }
+  .btn.deny {
+    background: #000;
+    border-color: var(--edge-top);
+  }
+  /* Decorative blooms carry no information at high contrast — the border
+     flash does the same job without washing out the text under it. */
+  .notch-glow {
+    display: none;
+  }
+  .edge-spark {
+    box-shadow: inset 0 0 0 2px var(--fx, var(--accent));
+  }
+  .row:focus-visible,
+  .ctl:focus-visible,
+  .btn:focus-visible,
+  .prompt-hint:focus-visible,
+  .question:focus-visible {
+    outline-width: 3px;
+  }
+}
+
+/* ---- Reduced transparency ----
+   macOS "Reduce transparency". The island's whole visual trick is a translucent
+   body over the wallpaper; here it becomes a solid panel. */
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --bg: #0b0b0d;
+  }
+  .approval,
+  .question,
+  .prompt-bar,
+  .q-option {
+    background-color: #16161a;
   }
 }

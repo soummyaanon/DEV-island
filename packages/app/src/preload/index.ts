@@ -20,6 +20,12 @@ export interface SettingsState {
   customSoundNames: Record<string, string>;
   tray: boolean;
   updateCheck: boolean;
+  haptics: boolean;
+  textSize: string;
+  /** False when the native helper is absent — the haptics toggle can't bite. */
+  hapticsSupported: boolean;
+  /** The registered VoiceOver focus shortcut, or null if another app holds it. */
+  a11yShortcut: string | null;
   openAtLogin: boolean;
   version: string;
   /** Newest available version, or null when up to date / not yet checked. */
@@ -29,6 +35,20 @@ export interface SettingsState {
 export interface SessionsPayload {
   sessions: SessionSnapshot[];
   connected: boolean;
+}
+
+export interface NotchLayout {
+  /** Px between the window's top and the notch's bottom line. */
+  inset: number;
+  /** Measured hardware notch width; 0 = unknown or no notch. */
+  notchWidth: number;
+  /** Widest the expanded island may grow on the current display. */
+  maxIslandWidth: number;
+}
+
+export interface UiPrefs {
+  /** "default" | "large" | "larger" — drives --ui-scale. */
+  textSize: string;
 }
 
 /** The only surface the renderer can touch — locked down via contextBridge. */
@@ -51,16 +71,53 @@ const api = {
 
   /**
    * Window geometry: `inset` = px between window top and the notch's bottom
-   * line; `notchWidth` = measured hardware notch width (0 = unknown/no notch).
+   * line; `notchWidth` = measured hardware notch width (0 = unknown/no notch);
+   * `maxIslandWidth` = widest the expanded island may grow on this display.
    */
-  getLayout: (): Promise<{ inset: number; notchWidth: number }> =>
-    ipcRenderer.invoke("agent-island:get-layout"),
+  getLayout: (): Promise<NotchLayout> => ipcRenderer.invoke("agent-island:get-layout"),
 
-  onLayout: (cb: (layout: { inset: number; notchWidth: number }) => void): (() => void) => {
-    const listener = (_e: unknown, layout: { inset: number; notchWidth: number }) => cb(layout);
+  onLayout: (cb: (layout: NotchLayout) => void): (() => void) => {
+    const listener = (_e: unknown, layout: NotchLayout) => cb(layout);
     ipcRenderer.on("agent-island:layout", listener);
     return () => ipcRenderer.removeListener("agent-island:layout", listener);
   },
+
+  /**
+   * Report where the island actually is, in window coordinates. The window is
+   * far wider than the island, so main needs this to tell whether the pointer
+   * has really left the pill.
+   */
+  reportIslandRect: (rect: { x: number; y: number; width: number; height: number }): void =>
+    ipcRenderer.send("agent-island:island-rect", rect),
+
+  /** Presentation prefs the overlay needs (text scale). */
+  getUiPrefs: (): Promise<UiPrefs> => ipcRenderer.invoke("agent-island:get-ui-prefs"),
+
+  onUiPrefs: (cb: (prefs: UiPrefs) => void): (() => void) => {
+    const listener = (_e: unknown, prefs: UiPrefs) => cb(prefs);
+    ipcRenderer.on("agent-island:ui-prefs", listener);
+    return () => ipcRenderer.removeListener("agent-island:ui-prefs", listener);
+  },
+
+  /**
+   * Request a trackpad haptic. Silently ignored on hardware without a Force
+   * Touch trackpad, when the user has haptics off, or when the native helper
+   * isn't present — callers never need to check.
+   */
+  haptic: (pattern: string): void => ipcRenderer.send("agent-island:haptic", pattern),
+
+  /**
+   * VoiceOver reach-in: main flips the window focusable and focuses it, then
+   * tells us to trap focus. Sent `false` when focus is handed back.
+   */
+  onA11yFocus: (cb: (focused: boolean) => void): (() => void) => {
+    const listener = (_e: unknown, focused: boolean) => cb(focused);
+    ipcRenderer.on("agent-island:a11y-focus", listener);
+    return () => ipcRenderer.removeListener("agent-island:a11y-focus", listener);
+  },
+
+  /** Leave the focus trap (Escape) and give focus back to the previous app. */
+  releaseA11yFocus: (): void => ipcRenderer.send("agent-island:a11y-release"),
 
   /** Fired by main when the cursor leaves the window while it's interactive. */
   onCursorLeft: (cb: () => void): (() => void) => {
