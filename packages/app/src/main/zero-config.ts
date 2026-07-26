@@ -244,9 +244,18 @@ export function removeClaudeHooks(): ZeroConfigResult {
 /* ------------------------------------------------------------------------- */
 
 const CURSOR_MARKER = ".agent-island/bin/cursor-hook";
-/** Only observing hooks — plus gating ones our bridge answers instantly by exiting 0. */
+/**
+ * Observing hooks only — the bridge exits 0 immediately so Cursor never waits.
+ * Includes lifecycle (sessionStart/End), generic tool hooks (pre/postToolUse),
+ * and the specialized shell/file/MCP hooks for denser activity titles.
+ */
 const CURSOR_EVENTS = [
+  "sessionStart",
+  "sessionEnd",
   "beforeSubmitPrompt",
+  "preToolUse",
+  "postToolUse",
+  "postToolUseFailure",
   "beforeShellExecution",
   "afterShellExecution",
   "beforeReadFile",
@@ -257,6 +266,7 @@ const CURSOR_EVENTS = [
   "afterAgentResponse",
   "subagentStart",
   "subagentStop",
+  "preCompact",
   "stop",
 ];
 

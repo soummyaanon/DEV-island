@@ -6,10 +6,12 @@ const execFile = vi.fn((_file, _args, callback) => callback?.(null));
 vi.mock("node:child_process", () => ({ execFile }));
 // Keep diagnostics out of the real ~/.agent-island/app.log during tests.
 vi.mock("node:fs", () => ({ appendFile: vi.fn() }));
+const { writeText } = vi.hoisted(() => ({ writeText: vi.fn() }));
 vi.mock("electron", () => ({
   systemPreferences: {
     isTrustedAccessibilityClient: () => true,
   },
+  clipboard: { writeText: (...args: unknown[]) => writeText(...args) },
   shell: { openExternal: vi.fn() },
 }));
 
@@ -64,6 +66,45 @@ describe("answerInTerminal", () => {
     expect(keys).toContain("key code 125");
     expect(keys).toContain("key code 36");
     expect(keys).not.toContain('keystroke "2"');
+  });
+});
+
+describe("sendPromptToTerminal for Cursor agent", () => {
+  beforeEach(() => {
+    execFile.mockReset();
+    execFile.mockImplementation((_file, _args, callback) => callback?.(null, "", ""));
+    writeText.mockReset();
+  });
+
+  it("focuses Composer, pastes, and force-sends with Cmd+Return", async () => {
+    const cursorSession: SessionSnapshot = {
+      ...session,
+      agent: "cursor",
+      key: "cursor:conv-1",
+      session_id: "conv-1",
+      cwd: "/Users/me/proj",
+      meta: { app_bundle_id: CURSOR },
+    };
+    const { sendPromptToTerminal } = await import("./jump-back");
+    expect(sendPromptToTerminal(cursorSession, "fix the flaky test")).toBe("sent");
+
+    expect(openCalls()[0]).toEqual(["-b", CURSOR, "/Users/me/proj"]);
+    expect(writeText).toHaveBeenCalledWith("fix the flaky test");
+    const keys = osascripts().join("\n");
+    expect(keys).toContain("composer.focusComposer");
+    expect(keys).toContain('keystroke "v" using command down');
+    expect(keys).toContain("keystroke return using command down");
+    // Must not type the prompt via keystroke (clipboard paste instead).
+    expect(keys).not.toContain("fix the flaky test");
+  });
+
+  it("still types + Enter for non-Cursor terminal agents", async () => {
+    const { sendPromptToTerminal } = await import("./jump-back");
+    expect(sendPromptToTerminal(session, 'say "hi"')).toBe("sent");
+    const keys = osascripts().join("\n");
+    expect(keys).toContain('keystroke "say \\"hi\\""');
+    expect(keys).toContain("key code 36");
+    expect(keys).not.toContain("composer.focusComposer");
   });
 });
 

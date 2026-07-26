@@ -14,6 +14,10 @@ const MODE_LABEL: Record<string, string> = {
   auto: "auto",
   dontAsk: "dont ask",
   bypassPermissions: "bypass",
+  // Cursor composer modes (surfaced via session meta.permission_mode)
+  agent: "agent",
+  ask: "ask",
+  edit: "edit",
 };
 
 /** Friendly names for the app hosting the session's terminal (bundle id). */

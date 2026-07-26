@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import { appendFile } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { systemPreferences } from "electron";
+import { clipboard, systemPreferences } from "electron";
 import type { SessionSnapshot } from "@agent-island/shared";
 import { requestAccessibility } from "./accessibility";
 
@@ -165,13 +165,20 @@ export function answerInTerminal(session: SessionSnapshot, digit: string): void 
 /** Why a prompt did (or didn't) reach the terminal — so the notch can react. */
 export type SendPromptResult = "sent" | "no-accessibility" | "empty";
 
+/** Cursor IDE agent sessions need Composer focus, not terminal keystrokes. */
+export function isCursorAgentSession(session: SessionSnapshot): boolean {
+  return session.agent === "cursor";
+}
+
 /**
- * Type a free-form prompt into the session's terminal and press Enter. Brings
- * the owning terminal forward first, then uses Accessibility-backed System
- * Events — the same path as {@link answerInTerminal}. Single-line only; newlines
- * are flattened to spaces so a stray Enter never submits half a prompt.
- * Returns "no-accessibility" when the keystroke was dropped for lack of
- * permission, so the caller can surface a hint instead of failing silently.
+ * Send a free-form prompt into the session's host.
+ *
+ * - Terminal agents (Claude/Codex): type into the focused terminal + Enter.
+ * - Cursor agent: raise the project window, run `composer.focusComposer`, paste,
+ *   then Cmd+Return (Cursor's force-send — plain Enter only nudges).
+ *
+ * Single-line only; newlines are flattened so a stray Enter never splits a send.
+ * Returns "no-accessibility" when keystrokes were dropped for lack of permission.
  */
 export function sendPromptToTerminal(session: SessionSnapshot, text: string): SendPromptResult {
   const prompt = text.replace(/\s*\n\s*/g, " ").trim();
@@ -183,6 +190,10 @@ export function sendPromptToTerminal(session: SessionSnapshot, text: string): Se
     logJump("Accessibility not granted — jumped without typing the prompt");
     requestAccessibilityOnce();
     return "no-accessibility";
+  }
+
+  if (isCursorAgentSession(session)) {
+    return sendPromptToCursorComposer(prompt);
   }
 
   // AppleScript string literal: escape backslashes first, then double quotes.
@@ -200,6 +211,40 @@ export function sendPromptToTerminal(session: SessionSnapshot, text: string): Se
     ],
     (err) => {
       logJump(err ? `send-prompt failed: ${err.message}` : "prompt sent");
+    },
+  );
+  return "sent";
+}
+
+/**
+ * Cursor's agent input lives in Composer, not a shell. Focusing via the
+ * command palette (command id, not a toggle shortcut) avoids Cmd+L closing an
+ * already-open sidepanel. Paste + Cmd+Return submits without relying on
+ * keystroke escaping for the prompt body.
+ */
+function sendPromptToCursorComposer(prompt: string): SendPromptResult {
+  clipboard.writeText(prompt);
+  logJump("cursor path: focus Composer → paste → Cmd+Return");
+  execFile(
+    "osascript",
+    [
+      "-e",
+      `
+      delay 0.55
+      tell application "System Events"
+        keystroke "p" using {command down, shift down}
+        delay 0.35
+        keystroke "composer.focusComposer"
+        delay 0.2
+        key code 36
+        delay 0.4
+        keystroke "v" using command down
+        delay 0.12
+        keystroke return using command down
+      end tell`,
+    ],
+    (err) => {
+      logJump(err ? `cursor send-prompt failed: ${err.message}` : "cursor prompt sent");
     },
   );
   return "sent";

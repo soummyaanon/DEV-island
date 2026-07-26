@@ -35,8 +35,12 @@ export function registerCursorRoutes(
           : ({} as CursorHookPayload);
 
       const eventName = resolveCursorEventName(request.params.hookEvent, payload);
+      // Cursor uses conversation_id on most hooks; sessionStart/End send session_id.
       const sessionId =
-        typeof payload.conversation_id === "string" ? payload.conversation_id : undefined;
+        (typeof payload.conversation_id === "string" && payload.conversation_id) ||
+        (typeof payload.session_id === "string" && payload.session_id) ||
+        (typeof payload.generation_id === "string" && payload.generation_id) ||
+        undefined;
       const fallbackCwd =
         (sessionId && hub.getSession("cursor", sessionId)?.cwd) || "(unknown)";
 
