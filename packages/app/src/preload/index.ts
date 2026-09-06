@@ -29,6 +29,8 @@ export interface SettingsState {
   weather: boolean;
   weatherLocation: string;
   weatherUnits: string;
+  /** "hover" | "swipe" — how the collapsed island opens. */
+  openWith: string;
   openAtLogin: boolean;
   version: string;
   /** Newest available version, or null when up to date / not yet checked. */
@@ -52,6 +54,10 @@ export interface NotchLayout {
 export interface UiPrefs {
   /** "default" | "large" | "larger" — drives --ui-scale. */
   textSize: string;
+  /** "hover" | "swipe" — how the collapsed island opens. */
+  openWith: string;
+  /** macOS natural scrolling; inverts wheel sign relative to finger motion. */
+  naturalScroll: boolean;
 }
 
 export interface WeatherPayload {

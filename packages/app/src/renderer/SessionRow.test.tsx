@@ -66,4 +66,10 @@ describe("SessionRow", () => {
 
     expect(html).toContain('aria-label="project, waiting for you, Editing index.ts, 5s"');
   });
+  it("exposes its stagger index as --i for the entrance animation", () => {
+    const html = renderToStaticMarkup(
+      <SessionRow session={session()} now={Date.parse("2026-07-19T10:00:30.000Z")} index={3} onJump={() => {}} />,
+    );
+    expect(html).toContain("--i:3");
+  });
 });

@@ -34,6 +34,7 @@ interface SettingsState {
   weather: boolean;
   weatherLocation: string;
   weatherUnits: string;
+  openWith: string;
   openAtLogin: boolean;
   version: string;
   update: { version: string } | null;
@@ -55,6 +56,7 @@ const DEFAULTS: SettingsState = {
   weather: false,
   weatherLocation: "",
   weatherUnits: "auto",
+  openWith: "hover",
   openAtLogin: false,
   version: "",
   update: null,
@@ -62,6 +64,7 @@ const DEFAULTS: SettingsState = {
 
 const NAV = [
   { id: "integrations", label: "Integrations", icon: "❖" },
+  { id: "appearance", label: "Appearance", icon: "◐" },
   { id: "sounds", label: "Sounds", icon: "♪" },
   { id: "weather", label: "Weather", icon: "☂" },
   { id: "accessibility", label: "Accessibility", icon: "◍" },
@@ -139,6 +142,41 @@ function Row({
         <span>{detail}</span>
       </div>
       <Toggle on={on} onChange={onChange} />
+    </div>
+  );
+}
+
+const OPEN_WITH: { value: string; label: string }[] = [
+  { value: "hover", label: "Hover" },
+  { value: "swipe", label: "Swipe" },
+];
+
+/** A small segmented control — one choice among a few, all visible at once. */
+function Segmented({
+  value,
+  options,
+  onChange,
+  label,
+}: {
+  value: string;
+  options: { value: string; label: string }[];
+  onChange: (next: string) => void;
+  label: string;
+}) {
+  return (
+    <div className="s-seg" role="radiogroup" aria-label={label}>
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          role="radio"
+          aria-checked={value === o.value}
+          className={`s-seg-item${value === o.value ? " on" : ""}`}
+          onClick={() => onChange(o.value)}
+        >
+          {o.label}
+        </button>
+      ))}
     </div>
   );
 }
@@ -254,6 +292,27 @@ function Settings() {
               on={state.agents.cursor !== false}
               onChange={(v) => set("agent:cursor", v)}
             />
+          </div>
+        )}
+
+        {section === "appearance" && (
+          <div className="s-group">
+            <div className="s-row">
+              <div className="s-text">
+                <b>Open with</b>
+                <span>
+                  {state.openWith === "swipe"
+                    ? "Two-finger swipe down (or a click) opens the island; grazing the top of the screen doesn't. Swipe up closes it."
+                    : "Hovering the notch opens the island. Swipe up closes it either way."}
+                </span>
+              </div>
+              <Segmented
+                label="Open the island with"
+                value={state.openWith}
+                options={OPEN_WITH}
+                onChange={(v) => set("openWith", v)}
+              />
+            </div>
           </div>
         )}
 

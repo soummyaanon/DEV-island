@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { AgentUsage, SessionSnapshot } from "@agent-island/shared";
 import { SessionRow } from "./SessionRow";
 import { ApprovalCard } from "./ApprovalCard";
@@ -10,7 +10,9 @@ import { PacFeast } from "./PacFeast";
 import { UsageFooter } from "./UsageFooter";
 import { playSound } from "./sounds";
 import { DEFAULT_SOUND_PREFS, type SoundPrefs, type SoundTheme } from "./sound-prefs";
-import { summarizeTransitions, useAnnouncer, useFocusTrap } from "./a11y";
+import { summarizeTransitions, useAnnouncer, useFocusTrap, useReducedMotion } from "./a11y";
+import { OPEN_SPRING, SETTLE_SPRING, STEP_EASING, springEasing } from "./motion";
+import { WheelGesture, fingerDelta } from "./gesture";
 import { clampIslandWidth, isSignificantChange, minIslandWidth } from "./island-width";
 import { WeatherScene, type WeatherCondition } from "./weather/WeatherScene";
 
@@ -33,6 +35,17 @@ export function App() {
   const [connected, setConnected] = useState(false);
   const [hovering, setHovering] = useState(false);
   const [pinned, setPinned] = useState(false);
+  // Gestures. `openWith` and `naturalScroll` come from main's ui-prefs.
+  const [openWith, setOpenWith] = useState<"hover" | "swipe">("hover");
+  const [naturalScroll, setNaturalScroll] = useState(true);
+  // Swipe mode: a swipe-down (or wing click) happened while hovering.
+  const [gestureOpen, setGestureOpen] = useState(false);
+  // Swipe-up while open: stay closed until the pointer leaves the island.
+  const [dismissed, setDismissed] = useState(false);
+  // −1..1 rubber-band fraction while a swipe accumulates; 0 at rest.
+  const [rubber, setRubber] = useState(0);
+  const gesture = useRef(new WheelGesture());
+  const rubberTimer = useRef<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [promptText, setPromptText] = useState("");
   const [promptFocused, setPromptFocused] = useState(false);
@@ -81,16 +94,30 @@ export function App() {
     () => sessions.filter((s) => s.state === "waiting-for-approval"),
     [sessions],
   );
+  // Leaving the island resets both gesture latches, so a gesture-opened island
+  // can always be closed by moving away — never stuck open.
+  useEffect(() => {
+    if (hovering) return;
+    setGestureOpen(false);
+    setDismissed(false);
+  }, [hovering]);
+
+  // Hover opens the island in hover mode; in swipe mode it also needs a
+  // swipe-down (or a wing click). A swipe-up parks it closed until you leave.
+  const hoverExpands = hovering && !dismissed && (openWith === "hover" || gestureOpen);
   // Anything waiting on the human forces the panel open automatically.
   // Typing a prompt keeps it open even if the cursor drifts off the window.
   const expanded =
-    hovering ||
+    hoverExpands ||
     pinned ||
     promptFocused ||
     a11yFocused ||
     pending.length > 0 ||
     asking.length > 0 ||
     needsYou.length > 0;
+  // Wheel events only reach a window that captures the mouse, so swipe mode
+  // makes the collapsed wings interactive while the pointer is over them.
+  const interactive = expanded || (openWith === "swipe" && hovering);
 
   // Subscribe to session state from the main process.
   useEffect(() => {
@@ -262,13 +289,36 @@ export function App() {
     return window.agentIsland.onLayout(apply);
   }, []);
 
-  // Text scale (our stand-in for Dynamic Type, which macOS doesn't expose).
+  // Presentation prefs from main: text scale (our stand-in for Dynamic Type)
+  // and how the island opens.
   useEffect(() => {
-    const apply = (p: { textSize: string }) =>
+    const apply = (p: { textSize: string; openWith?: string; naturalScroll?: boolean }) => {
       document.documentElement.setAttribute("data-text-size", p.textSize);
+      setOpenWith(p.openWith === "swipe" ? "swipe" : "hover");
+      setNaturalScroll(p.naturalScroll ?? true);
+    };
     void window.agentIsland.getUiPrefs?.().then(apply);
     return window.agentIsland.onUiPrefs?.(apply);
   }, []);
+
+  // Spring motion: integrate once, publish as CSS timing functions. Reduced
+  // Motion swaps both for a 1ms step so CSS and any JS timing agree.
+  const reducedMotion = useReducedMotion();
+  useEffect(() => {
+    const open = reducedMotion ? STEP_EASING : springEasing(OPEN_SPRING);
+    const settle = reducedMotion ? STEP_EASING : springEasing(SETTLE_SPRING);
+    const root = document.documentElement.style;
+    root.setProperty("--spring-open", open.easing);
+    root.setProperty("--dur-open", `${open.ms}ms`);
+    root.setProperty("--spring-settle", settle.easing);
+    root.setProperty("--dur-settle", `${settle.ms}ms`);
+  }, [reducedMotion]);
+
+  // Once the open transition lands, further width changes use the firm spring.
+  const [settled, setSettled] = useState(false);
+  useEffect(() => {
+    if (!expanded) setSettled(false);
+  }, [expanded]);
 
   // Local weather (off unless the user enabled it).
   useEffect(() => {
@@ -356,13 +406,47 @@ export function App() {
     };
   }, []);
 
-  // Capture the mouse only while expanded so the rest of the desktop stays clickable.
+  // Two-finger swipes. Deltas are converted to FINGER motion first, so "down"
+  // means the same thing whatever the natural-scrolling setting. Swipe up
+  // over an open island closes it; in swipe mode, swipe down over the wings
+  // opens it. Nothing fires while you're typing a prompt.
   useEffect(() => {
-    if (expanded !== interactiveRef.current) {
-      interactiveRef.current = expanded;
-      window.agentIsland.setInteractive(expanded);
+    const onWheel = (e: WheelEvent) => {
+      if (promptFocused) return;
+      const el = islandRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const inside =
+        e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+      if (!inside) return;
+      const g = gesture.current;
+      const direction = g.feed(fingerDelta(e.deltaY, naturalScroll), e.timeStamp);
+      setRubber(g.progress(e.timeStamp));
+      if (rubberTimer.current !== null) window.clearTimeout(rubberTimer.current);
+      rubberTimer.current = window.setTimeout(() => setRubber(0), 200);
+      if (direction === "up" && expanded) {
+        setDismissed(true);
+        setGestureOpen(false);
+        window.agentIsland.haptic?.("tick");
+      } else if (direction === "down" && !expanded && openWith === "swipe") {
+        setGestureOpen(true);
+        window.agentIsland.haptic?.("tick");
+      }
+    };
+    window.addEventListener("wheel", onWheel, { passive: true });
+    return () => {
+      window.removeEventListener("wheel", onWheel);
+      if (rubberTimer.current !== null) window.clearTimeout(rubberTimer.current);
+    };
+  }, [promptFocused, naturalScroll, expanded, openWith]);
+
+  // Capture the mouse only while needed so the rest of the desktop stays clickable.
+  useEffect(() => {
+    if (interactive !== interactiveRef.current) {
+      interactiveRef.current = interactive;
+      window.agentIsland.setInteractive(interactive);
     }
-  }, [expanded]);
+  }, [interactive]);
 
   const active = useMemo(() => sessions.filter((s) => ACTIVE_STATES.has(s.state)), [sessions]);
   const visible = useMemo(() => sessions.slice(0, MAX_ROWS), [sessions]);
@@ -423,6 +507,15 @@ export function App() {
   // the island is always at least a small live scene.
   const ambientWeather = weather !== null && !expanded && active.length === 0;
   const condition = (weather?.condition ?? "clear-day") as WeatherCondition;
+  // Right wing text. Keyed on its value so a change remounts and rolls in.
+  const countText =
+    needsYou.length > 0
+      ? `${needsYou.length}!`
+      : active.length > 0
+        ? String(active.length)
+        : ambientWeather
+          ? (weather?.temperature ?? "")
+          : "";
 
   return (
     <div className={`app${animated ? "" : " paused"}${a11yFocused ? " a11y-focus" : ""}`}>
@@ -442,13 +535,19 @@ export function App() {
           </>
         )}
         <div
-          className={`island ${stateCls}${expanded ? " expanded" : ""}${
-            sessions.length === 0 && !ambientWeather ? " bare" : ""
-          }${showFeast ? " has-pac" : ""}${ambientWeather ? " has-weather" : ""} spr-${
-            showFeast ? 0 : shown.length
-          }`}
+          className={`island ${stateCls}${expanded ? " expanded" : ""}${settled ? " settled" : ""}${
+            rubber !== 0 ? " rubbering" : ""
+          }${sessions.length === 0 && !ambientWeather ? " bare" : ""}${
+            showFeast ? " has-pac" : ""
+          }${ambientWeather ? " has-weather" : ""} spr-${showFeast ? 0 : shown.length}`}
+          style={{ "--rubber": rubber } as CSSProperties}
           role="region"
           aria-label="Agent Island"
+          onTransitionEnd={(e) => {
+            if (e.target === e.currentTarget && e.propertyName === "width" && expanded) {
+              setSettled(true);
+            }
+          }}
         >
           {showGlow && <div className="notch-glow" aria-hidden />}
           {pulse && (
@@ -460,14 +559,31 @@ export function App() {
               onAnimationEnd={() => setPulse(null)}
             />
           )}
-          <div className={`notch-spacer ${stateCls}`}>
+          <div
+            className={`notch-spacer ${stateCls}`}
+            onClick={() => {
+              // Swipe mode only: a click on a wing toggles, mirroring the gesture.
+              if (openWith !== "swipe") return;
+              window.agentIsland.haptic?.("tick");
+              if (expanded && hoverExpands) setDismissed(true);
+              else if (!expanded) setGestureOpen(true);
+            }}
+          >
             <span className="sprites">
               {showFeast ? (
-                <PacFeast kinds={activeKinds} />
+                <span className="sprite-slot" key="feast">
+                  <PacFeast kinds={activeKinds} />
+                </span>
               ) : ambientWeather ? (
-                <WeatherScene condition={condition} variant="ambient" />
+                <span className="sprite-slot" key="weather">
+                  <WeatherScene condition={condition} variant="ambient" />
+                </span>
               ) : (
-                shown.map(({ kind, Sprite }) => <Sprite key={kind} live />)
+                shown.map(({ kind, Sprite }) => (
+                  <span className="sprite-slot" key={kind}>
+                    <Sprite live />
+                  </span>
+                ))
               )}
             </span>
             <span
@@ -480,13 +596,7 @@ export function App() {
                     : `${active.length} active sessions`
               }
             >
-              {needsYou.length > 0
-                ? `${needsYou.length}!`
-                : active.length > 0
-                  ? active.length
-                  : ambientWeather
-                    ? weather?.temperature
-                    : ""}
+              <span key={countText}>{countText}</span>
             </span>
           </div>
 
@@ -512,11 +622,12 @@ export function App() {
                 />
               ))}
               <ul className="rows">
-                {visible.map((s) => (
+                {visible.map((s, i) => (
                   <SessionRow
                     key={s.key}
                     session={s}
                     now={now}
+                    index={i}
                     onJump={(sess) => window.agentIsland.jump(sess)}
                   />
                 ))}

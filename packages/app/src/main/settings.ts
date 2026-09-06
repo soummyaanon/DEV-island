@@ -20,6 +20,12 @@ export type TextSize = (typeof TEXT_SIZES)[number];
 export const TEMPERATURE_UNITS = ["auto", "c", "f"] as const;
 export type TemperatureUnit = (typeof TEMPERATURE_UNITS)[number];
 
+/** How the collapsed island opens. Hover is today's behavior; swipe means a
+ *  two-finger swipe down (or a click) opens it and grazing the top of the
+ *  screen no longer does. */
+export const OPEN_WITH = ["hover", "swipe"] as const;
+export type OpenWith = (typeof OPEN_WITH)[number];
+
 /** Everything the Settings window can change, persisted across launches. */
 export interface AppSettings {
   agents: Record<AgentKind, boolean>;
@@ -50,6 +56,8 @@ export interface AppSettings {
   /** "lat, lon" typed by the user. Empty = fall back to the timezone guess. */
   weatherLocation: string;
   weatherUnits: TemperatureUnit;
+  /** Hover-to-open (default) or gesture-to-open. */
+  openWith: OpenWith;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -66,6 +74,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   weather: false,
   weatherLocation: "",
   weatherUnits: "auto",
+  openWith: "hover",
 };
 
 export function isSoundTheme(value: unknown): value is SoundTheme {
@@ -82,6 +91,10 @@ export function isTextSize(value: unknown): value is TextSize {
 
 export function isTemperatureUnit(value: unknown): value is TemperatureUnit {
   return typeof value === "string" && (TEMPERATURE_UNITS as readonly string[]).includes(value);
+}
+
+export function isOpenWith(value: unknown): value is OpenWith {
+  return typeof value === "string" && (OPEN_WITH as readonly string[]).includes(value);
 }
 
 function settingsPath(): string {
@@ -109,6 +122,7 @@ export function loadSettings(): AppSettings {
     weatherUnits: isTemperatureUnit(stored.weatherUnits)
       ? stored.weatherUnits
       : DEFAULT_SETTINGS.weatherUnits,
+    openWith: isOpenWith(stored.openWith) ? stored.openWith : DEFAULT_SETTINGS.openWith,
     soundOverrides: { ...(stored.soundOverrides ?? {}) },
     customSounds: { ...(stored.customSounds ?? {}) },
     customSoundNames: { ...(stored.customSoundNames ?? {}) },

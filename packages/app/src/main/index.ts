@@ -25,6 +25,7 @@ import { pushSettingsState, showSettingsWindow } from "./windows/settings-window
 import {
   isSoundEvent,
   isSoundTheme,
+  isOpenWith,
   isTemperatureUnit,
   isTextSize,
   loadSettings,
@@ -32,6 +33,7 @@ import {
 } from "./settings";
 import { haptic, hapticsSupported, isHapticPattern, setHapticsEnabled } from "./haptics";
 import { stopHelper } from "./native-helper";
+import { readNaturalScroll } from "./scroll-direction";
 import { getWeather, onWeather, startWeather, updateWeatherSettings } from "./weather";
 import { createTray, updateTrayTitle } from "./tray";
 import { answerInTerminal, jumpToTerminal, sendPromptToTerminal } from "./jump-back";
@@ -174,6 +176,14 @@ if (!app.requestSingleInstanceLock()) {
     const settings = loadSettings();
     setHapticsEnabled(settings.haptics);
 
+    // Natural scrolling inverts what a swipe looks like to the renderer; read
+    // it once so gestures are defined by finger motion, not wheel sign.
+    let naturalScroll = true;
+    void readNaturalScroll().then((natural) => {
+      naturalScroll = natural;
+      sendToNotch("agent-island:ui-prefs", uiPrefs());
+    });
+
     // Disabled integrations disappear everywhere the UI looks.
     const filterSessions = (sessions: SessionSnapshot[]): SessionSnapshot[] =>
       sessions.filter((s) => settings.agents[s.agent] !== false);
@@ -240,8 +250,12 @@ if (!app.requestSingleInstanceLock()) {
       };
     }
 
-    /** Presentation prefs the overlay itself needs (text scale). */
-    const uiPrefs = () => ({ textSize: settings.textSize });
+    /** Presentation prefs the overlay itself needs (text scale, open gesture). */
+    const uiPrefs = () => ({
+      textSize: settings.textSize,
+      openWith: settings.openWith,
+      naturalScroll,
+    });
 
     const weatherOptions = () => ({
       enabled: settings.weather,
@@ -302,6 +316,11 @@ if (!app.requestSingleInstanceLock()) {
         case "textSize":
           if (!isTextSize(value)) return;
           settings.textSize = value;
+          sendToNotch("agent-island:ui-prefs", uiPrefs());
+          break;
+        case "openWith":
+          if (!isOpenWith(value)) return;
+          settings.openWith = value;
           sendToNotch("agent-island:ui-prefs", uiPrefs());
           break;
         case "weather":

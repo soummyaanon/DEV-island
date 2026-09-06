@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import type { SessionSnapshot, SessionState } from "@agent-island/shared";
 import { describeSession } from "./a11y";
 
@@ -70,10 +71,13 @@ export function StatusDot({ state }: { state: SessionState }) {
 export function SessionRow({
   session,
   now,
+  index = 0,
   onJump,
 }: {
   session: SessionSnapshot;
   now: number;
+  /** Position in the list — drives the entrance stagger (`--i`). */
+  index?: number;
   onJump: (session: SessionSnapshot) => void;
 }) {
   const term = metaString(session, "term_program");
@@ -100,6 +104,7 @@ export function SessionRow({
       <button
         type="button"
         className={`row state-${session.state}`}
+        style={{ "--i": index } as CSSProperties}
         title={term ? `Jump to ${projectName(session.cwd)} in ${term}` : "Jump to terminal"}
         aria-label={describeSession(session, elapsedLabel)}
         onClick={(e) => {
