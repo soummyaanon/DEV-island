@@ -81,10 +81,11 @@ MacBook (Pro 14"/16", Air 13"/15", or no notch at all).
   translucent CSS panel. The notch band itself stays pure black so it keeps
   merging with the hardware. Reduce Transparency and Increase Contrast switch
   it off automatically.
-- **Gestures** — two-finger swipe up over the open island closes it. Settings →
-  Appearance → Open with: *Swipe* makes the wings ignore a grazing pointer and
-  open on a swipe down (or a click), with a rubber-band stretch under your
-  fingers. Natural-scrolling aware, so "down" means your fingers moved down.
+- **Gestures** — two-finger swipe down over the notch opens the island (or
+  click a wing); swipe up closes it; a grazing pointer no longer pops it open.
+  The wings stretch under your fingers before it springs open. Natural-scrolling
+  aware, so "down" means your fingers moved down. Prefer the old hover-to-open?
+  Settings → Appearance → Open with: *Hover*.
 - **Battery live activity** — plug in and the wings show a small ring gauge
   with a bolt for a few seconds, then yield; under 20% on battery a red ring
   stays while idle. The ring also lives in the panel footer.

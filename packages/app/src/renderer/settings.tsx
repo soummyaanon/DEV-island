@@ -4,6 +4,7 @@ import { PixelSprite } from "./PixelSprite";
 import { OpenAiSprite } from "./OpenAiSprite";
 import { CursorSprite } from "./CursorSprite";
 import { TrafficLights } from "./TrafficLights";
+import { Icon } from "./Icons";
 import { previewSound, previewCustom } from "./sounds";
 import {
   EVENT_LABELS,
@@ -64,7 +65,7 @@ const DEFAULTS: SettingsState = {
   weather: false,
   weatherLocation: "",
   weatherUnits: "auto",
-  openWith: "hover",
+  openWith: "swipe",
   glass: true,
   glassSupport: "none",
   battery: true,
@@ -79,14 +80,14 @@ const DEFAULTS: SettingsState = {
 };
 
 const NAV = [
-  { id: "integrations", label: "Integrations", icon: "❖" },
-  { id: "appearance", label: "Appearance", icon: "◐" },
-  { id: "sounds", label: "Sounds", icon: "♪" },
-  { id: "weather", label: "Weather", icon: "☂" },
-  { id: "live", label: "Live activities", icon: "◉" },
-  { id: "accessibility", label: "Accessibility", icon: "◍" },
-  { id: "general", label: "General", icon: "⚙" },
-  { id: "updates", label: "Updates", icon: "↑" },
+  { id: "integrations", label: "Integrations", icon: "integrations" },
+  { id: "appearance", label: "Appearance", icon: "appearance" },
+  { id: "sounds", label: "Sounds", icon: "sounds" },
+  { id: "weather", label: "Weather", icon: "weather" },
+  { id: "live", label: "Live activities", icon: "live" },
+  { id: "accessibility", label: "Accessibility", icon: "accessibility" },
+  { id: "general", label: "General", icon: "general" },
+  { id: "updates", label: "Updates", icon: "updates" },
 ] as const;
 type SectionId = (typeof NAV)[number]["id"];
 
@@ -297,7 +298,7 @@ function Settings() {
               onClick={() => setSection(n.id)}
             >
               <span className="s-nav-ic" aria-hidden>
-                {n.icon}
+                <Icon name={n.icon} size={14} />
               </span>
               {n.label}
               {n.id === "updates" && state.update && <span className="s-nav-dot" aria-hidden />}
@@ -415,7 +416,7 @@ function Settings() {
                         : previewSound(event, resolveTheme(event, soundPrefs))
                     }
                   >
-                    ▶
+                    <Icon name="play" size={11} />
                   </button>
                   {custom ? (
                     <span className="s-custom" title={`Playing your imported sound: ${customName}`}>

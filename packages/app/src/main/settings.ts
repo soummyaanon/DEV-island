@@ -20,9 +20,9 @@ export type TextSize = (typeof TEXT_SIZES)[number];
 export const TEMPERATURE_UNITS = ["auto", "c", "f"] as const;
 export type TemperatureUnit = (typeof TEMPERATURE_UNITS)[number];
 
-/** How the collapsed island opens. Hover is today's behavior; swipe means a
- *  two-finger swipe down (or a click) opens it and grazing the top of the
- *  screen no longer does. */
+/** How the collapsed island opens. Swipe (default): a two-finger swipe down
+ *  or a click opens it and grazing the top of the screen doesn't. Hover: the
+ *  classic behavior. */
 export const OPEN_WITH = ["hover", "swipe"] as const;
 export type OpenWith = (typeof OPEN_WITH)[number];
 
@@ -82,7 +82,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   weather: false,
   weatherLocation: "",
   weatherUnits: "auto",
-  openWith: "hover",
+  openWith: "swipe",
   glass: true,
   battery: true,
   procStats: true,

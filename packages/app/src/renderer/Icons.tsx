@@ -1,7 +1,31 @@
+import {
+  Accessibility,
+  Activity,
+  Blocks,
+  CircleArrowUp,
+  CloudSun,
+  Cpu,
+  Download,
+  type LucideIcon,
+  Moon,
+  Music,
+  Palette,
+  Play,
+  Power,
+  Settings,
+  SlidersHorizontal,
+  SquarePen,
+  Volume2,
+  VolumeX,
+  X,
+  Zap,
+} from "lucide-react";
+
 /**
- * Icons in the SF Symbols idiom — 16-unit grid, round caps, 1.6 stroke,
- * `currentColor` — drawn inline so the overlay ships no icon font. Every icon
- * is decorative; the control that wraps it carries the label.
+ * Icons come from Lucide (ISC) — a consistent 24-grid stroke set that reads
+ * like macOS's own symbols. Tree-shaken: only the icons named here ship. Every
+ * icon is decorative; the control that wraps it carries the label. Colour is
+ * always `currentColor`: gray at rest (`--text-dim`), white on hover.
  */
 
 export type IconName =
@@ -13,100 +37,44 @@ export type IconName =
   | "send"
   | "moon"
   | "bolt"
-  | "cpu";
+  | "cpu"
+  | "play"
+  | "close"
+  // Settings sidebar
+  | "integrations"
+  | "appearance"
+  | "sounds"
+  | "weather"
+  | "live"
+  | "accessibility"
+  | "general"
+  | "updates";
 
-/** An 8-tooth gear outline on the 16 grid (SF `gearshape` silhouette). */
-function gearPath(): string {
-  const teeth = 8;
-  const outer = 6.9;
-  const inner = 5.4;
-  const points: string[] = [];
-  for (let i = 0; i < teeth; i++) {
-    const a0 = (i / teeth) * Math.PI * 2;
-    const step = (Math.PI * 2) / teeth;
-    const at = (angle: number, r: number) =>
-      `${(8 + Math.cos(angle) * r).toFixed(2)} ${(8 + Math.sin(angle) * r).toFixed(2)}`;
-    points.push(at(a0 - step * 0.18, outer), at(a0 + step * 0.18, outer));
-    points.push(at(a0 + step * 0.32, inner), at(a0 + step * 0.68, inner));
-  }
-  return `M${points.join("L")}Z`;
-}
-const GEAR = gearPath();
-
-const STROKE = {
-  fill: "none",
-  stroke: "currentColor",
-  strokeWidth: 1.6,
-  strokeLinecap: "round" as const,
-  strokeLinejoin: "round" as const,
+const ICONS: Record<IconName, LucideIcon> = {
+  speaker: Volume2,
+  "speaker-slash": VolumeX,
+  compose: SquarePen,
+  gear: Settings,
+  power: Power,
+  send: CircleArrowUp,
+  moon: Moon,
+  bolt: Zap,
+  cpu: Cpu,
+  play: Play,
+  close: X,
+  integrations: Blocks,
+  appearance: Palette,
+  sounds: Music,
+  weather: CloudSun,
+  live: Activity,
+  accessibility: Accessibility,
+  general: SlidersHorizontal,
+  updates: Download,
 };
 
 export function Icon({ name, size = 16, className }: { name: IconName; size?: number; className?: string }) {
-  const common = { width: size, height: size, viewBox: "0 0 16 16", className, "aria-hidden": true as const };
-  switch (name) {
-    case "speaker":
-      return (
-        <svg {...common}>
-          <path d="M2.8 6.3h2.1L8.3 3.6v8.8L4.9 9.7H2.8z" fill="currentColor" />
-          <path d="M10.6 6a2.9 2.9 0 0 1 0 4" {...STROKE} />
-          <path d="M12.6 4.2a5.4 5.4 0 0 1 0 7.6" {...STROKE} />
-        </svg>
-      );
-    case "speaker-slash":
-      return (
-        <svg {...common}>
-          <path d="M2.8 6.3h2.1L8.3 3.6v8.8L4.9 9.7H2.8z" fill="currentColor" />
-          <path d="M10.4 6.2l3.6 3.6M14 6.2l-3.6 3.6" {...STROKE} />
-        </svg>
-      );
-    case "compose":
-      return (
-        <svg {...common}>
-          <path d="M8.6 3.6H4.4A1.6 1.6 0 0 0 2.8 5.2v6.4a1.6 1.6 0 0 0 1.6 1.6h6.4a1.6 1.6 0 0 0 1.6-1.6V7.4" {...STROKE} />
-          <path d="M12.7 2.4l1.3 1.3-5.6 5.6-1.9.6.6-1.9z" {...STROKE} />
-        </svg>
-      );
-    case "gear":
-      return (
-        <svg {...common}>
-          <path d={GEAR} {...STROKE} strokeWidth={1.4} />
-          <circle cx="8" cy="8" r="2.1" {...STROKE} strokeWidth={1.4} />
-        </svg>
-      );
-    case "power":
-      return (
-        <svg {...common}>
-          <path d="M8 2.6v5.6" {...STROKE} />
-          <path d="M4.9 5.1a4.6 4.6 0 1 0 6.2 0" {...STROKE} />
-        </svg>
-      );
-    case "send":
-      return (
-        <svg {...common}>
-          <circle cx="8" cy="8" r="6.6" fill="currentColor" />
-          <path d="M8 11.2V5.4M5.6 7.6L8 5.2l2.4 2.4" {...STROKE} stroke="#0b0b0d" strokeWidth={1.7} />
-        </svg>
-      );
-    case "moon":
-      return (
-        <svg {...common}>
-          <path d="M9.6 2.4a5.9 5.9 0 1 0 4 10.1 5.1 5.1 0 0 1-4-10.1z" fill="currentColor" />
-        </svg>
-      );
-    case "bolt":
-      return (
-        <svg {...common}>
-          <path d="M9.2 1.6L3.6 9.1h3.7l-.9 5.3 5.9-7.7H8.5z" fill="currentColor" />
-        </svg>
-      );
-    case "cpu":
-      return (
-        <svg {...common}>
-          <rect x="4.3" y="4.3" width="7.4" height="7.4" rx="1.4" {...STROKE} />
-          <path d="M6.5 1.8v2.5M9.5 1.8v2.5M6.5 11.7v2.5M9.5 11.7v2.5M1.8 6.5h2.5M1.8 9.5h2.5M11.7 6.5h2.5M11.7 9.5h2.5" {...STROKE} strokeWidth={1.3} />
-        </svg>
-      );
-  }
+  const Glyph = ICONS[name];
+  return <Glyph size={size} strokeWidth={1.75} absoluteStrokeWidth className={className} aria-hidden />;
 }
 
 /**
@@ -153,10 +121,11 @@ export function BatteryRing({
         transform="rotate(-90 8 8)"
       />
       {charging && (
+        // Lucide's `zap` outline, scaled into the ring and filled.
         <path
-          d="M9.2 1.6L3.6 9.1h3.7l-.9 5.3 5.9-7.7H8.5z"
+          d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
           fill={tone}
-          transform="translate(8 8) scale(0.5) translate(-8 -8)"
+          transform="translate(8 8) scale(0.36) translate(-12 -12)"
         />
       )}
     </svg>

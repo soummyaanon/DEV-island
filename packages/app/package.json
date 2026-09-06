@@ -2,7 +2,7 @@
   "name": "@agent-island/app",
   "version": "1.4.0",
   "private": true,
-  "description": "Agent Island \u2014 menu bar / Dynamic Island for Claude Code and Codex sessions",
+  "description": "Agent Island — menu bar / Dynamic Island for Claude Code and Codex sessions",
   "author": "Agent Island",
   "main": "./out/main/index.js",
   "scripts": {
@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@agent-island/shared": "workspace:*",
+    "lucide-react": "^1.41.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {

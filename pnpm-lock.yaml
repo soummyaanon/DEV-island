@@ -17,6 +17,9 @@ importers:
       '@agent-island/shared':
         specifier: workspace:*
         version: link:../shared
+      lucide-react:
+        specifier: ^1.41.0
+        version: 1.41.0(react@19.2.7)
       ws:
         specifier: ^8.18.0
         version: 8.21.1
@@ -869,6 +872,7 @@ packages:
   '@xmldom/xmldom@0.9.10':
     resolution: {integrity: sha512-A9gOqLdi6cV4ibazAjcQufGj0B1y/vDqYrcuP6d/6x8P27gRS8643Dj9o1dEKtB6O7fwxb2FgBmJS2mX7gpvdw==}
     engines: {node: '>=14.6'}
+    deprecated: this version has critical issues, please update to the latest version
 
   abbrev@1.1.1:
     resolution: {integrity: sha512-nne9/IiQ/hzIhY6pdDnbBtz7DjPTKrY00P/zvPSm5pOFkl6xuGrGnXn/VtTNNfNtAfZ9/1RtehkszU9qcTii0Q==}
@@ -1766,6 +1770,11 @@ packages:
   lru-cache@7.18.3:
     resolution: {integrity: sha512-jumlc0BIUrS3qJGgIkWZsyfAM7NCWiBcCDhnd+3NNM5KbBmLTgHVfWBcg6W+rLUsIpzpERPsvwUP7CckAQSOoA==}
     engines: {node: '>=12'}
+
+  lucide-react@1.41.0:
+    resolution: {integrity: sha512-6lksP35l6KszDKUeRTi4LV7i6DEe0Yzl2ALJm9j4c5xEYN91GdW1xGsawGMOg2mgjF5GHBVX8pKX9kP+cWsP3Q==}
+    peerDependencies:
+      react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
 
   magic-string@0.30.21:
     resolution: {integrity: sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==}
@@ -4313,6 +4322,10 @@ snapshots:
       yallist: 4.0.0
 
   lru-cache@7.18.3: {}
+
+  lucide-react@1.41.0(react@19.2.7):
+    dependencies:
+      react: 19.2.7
 
   magic-string@0.30.21:
     dependencies:

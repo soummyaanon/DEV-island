@@ -225,7 +225,7 @@ private final class GlassPanel {
       view.setValue(NSNumber(value: 16.0), forKey: "cornerRadius")
       // Dark glass, not frosted grey: a heavy black tint leaves only a hint of
       // the wallpaper's light and colour bleeding through at the edges.
-      view.setValue(NSColor.black.withAlphaComponent(0.82), forKey: "tintColor")
+      view.setValue(NSColor.black.withAlphaComponent(0.9), forKey: "tintColor")
       effect = view
       tier = "native"
     } else {

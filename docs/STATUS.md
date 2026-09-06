@@ -132,6 +132,12 @@ were implemented directly from the spec at the user's request.
   `BatteryRing`). Settings → Live activities: battery, meter, Quiet during Focus,
   Focus status + Open Shortcuts + copyable links.
 
+- **Follow-ups from live review (same day)**: glass tint raised to black @ 0.9
+  + scrim 0.62 ("fully dark", "deep black"); every glyph replaced with
+  **Lucide** icons (`lucide-react` 1.41, ISC, tree-shaken — Icons.tsx maps names
+  to components; Settings sidebar too); battery text → `BatteryRing` gauge;
+  `openWith` now **defaults to swipe** (hover remains in Settings → Appearance).
+
 **Verified by machine (screenshots in the session)**: glass native tier under a
 real approval card, dark tint, staggered rows, battery ring 80% charging, meter
 "0% · 4 MB" on a fake session with `X-Agent-Pid`, SF-style icons, this very

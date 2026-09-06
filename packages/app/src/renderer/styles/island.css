@@ -19,8 +19,8 @@
      covers the one-frame lag and keeps text legible over a bright wallpaper;
      `css` paints a translucent panel with one static specular rim — the
      honest fallback, no refraction. The notch band is #000 in every tier. */
-  --panel-scrim: rgba(6, 6, 8, 0.55);
-  --panel-bg: rgba(9, 9, 11, 0.93);
+  --panel-scrim: rgba(4, 4, 6, 0.62);
+  --panel-bg: rgba(7, 7, 9, 0.96);
   --panel-rim:
     inset 0 1px 0 rgba(255, 255, 255, 0.12),
     inset 0 -1px 0 rgba(255, 255, 255, 0.04);
