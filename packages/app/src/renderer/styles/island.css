@@ -12,6 +12,23 @@
   --failed: #ff5f56;
   --idle: rgba(255, 255, 255, 0.32);
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* The expanded panel's material. Three tiers, chosen by main and stamped on
+     <html> as data-glass: `native` / `vibrancy` mean a real glass sheet sits
+     BENEATH the panel (Swift sidecar), so CSS paints only a faint scrim that
+     covers the one-frame lag and keeps text legible over a bright wallpaper;
+     `css` paints a translucent panel with one static specular rim — the
+     honest fallback, no refraction. The notch band is #000 in every tier. */
+  --panel-scrim: rgba(8, 8, 10, 0.35);
+  --panel-bg: rgba(11, 11, 13, 0.82);
+  --panel-rim:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.04);
+}
+:root[data-glass="native"],
+:root[data-glass="vibrancy"] {
+  --panel-bg: var(--panel-scrim);
+  --panel-rim: none;
 }
 
 * {
@@ -68,7 +85,9 @@ body {
    get generous room: sprite row on the left, count badge on the right. */
 .island {
   width: calc(var(--notch-width, 196px) + 68px);
-  background: #000;
+  /* Transparent: the band paints itself black and the panel paints its
+     material; overflow+radius clip both to the island's rounded shape. */
+  background: transparent;
   border-radius: 0 0 12px 12px;
   overflow: hidden;
   transition:
@@ -143,6 +162,8 @@ body {
 }
 
 .notch-spacer {
+  /* Pure black, always: this strip merges with the hardware notch. */
+  background: #000;
   height: calc(var(--notch-inset, 33px) - 1px);
   display: flex;
   align-items: center;
@@ -302,6 +323,10 @@ body {
 .panel-wrap {
   display: grid;
   grid-template-rows: 0fr;
+  background: var(--panel-bg);
+  /* Static — never animated — so it costs nothing per frame. */
+  box-shadow: var(--panel-rim);
+  border-radius: 0 0 16px 16px;
   transition: grid-template-rows var(--dur-close) ease-in;
 }
 .island.expanded .panel-wrap {
@@ -1225,6 +1250,8 @@ body {
 @media (prefers-contrast: more) {
   :root {
     --bg: #000;
+    --panel-bg: #000;
+    --panel-rim: inset 0 0 0 1px rgba(255, 255, 255, 0.5);
     --edge: rgba(255, 255, 255, 0.5);
     --edge-top: rgba(255, 255, 255, 0.7);
     --text: #fff;
@@ -1276,6 +1303,8 @@ body {
 @media (prefers-reduced-transparency: reduce) {
   :root {
     --bg: #0b0b0d;
+    --panel-bg: #0b0b0d;
+    --panel-rim: none;
   }
   .approval,
   .question,

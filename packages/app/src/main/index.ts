@@ -34,6 +34,16 @@ import {
 import { haptic, hapticsSupported, isHapticPattern, setHapticsEnabled } from "./haptics";
 import { stopHelper } from "./native-helper";
 import { readNaturalScroll } from "./scroll-direction";
+import {
+  glassSupport,
+  glassTier,
+  hideGlass,
+  initGlass,
+  onGlassSupport,
+  setGlassEnabled,
+  setGlassMediaPrefs,
+  updateGlass,
+} from "./glass";
 import { getWeather, onWeather, startWeather, updateWeatherSettings } from "./weather";
 import { createTray, updateTrayTitle } from "./tray";
 import { answerInTerminal, jumpToTerminal, sendPromptToTerminal } from "./jump-back";
@@ -163,18 +173,26 @@ if (!app.requestSingleInstanceLock()) {
   app.whenReady().then(async () => {
     app.dock?.hide(); // menu-bar app, no Dock icon
     notch = createNotchWindow();
+    initGlass(notch);
 
     // Battery saver: freeze the overlay's animations while the Mac is locked or
     // asleep — a long agent run shouldn't keep compositing the notch when nobody
     // can see it. Resume the moment the screen comes back.
     const setAnimating = (active: boolean) => sendToNotch("agent-island:animation-active", active);
-    powerMonitor.on("lock-screen", () => setAnimating(false));
-    powerMonitor.on("suspend", () => setAnimating(false));
+    powerMonitor.on("lock-screen", () => {
+      setAnimating(false);
+      hideGlass();
+    });
+    powerMonitor.on("suspend", () => {
+      setAnimating(false);
+      hideGlass();
+    });
     powerMonitor.on("unlock-screen", () => setAnimating(true));
     powerMonitor.on("resume", () => setAnimating(true));
 
     const settings = loadSettings();
     setHapticsEnabled(settings.haptics);
+    setGlassEnabled(settings.glass);
 
     // Natural scrolling inverts what a swipe looks like to the renderer; read
     // it once so gestures are defined by finger motion, not wheel sign.
@@ -246,6 +264,8 @@ if (!app.requestSingleInstanceLock()) {
         update: getPendingUpdate(),
         // So Settings can explain why the haptics toggle may do nothing.
         hapticsSupported: hapticsSupported(),
+        // So Settings can say whether the glass toggle can bite, and how.
+        glassSupport: glassSupport(),
         a11yShortcut: a11yShortcutRegistered ? A11Y_FOCUS_SHORTCUT : null,
       };
     }
@@ -255,6 +275,15 @@ if (!app.requestSingleInstanceLock()) {
       textSize: settings.textSize,
       openWith: settings.openWith,
       naturalScroll,
+      // Which material the renderer should style for: native/vibrancy = a
+      // real glass panel sits beneath; css = draw the panel itself.
+      glass: glassTier(),
+    });
+
+    // The sidecar answers `glass caps` asynchronously; refresh both windows.
+    onGlassSupport(() => {
+      sendToNotch("agent-island:ui-prefs", uiPrefs());
+      pushSettingsState(settingsState());
     });
 
     const weatherOptions = () => ({
@@ -321,6 +350,11 @@ if (!app.requestSingleInstanceLock()) {
         case "openWith":
           if (!isOpenWith(value)) return;
           settings.openWith = value;
+          sendToNotch("agent-island:ui-prefs", uiPrefs());
+          break;
+        case "glass":
+          settings.glass = value === true;
+          setGlassEnabled(settings.glass);
           sendToNotch("agent-island:ui-prefs", uiPrefs());
           break;
         case "weather":
@@ -396,8 +430,27 @@ if (!app.requestSingleInstanceLock()) {
     // where it actually is; see the cursor watcher below.
     ipcMain.on(
       "agent-island:island-rect",
-      (_e, rect: { x: number; y: number; width: number; height: number }) => {
+      (
+        _e,
+        rect: { x: number; y: number; width: number; height: number },
+        panel: { x: number; y: number; width: number; height: number } | null,
+      ) => {
         islandRect = rect;
+        // The glass sheet follows the panel portion, frame by frame.
+        if (notch && !notch.isDestroyed()) updateGlass(notch.getBounds(), panel ?? null);
+      },
+    );
+
+    // Reduce transparency / Increase contrast: the renderer already honours
+    // both in CSS; here they also retire the native glass the moment they flip.
+    ipcMain.on(
+      "agent-island:media-prefs",
+      (_e, prefs: { reducedTransparency?: boolean; moreContrast?: boolean } | null) => {
+        setGlassMediaPrefs({
+          reducedTransparency: prefs?.reducedTransparency === true,
+          moreContrast: prefs?.moreContrast === true,
+        });
+        sendToNotch("agent-island:ui-prefs", uiPrefs());
       },
     );
 

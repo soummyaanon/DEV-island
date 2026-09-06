@@ -65,6 +65,8 @@ export function App() {
 
   const islandRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  // The glass sheet follows this element, not the whole island.
+  const panelWrapRef = useRef<HTMLDivElement>(null);
   const measureRef = useRef<HTMLDivElement>(null);
   const interactiveRef = useRef(false);
   // VoiceOver reached in via the global shortcut; holds the panel open and traps Tab.
@@ -292,10 +294,18 @@ export function App() {
   // Presentation prefs from main: text scale (our stand-in for Dynamic Type)
   // and how the island opens.
   useEffect(() => {
-    const apply = (p: { textSize: string; openWith?: string; naturalScroll?: boolean }) => {
+    const apply = (p: {
+      textSize: string;
+      openWith?: string;
+      naturalScroll?: boolean;
+      glass?: string;
+    }) => {
       document.documentElement.setAttribute("data-text-size", p.textSize);
       setOpenWith(p.openWith === "swipe" ? "swipe" : "hover");
       setNaturalScroll(p.naturalScroll ?? true);
+      // Which material the panel should style for. Native/vibrancy = a real
+      // glass sheet sits beneath the panel, so CSS draws only a scrim.
+      document.documentElement.setAttribute("data-glass", p.glass ?? "css");
     };
     void window.agentIsland.getUiPrefs?.().then(apply);
     return window.agentIsland.onUiPrefs?.(apply);
@@ -367,23 +377,60 @@ export function App() {
   }, [expanded, notchWidth, maxIslandWidth]);
 
   // Main polls the cursor against the ISLAND, not the window — the window is
-  // far wider, so it needs to know where the pill actually is.
+  // far wider, so it needs to know where the pill actually is. The glass sheet
+  // follows the PANEL's rect. A ResizeObserver fires every frame while the
+  // spring transitions run, so the glass tracks the motion one frame behind at
+  // most; the slow heartbeat only covers anything the observer can't see.
   useEffect(() => {
-    const report = () => {
-      const el = islandRef.current;
-      if (!el) return;
+    const rectOf = (el: HTMLElement | null) => {
+      if (!el) return null;
       const r = el.getBoundingClientRect();
-      window.agentIsland.reportIslandRect?.({
+      return {
         x: Math.round(r.left),
         y: Math.round(r.top),
         width: Math.round(r.width),
         height: Math.round(r.height),
-      });
+      };
     };
+    let frame = 0;
+    const report = () => {
+      frame = 0;
+      const island = rectOf(islandRef.current);
+      if (!island) return;
+      window.agentIsland.reportIslandRect?.(island, rectOf(panelWrapRef.current));
+    };
+    const schedule = () => {
+      if (frame === 0) frame = requestAnimationFrame(report);
+    };
+    const observer = new ResizeObserver(schedule);
+    if (islandRef.current) observer.observe(islandRef.current);
+    if (panelWrapRef.current) observer.observe(panelWrapRef.current);
     report();
-    // The rect changes as the island expands and as its width settles.
-    const id = window.setInterval(report, 300);
-    return () => window.clearInterval(id);
+    const heartbeat = window.setInterval(report, 1000);
+    return () => {
+      observer.disconnect();
+      window.clearInterval(heartbeat);
+      if (frame !== 0) cancelAnimationFrame(frame);
+    };
+  }, []);
+
+  // Reduce transparency / Increase contrast. CSS already follows both; main
+  // also needs them, to retire the native glass sheet the moment they flip.
+  useEffect(() => {
+    const transparency = window.matchMedia("(prefers-reduced-transparency: reduce)");
+    const contrast = window.matchMedia("(prefers-contrast: more)");
+    const report = () =>
+      window.agentIsland.reportMediaPrefs?.({
+        reducedTransparency: transparency.matches,
+        moreContrast: contrast.matches,
+      });
+    report();
+    transparency.addEventListener("change", report);
+    contrast.addEventListener("change", report);
+    return () => {
+      transparency.removeEventListener("change", report);
+      contrast.removeEventListener("change", report);
+    };
   }, []);
 
   // The window is click-through with forwarded mouse-move; detect when the
@@ -600,7 +647,7 @@ export function App() {
             </span>
           </div>
 
-          <div className="panel-wrap">
+          <div className="panel-wrap" ref={panelWrapRef}>
             <div className="panel" ref={panelRef}>
               {/* `max-content` here is what makes the island content-sized: it
                   reports the panel's natural width independent of the width the

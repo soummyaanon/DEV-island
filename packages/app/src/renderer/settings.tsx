@@ -35,6 +35,8 @@ interface SettingsState {
   weatherLocation: string;
   weatherUnits: string;
   openWith: string;
+  glass: boolean;
+  glassSupport: string;
   openAtLogin: boolean;
   version: string;
   update: { version: string } | null;
@@ -57,6 +59,8 @@ const DEFAULTS: SettingsState = {
   weatherLocation: "",
   weatherUnits: "auto",
   openWith: "hover",
+  glass: true,
+  glassSupport: "none",
   openAtLogin: false,
   version: "",
   update: null,
@@ -297,6 +301,18 @@ function Settings() {
 
         {section === "appearance" && (
           <div className="s-group">
+            <Row
+              title="Liquid Glass panel"
+              detail={
+                state.glassSupport === "native"
+                  ? "The panel below the notch is real macOS glass — it refracts your wallpaper. The notch band itself stays black. Reduce transparency and Increase contrast switch it off automatically."
+                  : state.glassSupport === "vibrancy"
+                    ? "Real see-through blur beneath the panel. macOS 26 adds Liquid Glass refraction to this."
+                    : "Unavailable on this install — the native helper wasn't built, so the panel is drawn in CSS instead."
+              }
+              on={state.glass && state.glassSupport !== "none"}
+              onChange={(v) => set("glass", v)}
+            />
             <div className="s-row">
               <div className="s-text">
                 <b>Open with</b>

@@ -58,6 +58,8 @@ export interface AppSettings {
   weatherUnits: TemperatureUnit;
   /** Hover-to-open (default) or gesture-to-open. */
   openWith: OpenWith;
+  /** Liquid Glass under the expanded panel (native; falls back to CSS). */
+  glass: boolean;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -75,6 +77,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   weatherLocation: "",
   weatherUnits: "auto",
   openWith: "hover",
+  glass: true,
 };
 
 export function isSoundTheme(value: unknown): value is SoundTheme {

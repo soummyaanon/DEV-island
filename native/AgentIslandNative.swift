@@ -8,6 +8,9 @@ import Foundation
 //   → ping                                ← pong
 //   → haptic levelChange,55,levelChange   ← ok
 //   → location                            ← loc 22.53 88.37  |  loc-error denied
+//   → glass caps                          ← glass native | glass vibrancy
+//   → glass show x y w h radius belowId   ← ok | err <reason>
+//   → glass hide                          ← ok
 //   → quit                                (exits)
 //
 // Long-lived rather than spawned per call because haptics need sub-10ms
@@ -196,6 +199,133 @@ private func requestLocation() {
   fix.start()
 }
 
+
+// MARK: - Glass
+
+/// The Liquid Glass sheet under the island's expanded panel.
+///
+/// Electron's web view can't refract the wallpaper — `backdrop-filter` in a
+/// transparent window only sees the page — so this process owns one
+/// borderless, click-through panel holding the real material and keeps it
+/// ordered directly BELOW the Electron overlay. The parent tells us the frame
+/// (Electron screen points: primary display, top-left origin, y down) every
+/// time the panel moves; we snap to it immediately, no animation of our own,
+/// so the glass never drifts from the CSS spring it follows.
+private final class GlassPanel {
+  let panel: NSPanel
+  private let effect: NSView
+  let tier: String
+  private var belowWindowId: Int = 0
+
+  init() {
+    // NSGlassEffectView is looked up by name so this file still compiles
+    // against an older SDK (CI runs macos-14); KVC configures it.
+    if let glassClass = NSClassFromString("NSGlassEffectView") as? NSView.Type {
+      let view = glassClass.init(frame: .zero)
+      view.setValue(NSNumber(value: 16.0), forKey: "cornerRadius")
+      view.setValue(NSColor.black.withAlphaComponent(0.35), forKey: "tintColor")
+      effect = view
+      tier = "native"
+    } else {
+      let view = NSVisualEffectView(frame: .zero)
+      view.material = .hudWindow
+      view.blendingMode = .behindWindow
+      view.state = .active
+      view.wantsLayer = true
+      view.layer?.cornerRadius = 16
+      view.layer?.masksToBounds = true
+      effect = view
+      tier = "vibrancy"
+    }
+
+    panel = NSPanel(
+      contentRect: .zero,
+      styleMask: [.borderless, .nonactivatingPanel],
+      backing: .buffered,
+      defer: true
+    )
+    panel.isOpaque = false
+    panel.backgroundColor = .clear
+    panel.hasShadow = false
+    panel.ignoresMouseEvents = true
+    panel.hidesOnDeactivate = false
+    panel.isReleasedWhenClosed = false
+    // Same level Electron uses for "screen-saver"; ordering below the overlay
+    // keeps the glass beneath the web content at that level.
+    panel.level = .screenSaver
+    panel.collectionBehavior = [
+      .canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle, .transient,
+    ]
+    panel.contentView = effect
+
+    // Space switches can reshuffle ordering; put the glass back under the island.
+    NSWorkspace.shared.notificationCenter.addObserver(
+      forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main
+    ) { [weak self] _ in self?.reassertOrder() }
+  }
+
+  func show(x: Double, y: Double, width: Double, height: Double, radius: Double, belowId: Int) {
+    guard let primary = NSScreen.screens.first else { return }
+    // Electron: primary top-left origin, y down. AppKit: primary bottom-left, y up.
+    let frame = NSRect(x: x, y: primary.frame.height - y - height, width: width, height: height)
+    setRadius(radius)
+    belowWindowId = belowId
+    panel.setFrame(frame, display: true)
+    if !panel.isVisible { panel.orderFrontRegardless() }
+    reassertOrder()
+  }
+
+  func hide() {
+    panel.orderOut(nil)
+  }
+
+  private func setRadius(_ radius: Double) {
+    if tier == "native" {
+      effect.setValue(NSNumber(value: radius), forKey: "cornerRadius")
+    } else {
+      effect.layer?.cornerRadius = CGFloat(radius)
+    }
+  }
+
+  private func reassertOrder() {
+    guard panel.isVisible else { return }
+    if belowWindowId > 0 {
+      panel.order(.below, relativeTo: belowWindowId)
+    }
+  }
+}
+
+private var glassPanel: GlassPanel?
+
+private func glassCaps() -> String {
+  NSClassFromString("NSGlassEffectView") != nil ? "glass native" : "glass vibrancy"
+}
+
+private func handleGlass(_ argument: String) -> String {
+  let parts = argument.split(separator: " ").map(String.init)
+  guard let sub = parts.first else { return "err glass-missing-subcommand" }
+  switch sub {
+  case "caps":
+    return glassCaps()
+  case "hide":
+    glassPanel?.hide()
+    return "ok"
+  case "show":
+    // glass show x y w h radius belowId
+    guard parts.count >= 7,
+      let x = Double(parts[1]), let y = Double(parts[2]),
+      let w = Double(parts[3]), let h = Double(parts[4]),
+      let radius = Double(parts[5]), let below = Int(parts[6])
+    else { return "err glass-bad-args" }
+    guard w > 0, h > 0 else { return "err glass-empty" }
+    if glassPanel == nil { glassPanel = GlassPanel() }
+    glassPanel?.show(x: x, y: y, width: w, height: h, radius: radius, belowId: below)
+    return "ok"
+  default:
+    return "err glass-unknown \(sub)"
+  }
+}
+
 // MARK: - Command loop
 
 private func handle(_ input: String) {
@@ -208,6 +338,7 @@ private func handle(_ input: String) {
   case "haptic": respond(performRhythm(argument))
   // Answers later, out of band — the only asynchronous command.
   case "location": requestLocation()
+  case "glass": respond(handleGlass(argument))
   case "quit": exit(0)
   default: respond("err unknown-command \(command)")
   }
@@ -228,4 +359,10 @@ let reader = Thread {
 reader.stackSize = 1 << 19
 reader.start()
 
-RunLoop.main.run()
+// An NSApplication, not a bare run loop: the glass panel is a real window, and
+// AppKit only draws windows for a process that has one. Accessory policy keeps
+// us out of the Dock and the ⌘-Tab switcher. CoreLocation's delegate callbacks
+// still arrive on this main loop.
+let application = NSApplication.shared
+application.setActivationPolicy(.accessory)
+application.run()

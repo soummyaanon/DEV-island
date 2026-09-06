@@ -31,6 +31,10 @@ export interface SettingsState {
   weatherUnits: string;
   /** "hover" | "swipe" — how the collapsed island opens. */
   openWith: string;
+  /** Liquid Glass under the expanded panel. */
+  glass: boolean;
+  /** "native" | "vibrancy" | "none" — what the sidecar can draw. */
+  glassSupport: string;
   openAtLogin: boolean;
   version: string;
   /** Newest available version, or null when up to date / not yet checked. */
@@ -58,6 +62,8 @@ export interface UiPrefs {
   openWith: string;
   /** macOS natural scrolling; inverts wheel sign relative to finger motion. */
   naturalScroll: boolean;
+  /** "native" | "vibrancy" | "css" — the material the panel should style for. */
+  glass: string;
 }
 
 export interface WeatherPayload {
@@ -108,8 +114,18 @@ const api = {
    * far wider than the island, so main needs this to tell whether the pointer
    * has really left the pill.
    */
-  reportIslandRect: (rect: { x: number; y: number; width: number; height: number }): void =>
-    ipcRenderer.send("agent-island:island-rect", rect),
+  reportIslandRect: (
+    rect: { x: number; y: number; width: number; height: number },
+    panel?: { x: number; y: number; width: number; height: number } | null,
+  ): void => ipcRenderer.send("agent-island:island-rect", rect, panel ?? null),
+
+  /**
+   * System appearance switches the renderer sees via matchMedia. Main uses
+   * them to retire the native glass panel when transparency or contrast
+   * settings ask for it.
+   */
+  reportMediaPrefs: (prefs: { reducedTransparency: boolean; moreContrast: boolean }): void =>
+    ipcRenderer.send("agent-island:media-prefs", prefs),
 
   /** Presentation prefs the overlay needs (text scale). */
   getUiPrefs: (): Promise<UiPrefs> => ipcRenderer.invoke("agent-island:get-ui-prefs"),
