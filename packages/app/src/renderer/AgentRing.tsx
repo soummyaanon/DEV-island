@@ -1,7 +1,7 @@
 import type { AgentKind, SessionState } from "@agent-island/shared";
 import { CursorSprite } from "./CursorSprite";
 import { OpenAiSprite } from "./OpenAiSprite";
-import { PixelSprite } from "./PixelSprite";
+import { ClaudeSprite } from "./ClaudeSprite";
 
 /**
  * A session's status as a ring around its agent's logo — the same idiom as the
@@ -34,7 +34,7 @@ export function AgentRing({ agent, state, size = 18 }: { agent: AgentKind; state
       </svg>
       <span className="agent-ring-logo">
         {agent === "claude-code" ? (
-          <PixelSprite size={logo + 1} />
+          <ClaudeSprite size={logo + 1} />
         ) : agent === "codex" ? (
           <OpenAiSprite size={logo - 1} />
         ) : (

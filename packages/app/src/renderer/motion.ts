@@ -24,8 +24,8 @@ export interface SpringEasing {
   ms: number;
 }
 
-/** Opening: lands with ~4% overshoot, settles in ~400ms. */
-export const OPEN_SPRING: SpringConfig = { stiffness: 380, damping: 28, mass: 1 };
+/** Opening: steady — lands with ~1% overshoot (a hint of life, no wobble), settles in ~360ms. */
+export const OPEN_SPRING: SpringConfig = { stiffness: 380, damping: 32, mass: 1 };
 /** Adjusting while already open, and the count roll: firm, no visible overshoot, ~300ms. */
 export const SETTLE_SPRING: SpringConfig = { stiffness: 380, damping: 36, mass: 1 };
 /** Reduced motion: a step. 1ms rather than 0 so `transitionend` still fires. */

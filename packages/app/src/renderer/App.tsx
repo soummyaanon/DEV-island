@@ -3,10 +3,9 @@ import type { AgentUsage, SessionSnapshot } from "@agent-island/shared";
 import { SessionRow } from "./SessionRow";
 import { ApprovalCard } from "./ApprovalCard";
 import { QuestionCard } from "./QuestionCard";
-import { PixelSprite } from "./PixelSprite";
+import { ClaudeSprite } from "./ClaudeSprite";
 import { OpenAiSprite } from "./OpenAiSprite";
 import { CursorSprite } from "./CursorSprite";
-import { PacFeast } from "./PacFeast";
 import { StatusFooter } from "./StatusFooter";
 import { LIVE_ACTIVITY_MS, LiveActivity, type LiveActivityKind } from "./LiveActivity";
 import { wingContent } from "./wing-priority";
@@ -25,9 +24,9 @@ const MAX_ROWS = 5;
 /** Discrete moments the edge spark reacts to — each gets its own color/pattern. */
 type PulseKind = "done" | "failed" | "attention" | "question" | "approve";
 
-/** Wing order: one sprite per agent kind that has sessions. */
+/** Wing order: one logo per agent kind that has sessions — the real marks. */
 const AGENT_SPRITES = [
-  { kind: "claude-code", Sprite: PixelSprite },
+  { kind: "claude-code", Sprite: ClaudeSprite },
   { kind: "codex", Sprite: OpenAiSprite },
   { kind: "cursor", Sprite: CursorSprite },
 ] as const;
@@ -643,12 +642,11 @@ export function App() {
     });
   };
 
-  // Sprites are strictly live: one per agent kind that is ACTIVELY running
-  // (working / starting / waiting). Nothing running = an empty wing.
+  // Logos are strictly live: one per agent kind that is ACTIVELY running
+  // (working / starting / waiting), each with its own working motion. Nothing
+  // running = an empty wing.
   const liveKinds = new Set(active.map((s) => s.agent));
   const shown = AGENT_SPRITES.filter((a) => liveKinds.has(a.kind));
-  // Active agent kinds in stable order — these become Pac's dots.
-  const activeKinds = shown.map((a) => a.kind);
 
   // What the collapsed wings show — one winner, strict order (wing-priority.ts):
   // an agent needing you or working always beats a live activity, which beats
@@ -662,10 +660,6 @@ export function App() {
         lowBattery: power?.low === true,
         weather: weather !== null,
       });
-  // The compact working animation is Pac-Man chomping a line of agent logos
-  // (crab / blossom / cube) like dots — it takes over the whole sprite wing
-  // while work is live. Events are signalled separately by the edge glow.
-  const showFeast = (wing === "working" || wing === "attention") && active.length > 0;
   // At rest — sessions present but nothing running — the rim carries a very soft
   // green-bluish breathing glow.
   const showGlow = !expanded && sessions.length > 0 && active.length === 0;
@@ -740,11 +734,9 @@ export function App() {
         <div
           className={`island ${stateCls}${expanded ? " expanded" : ""}${settled ? " settled" : ""}${
             rubber !== 0 ? " rubbering" : ""
-          }${resting ? " bare" : ""}${showFeast ? " has-pac" : ""}${
-            ambientWeather ? " has-weather" : ""
-          }${liveActivity ? " has-activity" : ""}${lowBattery ? " has-low-batt" : ""} spr-${
-            showFeast ? 0 : shown.length
-          }`}
+          }${resting ? " bare" : ""}${ambientWeather ? " has-weather" : ""}${
+            liveActivity ? " has-activity" : ""
+          }${lowBattery ? " has-low-batt" : ""} spr-${shown.length}`}
           style={{ "--rubber": rubber } as CSSProperties}
           role="region"
           aria-label="Agent Island"
@@ -775,11 +767,7 @@ export function App() {
             }}
           >
             <span className="sprites">
-              {showFeast ? (
-                <span className="sprite-slot" key="feast">
-                  <PacFeast kinds={activeKinds} />
-                </span>
-              ) : liveActivity ? (
+              {liveActivity ? (
                 <span className="sprite-slot" key={`la-${liveActivity.n}`}>
                   <LiveActivity kind={liveActivity.kind} percent={liveActivity.percent} />
                 </span>

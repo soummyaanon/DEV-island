@@ -126,37 +126,30 @@ body {
   align-items: center;
   gap: 6px;
 }
-.demo-sprites .pixel-sprite.live g.f1 {
-  animation: crab-f1 0.7s steps(1, end) infinite;
+/* The same working motions as the island (island.css): Claude's spark turns
+   and breathes, the OpenAI blossom spins, Cursor's cube floats. */
+.demo-sprites .claude-sprite.live {
+  animation: spark-work 8s linear infinite;
 }
-.demo-sprites .pixel-sprite g.f2 {
-  opacity: 0;
-}
-.demo-sprites .pixel-sprite.live g.f2 {
-  animation: crab-f2 0.7s steps(1, end) infinite;
-}
-@keyframes crab-f1 {
-  0%,
-  49% {
-    opacity: 1;
+@keyframes spark-work {
+  0% {
+    transform: rotate(0deg) scale(1);
   }
-  50%,
+  25% {
+    transform: rotate(90deg) scale(0.9);
+  }
+  50% {
+    transform: rotate(180deg) scale(1);
+  }
+  75% {
+    transform: rotate(270deg) scale(0.9);
+  }
   100% {
-    opacity: 0;
-  }
-}
-@keyframes crab-f2 {
-  0%,
-  49% {
-    opacity: 0;
-  }
-  50%,
-  100% {
-    opacity: 1;
+    transform: rotate(360deg) scale(1);
   }
 }
 .demo-sprites .openai-sprite.live {
-  animation: spin 2.8s linear infinite;
+  animation: spin 4s linear infinite;
 }
 @keyframes spin {
   to {
@@ -164,17 +157,17 @@ body {
   }
 }
 .demo-sprites .cursor-sprite.live {
-  animation: bob 1.2s ease-in-out infinite alternate;
+  animation: bob 2s ease-in-out infinite alternate;
 }
 @keyframes bob {
   from {
-    transform: translateY(0.6px);
+    transform: translateY(0.8px);
   }
   to {
-    transform: translateY(-0.6px);
+    transform: translateY(-0.8px);
   }
 }
-.demo-sprites .pixel-sprite.live,
+.demo-sprites .claude-sprite.live,
 .demo-sprites .openai-sprite.live,
 .demo-sprites .cursor-sprite.live {
   filter: drop-shadow(0 0 3px currentColor);
@@ -354,9 +347,9 @@ body {
   .ob-start,
   .ob-hint,
   .demo-island,
-  .demo-sprites .pixel-sprite.live g.f1,
-  .demo-sprites .pixel-sprite.live g.f2,
-  .demo-sprites .openai-sprite.live {
+  .demo-sprites .claude-sprite.live,
+  .demo-sprites .openai-sprite.live,
+  .demo-sprites .cursor-sprite.live {
     animation: none;
   }
 }

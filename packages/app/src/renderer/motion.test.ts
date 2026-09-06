@@ -8,11 +8,11 @@ describe("sampleSpring", () => {
     expect(values[values.length - 1]).toBe(1);
   });
 
-  it("the open spring overshoots a little, then settles in under 600ms", () => {
+  it("the open spring overshoots only a hint (steady, no wobble), then settles in under 600ms", () => {
     const { values, ms } = sampleSpring(OPEN_SPRING);
     const peak = Math.max(...values);
-    expect(peak).toBeGreaterThan(1.02);
-    expect(peak).toBeLessThan(1.08);
+    expect(peak).toBeGreaterThan(1.004);
+    expect(peak).toBeLessThan(1.02);
     expect(ms).toBeGreaterThanOrEqual(300);
     expect(ms).toBeLessThanOrEqual(600);
   });

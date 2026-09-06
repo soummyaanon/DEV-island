@@ -35,8 +35,9 @@ terminal.
 | **Codex** | read-only tail of its local rollout logs | none at all |
 | **Cursor** | hooks + a fire-and-forget bridge script | automatic on first launch |
 
-Each running agent gets its own animated sprite in the notch wing — the pixel
-crab for Claude, the OpenAI blossom for Codex, the cube for Cursor — shown
+Each running agent shows its real mark in the notch wing — Claude's spark,
+the OpenAI blossom, Cursor's cube — each with its own steady working motion
+(the spark turns and breathes, the blossom spins, the cube floats), shown
 **only while that agent is actually working**, side by side when several run
 at once. The island measures your hardware notch at startup and adapts to any
 MacBook (Pro 14"/16", Air 13"/15", or no notch at all).
@@ -70,17 +71,20 @@ MacBook (Pro 14"/16", Air 13"/15", or no notch at all).
   thunderstorm, a crescent and stars at night, sunrise and sunset, a rainbow
   after the rain clears. Agents always take priority, so it never competes with
   work. Off by default; see [Privacy](#privacy).
-- **Moves like a real object** — every open, close, and resize runs on a
-  damped spring sampled once into a CSS `linear()` curve (no frame loop, no
-  hand-tuned bezier). Rows stagger in, cards slide in, a new agent's sprite pops
-  into the wing, the count rolls like a counter. Reduce Motion makes it instant.
-- **Liquid Glass, for real** — on macOS 26 the panel below the notch is a
-  native `NSGlassEffectView` sheet (a dark tint over your wallpaper's light),
-  owned by the Swift sidecar and ordered directly beneath the island. Older
-  macOS gets true see-through blur; a build without the helper gets a
-  translucent CSS panel. The notch band itself stays pure black so it keeps
-  merging with the hardware. Reduce Transparency and Increase Contrast switch
-  it off automatically.
+- **One solid body, moving like a real object** — the island is a single
+  deep-black shape: the notch band and the panel below it are the same `#000`,
+  so opening is one shape growing on a damped spring (sampled once into a CSS
+  `linear()` curve — no frame loop, no hand-tuned bezier) with barely a hint of
+  overshoot. Nothing inside slides against it: the contents fade in behind the
+  shape, rows and cards in a quiet cascade; a new agent's logo pops into the
+  wing and the count rolls like a counter. Reduce Motion makes it instant.
+- **Liquid Glass, opt-in** — Settings → Appearance can swap the solid body for
+  a translucent panel: on macOS 26 a native `NSGlassEffectView` sheet (a dark
+  tint over your wallpaper's light), owned by the Swift sidecar and ordered
+  directly beneath the island; older macOS gets true see-through blur. The
+  notch band stays pure black either way. The native sheet trails the open
+  animation by a frame, which is why solid black is the default. Reduce
+  Transparency and Increase Contrast switch glass off automatically.
 - **Gestures** — two-finger swipe down over the notch opens the island (or
   click a wing); swipe up closes it; a grazing pointer no longer pops it open.
   The wings stretch under your fingers before it springs open. Natural-scrolling

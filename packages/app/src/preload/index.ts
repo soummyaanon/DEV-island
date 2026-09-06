@@ -44,6 +44,8 @@ export interface SettingsState {
   /** False in dev builds and when another app owns the scheme. */
   deepLinksRegistered: boolean;
   openAtLogin: boolean;
+  /** macOS 13+ can hold a login item pending the user's approval in System Settings. */
+  loginNeedsApproval: boolean;
   version: string;
   /** Newest available version, or null when up to date / not yet checked. */
   update: { version: string } | null;

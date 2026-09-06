@@ -1,9 +1,8 @@
 import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { PixelSprite } from "./PixelSprite";
+import { ClaudeSprite } from "./ClaudeSprite";
 import { OpenAiSprite } from "./OpenAiSprite";
 import { CursorSprite } from "./CursorSprite";
-import { TrafficLights } from "./TrafficLights";
 import { Icon } from "./Icons";
 import { previewSound, previewCustom } from "./sounds";
 import {
@@ -16,7 +15,6 @@ import {
   type SoundPrefs,
   type SoundTheme,
 } from "./sound-prefs";
-import "./styles/window-chrome.css";
 import "./styles/settings.css";
 
 interface SettingsState {
@@ -45,6 +43,8 @@ interface SettingsState {
   focusLinks: { on: string; off: string };
   deepLinksRegistered: boolean;
   openAtLogin: boolean;
+  /** macOS 13+ can hold a login item pending the user's approval in System Settings. */
+  loginNeedsApproval?: boolean;
   version: string;
   update: { version: string } | null;
 }
@@ -66,7 +66,7 @@ const DEFAULTS: SettingsState = {
   weatherLocation: "",
   weatherUnits: "auto",
   openWith: "swipe",
-  glass: true,
+  glass: false,
   glassSupport: "none",
   battery: true,
   procStats: true,
@@ -237,8 +237,8 @@ function Settings() {
   const weatherSource = locationSource ? LOCATION_SOURCE_LABEL[locationSource] : null;
 
   useEffect(() => {
-    void window.agentIsland.getWeather?.().then((w) => setLocationSource(w?.locationSource ?? null));
-    return window.agentIsland.onWeather?.((w) => setLocationSource(w?.locationSource ?? null));
+    void window.agentIsland?.getWeather?.().then((w) => setLocationSource(w?.locationSource ?? null));
+    return window.agentIsland?.onWeather?.((w) => setLocationSource(w?.locationSource ?? null));
   }, []);
 
   useEffect(() => {
@@ -282,12 +282,12 @@ function Settings() {
 
   return (
     <div className="settings">
+      {/* The window chrome is macOS's own (hidden-inset title bar): real
+          traffic lights, resize, zoom, full screen. These strips only make
+          the top of the page draggable the way a title bar is. */}
+      <div className="title-drag" aria-hidden />
       <aside className="s-sidebar">
-        <div className="drag-strip" />
-        <TrafficLights
-          onClose={() => window.agentIsland?.winClose()}
-          onMinimize={() => window.agentIsland?.winMinimize()}
-        />
+        <div className="drag-strip" aria-hidden />
         <div className="s-brand">Agent Island</div>
         <nav className="s-nav">
           {NAV.map((n) => (
@@ -317,7 +317,7 @@ function Settings() {
         {section === "integrations" && (
           <div className="s-group">
             <Row
-              icon={<PixelSprite live />}
+              icon={<ClaudeSprite live />}
               title="Claude Code"
               detail="Lifecycle hooks in ~/.claude/settings.json — removed cleanly when off."
               on={state.agents["claude-code"] !== false}
@@ -346,10 +346,10 @@ function Settings() {
               title="Liquid Glass panel"
               detail={
                 state.glassSupport === "native"
-                  ? "The panel below the notch is real macOS glass — it refracts your wallpaper. The notch band itself stays black. Reduce transparency and Increase contrast switch it off automatically."
+                  ? "Off: the island is one solid deep-black body. On: the panel below the notch becomes real macOS glass that refracts your wallpaper (the band stays black); the native sheet trails the open animation by a frame. Reduce transparency and Increase contrast switch it off automatically."
                   : state.glassSupport === "vibrancy"
-                    ? "Real see-through blur beneath the panel. macOS 26 adds Liquid Glass refraction to this."
-                    : "Unavailable on this install — the native helper wasn't built, so the panel is drawn in CSS instead."
+                    ? "Off: the island is one solid deep-black body. On: real see-through blur beneath the panel. macOS 26 adds Liquid Glass refraction to this."
+                    : "Unavailable on this install — the native helper wasn't built, so the island stays a solid black body."
               }
               on={state.glass && state.glassSupport !== "none"}
               onChange={(v) => set("glass", v)}
@@ -638,7 +638,11 @@ function Settings() {
           <div className="s-group">
             <Row
               title="Open at login"
-              detail="Start silently with your Mac — no Dock, no windows."
+              detail={
+                state.loginNeedsApproval
+                  ? "Requested — macOS wants your approval first: System Settings → General → Login Items & Extensions."
+                  : "Start silently with your Mac — no Dock, no windows."
+              }
               on={state.openAtLogin}
               onChange={(v) => set("openAtLogin", v)}
             />

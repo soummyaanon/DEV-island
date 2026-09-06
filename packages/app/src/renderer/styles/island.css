@@ -13,22 +13,18 @@
   --idle: rgba(255, 255, 255, 0.32);
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
 
-  /* The expanded panel's material. Three tiers, chosen by main and stamped on
-     <html> as data-glass: `native` / `vibrancy` mean a real glass sheet sits
-     BENEATH the panel (Swift sidecar), so CSS paints only a faint scrim that
-     covers the one-frame lag and keeps text legible over a bright wallpaper;
-     `css` paints a translucent panel with one static specular rim — the
-     honest fallback, no refraction. The notch band is #000 in every tier. */
+  /* The expanded panel's material. Default: the same pure #000 as the notch
+     band, so the island is ONE solid deep-black body and opening is a single
+     shape growing — no cap over a second surface, no rim, no seam. Liquid
+     Glass is opt-in (Settings → Appearance): main stamps data-glass
+     `native` / `vibrancy` on <html> when a real glass sheet sits BENEATH the
+     panel (Swift sidecar), and CSS then paints only a dark scrim over it. */
   --panel-scrim: rgba(0, 0, 0, 0.8);
-  --panel-bg: rgba(7, 7, 9, 0.96);
-  --panel-rim:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.04);
+  --panel-bg: #000;
 }
 :root[data-glass="native"],
 :root[data-glass="vibrancy"] {
   --panel-bg: var(--panel-scrim);
-  --panel-rim: none;
 }
 
 * {
@@ -130,18 +126,6 @@ body {
   width: calc(var(--notch-width, 196px) + 136px);
 }
 
-/* Pac-Man claims a slim lane in the left wing — a modest bump keeps the band
-   tight. Two/three classes outrank the plain spr-N rules above regardless of order. */
-.island.has-pac:not(.expanded):not(.bare) {
-  width: calc(var(--notch-width, 196px) + 80px);
-}
-.island.has-pac.spr-2:not(.expanded):not(.bare) {
-  width: calc(var(--notch-width, 196px) + 122px);
-}
-.island.has-pac.spr-3:not(.expanded):not(.bare) {
-  width: calc(var(--notch-width, 196px) + 158px);
-}
-
 /* Concave top "ears" (quad-Bezier r=10 in the reference — a radial-gradient
    inverse corner is the CSS equivalent). They flare the top edge outward so
    the shape blends into the notch instead of butting against it. */
@@ -191,43 +175,55 @@ body {
   opacity: 0;
 }
 
-/* Left wing: one sprite per active agent kind. */
+/* Left wing: one logo per active agent kind — the agents' real marks. Each
+   has its own steady working motion; all are a single `transform` on the <svg>
+   itself, so the glow below is rasterised once and only composited. */
 .sprites {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
 }
 
-.pixel-sprite,
+.claude-sprite,
 .openai-sprite,
 .cursor-sprite {
   display: block;
   flex: none;
 }
 
-/* Live sprites get a soft neon glow in their state color. */
-.pixel-sprite.live,
+/* Live logos get a soft neon glow in their state color. */
+.claude-sprite.live,
 .openai-sprite.live,
 .cursor-sprite.live {
   filter: drop-shadow(0 0 3px currentColor);
 }
 
-/* Cursor's cube floats while it works. */
-.cursor-sprite.live {
-  animation: cursor-bob 1.2s ease-in-out infinite alternate;
+/* Claude's spark turns slowly and breathes while it works: one linear
+   revolution every 8s with two soft swells per turn. */
+.claude-sprite.live {
+  animation: spark-work 8s linear infinite;
 }
-@keyframes cursor-bob {
-  from {
-    transform: translateY(0.6px);
+@keyframes spark-work {
+  0% {
+    transform: rotate(0deg) scale(1);
   }
-  to {
-    transform: translateY(-0.6px);
+  25% {
+    transform: rotate(90deg) scale(0.9);
+  }
+  50% {
+    transform: rotate(180deg) scale(1);
+  }
+  75% {
+    transform: rotate(270deg) scale(0.9);
+  }
+  100% {
+    transform: rotate(360deg) scale(1);
   }
 }
 
 /* The OpenAI blossom turns slowly while Codex works. */
 .openai-sprite.live {
-  animation: openai-spin 2.8s linear infinite;
+  animation: openai-spin 4s linear infinite;
 }
 @keyframes openai-spin {
   to {
@@ -235,34 +231,16 @@ body {
   }
 }
 
-/* The crab animates like the arcade original: two frames, hard steps. */
-.pixel-sprite g.f2 {
-  opacity: 0;
+/* Cursor's cube floats while it works. */
+.cursor-sprite.live {
+  animation: cursor-float 2s ease-in-out infinite alternate;
 }
-.pixel-sprite.live g.f1 {
-  animation: crab-f1 0.7s steps(1, end) infinite;
-}
-.pixel-sprite.live g.f2 {
-  animation: crab-f2 0.7s steps(1, end) infinite;
-}
-@keyframes crab-f1 {
-  0%,
-  49% {
-    opacity: 1;
+@keyframes cursor-float {
+  from {
+    transform: translateY(0.8px);
   }
-  50%,
-  100% {
-    opacity: 0;
-  }
-}
-@keyframes crab-f2 {
-  0%,
-  49% {
-    opacity: 0;
-  }
-  50%,
-  100% {
-    opacity: 1;
+  to {
+    transform: translateY(-0.8px);
   }
 }
 
@@ -388,71 +366,58 @@ body {
   opacity: 0.6;
 }
 
-/* ---- Expanding panel ---- */
+/* ---- Expanding panel ----
+   The band above and this panel are the same opaque #000 (or, with glass on,
+   the same dark scrim over one sheet), and the radius is inherited from the
+   island so the two corners never disagree mid-transition: one body, one
+   shape, growing on one spring. */
 .panel-wrap {
   display: grid;
   grid-template-rows: 0fr;
   background: var(--panel-bg);
-  /* Static — never animated — so it costs nothing per frame. */
-  box-shadow: var(--panel-rim);
-  border-radius: 0 0 16px 16px;
+  border-radius: inherit;
   transition: grid-template-rows var(--dur-close) ease-in;
 }
 .island.expanded .panel-wrap {
   grid-template-rows: 1fr;
   transition: grid-template-rows var(--dur-open) var(--spring-open);
 }
+/* The contents don't move — the shape does. They fade up once the body is
+   most of the way open, so nothing slides against the direction of growth. */
 .panel {
   overflow: hidden;
   min-height: 0;
   opacity: 0;
-  transform: translateY(-8px) scale(0.985);
-  transition:
-    opacity 80ms ease-in,
-    transform var(--dur-close) ease-in;
+  transition: opacity 70ms ease-in;
 }
 .island.expanded .panel {
   opacity: 1;
-  transform: none;
-  transition:
-    opacity 120ms ease-out,
-    transform var(--dur-open) var(--spring-open);
+  transition: opacity 160ms ease-out 60ms;
 }
 
 /* ---- Entrance choreography ----
-   Everything below is transform/opacity only and starts matching when
-   `.expanded` is added (or when the element mounts), so each plays once per
-   open — a row re-render doesn't remount and doesn't replay. */
+   Opacity only, and only a cascade: rows and cards fade in one after another
+   inside the panel's own fade. Each starts matching when `.expanded` is added
+   (or when the element mounts), so it plays once per open — a row re-render
+   doesn't remount and doesn't replay. */
 .island.expanded .row {
-  animation: row-in var(--dur-open) var(--spring-open) both;
-  animation-delay: calc(var(--i, 0) * 22ms);
+  animation: row-in 220ms ease-out both;
+  animation-delay: calc(60ms + var(--i, 0) * 18ms);
 }
 @keyframes row-in {
   from {
     opacity: 0;
-    transform: translateY(6px);
   }
   to {
     opacity: 1;
-    transform: none;
   }
 }
 .island.expanded .approval,
 .island.expanded .question {
-  animation: card-in var(--dur-open) var(--spring-open) both;
+  animation: row-in 220ms ease-out 60ms both;
 }
-@keyframes card-in {
-  from {
-    opacity: 0;
-    transform: translateY(-6px) scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-/* A sprite (or the feast / weather strip) arriving in the wing pops in. The
-   wrapper animates so the sprites' own spin/bob/frame animations are untouched. */
+/* A logo (or a live activity / weather strip) arriving in the wing pops in
+   gently. The wrapper animates so the logos' own motion is untouched. */
 .sprite-slot {
   display: inline-flex;
   align-items: center;
@@ -461,11 +426,11 @@ body {
 @keyframes sprite-pop {
   0% {
     opacity: 0;
-    transform: scale(0.6);
+    transform: scale(0.8);
   }
   60% {
     opacity: 1;
-    transform: scale(1.12);
+    transform: scale(1.06);
   }
   100% {
     opacity: 1;
@@ -591,7 +556,7 @@ body {
   justify-content: center;
   color: var(--text);
 }
-.agent-ring-logo .pixel-sprite,
+.agent-ring-logo .claude-sprite,
 .agent-ring-logo .openai-sprite,
 .agent-ring-logo .cursor-sprite {
   filter: none;
@@ -1069,93 +1034,6 @@ body {
   background: var(--done);
 }
 
-/* ---- Pac-Man feast (compact band, only while work is in flight) ----
-   Pac chomps in place at the left while a line of agent logos (crab / blossom /
-   cube) streams in from the right and vanishes at his mouth — the logos are his
-   dots. Pure-transform motion so it stays light. */
-.pac-run {
-  position: relative;
-  flex: none;
-  width: 74px;
-  height: 14px;
-  overflow: hidden;
-  color: #ffd23b;
-}
-.pac-man {
-  position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  display: block;
-  z-index: 1;
-  color: #ffd23b; /* Pac is always arcade yellow — never state-tinted. */
-}
-/* The food line: logos glide left into Pac's mouth and vanish as he eats them.
-   A soft blue-white keeps them reading as glowing dots regardless of shape;
-   per-item animation-delay (set inline) phases them into one steady stream. */
-.pac-food .food {
-  position: absolute;
-  left: 0;
-  top: 50%;
-  margin-top: -5px;
-  width: 10px;
-  height: 10px;
-  color: rgba(210, 228, 255, 0.85);
-  animation: food-eat 2.6s linear infinite;
-}
-.pac-food .food .pixel-sprite,
-.pac-food .food .openai-sprite,
-.pac-food .food .cursor-sprite {
-  display: block;
-  filter: none;
-}
-@keyframes food-eat {
-  0% {
-    transform: translateX(64px);
-    opacity: 0;
-  }
-  10% {
-    opacity: 1;
-  }
-  86% {
-    transform: translateX(14px);
-    opacity: 1;
-  }
-  100% {
-    transform: translateX(7px);
-    opacity: 0;
-  }
-}
-/* Two-frame chomp, hard steps like the arcade original. */
-.pac-man .pac-closed {
-  opacity: 0;
-}
-.pac-man .pac-open {
-  animation: pac-chomp-open 0.5s steps(1, end) infinite;
-}
-.pac-man .pac-closed {
-  animation: pac-chomp-closed 0.5s steps(1, end) infinite;
-}
-@keyframes pac-chomp-open {
-  0%,
-  49% {
-    opacity: 1;
-  }
-  50%,
-  100% {
-    opacity: 0;
-  }
-}
-@keyframes pac-chomp-closed {
-  0%,
-  49% {
-    opacity: 0;
-  }
-  50%,
-  100% {
-    opacity: 1;
-  }
-}
 /* ---- Idle glow: at rest (sessions present, nothing running) the bottom rim
    carries a whisper-soft green-bluish glow that slowly breathes. Deliberately
    faint — a sign of life, not a spotlight. */
@@ -1311,26 +1189,13 @@ body {
     transform: none;
     transition: none;
   }
-  .pixel-sprite.live g.f1,
-  .pixel-sprite.live g.f2,
+  /* The logos hold still; the glow stops breathing. The event bloom keeps
+     only a gentle fade so events still register without motion. */
+  .claude-sprite.live,
   .openai-sprite.live,
   .cursor-sprite.live,
   .notch-spacer.state-working .spacer-info {
     animation: none;
-  }
-  /* The feast holds still (Pac mouth open, one logo parked); the glow stops
-     breathing. The event bloom keeps only a gentle fade so events still
-     register without motion. */
-  .pac-man .pac-open,
-  .pac-man .pac-closed,
-  .pac-food .food {
-    animation: none;
-  }
-  .pac-man .pac-closed {
-    opacity: 0;
-  }
-  .pac-food .food:nth-child(n + 2) {
-    display: none;
   }
   .notch-glow {
     animation: none;
@@ -1371,7 +1236,6 @@ body {
   :root {
     --bg: #000;
     --panel-bg: #000;
-    --panel-rim: inset 0 0 0 1px rgba(255, 255, 255, 0.5);
     --edge: rgba(255, 255, 255, 0.5);
     --edge-top: rgba(255, 255, 255, 0.7);
     --text: #fff;
@@ -1418,13 +1282,12 @@ body {
 }
 
 /* ---- Reduced transparency ----
-   macOS "Reduce transparency". The island's whole visual trick is a translucent
-   body over the wallpaper; here it becomes a solid panel. */
+   macOS "Reduce transparency". The solid body is already opaque; this only
+   pins the glass tier's scrim back to the same #000 and lifts the inset cards. */
 @media (prefers-reduced-transparency: reduce) {
   :root {
     --bg: #0b0b0d;
-    --panel-bg: #0b0b0d;
-    --panel-rim: none;
+    --panel-bg: #000;
   }
   .approval,
   .question,

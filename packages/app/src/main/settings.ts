@@ -27,11 +27,15 @@ export const OPEN_WITH = ["hover", "swipe"] as const;
 export type OpenWith = (typeof OPEN_WITH)[number];
 
 /**
- * Bumped when a stored field's meaning changes. v1 files (no version) were
- * written before "Open with" existed in Settings, so their `openWith` was
- * only ever the old implicit default — it is reset to the new default once.
+ * Bumped when a stored field's meaning changes.
+ * - v1 → v2: v1 files (no version) were written before "Open with" existed in
+ *   Settings, so their `openWith` was only ever the old implicit default — it
+ *   is reset to the new default once.
+ * - v2 → v3: `glass` used to default to on. The island is now one solid black
+ *   body and glass is an opt-in translucent look, so a v2 file's `glass` (only
+ *   ever the old default) is reset to off once.
  */
-export const SETTINGS_VERSION = 2;
+export const SETTINGS_VERSION = 3;
 
 /** Everything the Settings window can change, persisted across launches. */
 export interface AppSettings {
@@ -66,7 +70,8 @@ export interface AppSettings {
   weatherUnits: TemperatureUnit;
   /** Hover-to-open (default) or gesture-to-open. */
   openWith: OpenWith;
-  /** Liquid Glass under the expanded panel (native; falls back to CSS). */
+  /** Opt-in: a translucent Liquid Glass panel (native sheet, falls back to
+   *  CSS) instead of the solid deep-black body. Off by default. */
   glass: boolean;
   /** Battery live activity in the wings and footer. */
   battery: boolean;
@@ -92,7 +97,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   weatherLocation: "",
   weatherUnits: "auto",
   openWith: "swipe",
-  glass: true,
+  glass: false,
   battery: true,
   procStats: true,
   respectFocus: true,
@@ -137,7 +142,7 @@ export function loadSettings(): AppSettings {
   cached = normalizeSettings(stored);
   // A migrated file is written back once, so the migration doesn't re-run
   // (and re-reset the field) on every launch.
-  if (typeof stored.settingsVersion !== "number") saveSettings(cached);
+  if (stored.settingsVersion !== SETTINGS_VERSION) saveSettings(cached);
   return cached;
 }
 
@@ -146,7 +151,8 @@ export function loadSettings(): AppSettings {
  * migrations. Pure, so it is unit-tested without Electron.
  */
 export function normalizeSettings(stored: Partial<AppSettings>): AppSettings {
-  const legacy = typeof stored.settingsVersion !== "number";
+  // Unversioned files are v1.
+  const version = typeof stored.settingsVersion === "number" ? stored.settingsVersion : 1;
   return {
     ...DEFAULT_SETTINGS,
     ...stored,
@@ -158,7 +164,10 @@ export function normalizeSettings(stored: Partial<AppSettings>): AppSettings {
       ? stored.weatherUnits
       : DEFAULT_SETTINGS.weatherUnits,
     // Migration: a v1 file's openWith was never a choice, only the old default.
-    openWith: !legacy && isOpenWith(stored.openWith) ? stored.openWith : DEFAULT_SETTINGS.openWith,
+    openWith: version >= 2 && isOpenWith(stored.openWith) ? stored.openWith : DEFAULT_SETTINGS.openWith,
+    // Migration: before v3, glass was on by default — a stored `true` was the
+    // default, not a choice. The solid black body is the look now; glass is opt-in.
+    glass: version >= 3 && typeof stored.glass === "boolean" ? stored.glass : DEFAULT_SETTINGS.glass,
     soundOverrides: { ...(stored.soundOverrides ?? {}) },
     customSounds: { ...(stored.customSounds ?? {}) },
     customSoundNames: { ...(stored.customSoundNames ?? {}) },

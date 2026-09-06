@@ -24,6 +24,18 @@ describe("normalizeSettings", () => {
     expect(normalizeSettings({ settingsVersion: 2, openWith: "swipe" }).openWith).toBe("swipe");
   });
 
+  it("migrates a v2 file's glass (only ever the old default) to off", () => {
+    const s = normalizeSettings({ settingsVersion: 2, glass: true, openWith: "hover" });
+    expect(s.glass).toBe(false);
+    expect(s.openWith).toBe("hover"); // the v2 choice survives
+    expect(s.settingsVersion).toBe(SETTINGS_VERSION);
+  });
+
+  it("respects a chosen glass once the file is v3", () => {
+    expect(normalizeSettings({ settingsVersion: 3, glass: true }).glass).toBe(true);
+    expect(normalizeSettings({ settingsVersion: 3, glass: false }).glass).toBe(false);
+  });
+
   it("rejects junk enums", () => {
     const s = normalizeSettings({ settingsVersion: 2, openWith: "tap", textSize: "huge" } as never);
     expect(s.openWith).toBe("swipe");

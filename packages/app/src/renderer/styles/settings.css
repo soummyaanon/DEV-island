@@ -1,3 +1,8 @@
+/* A real macOS window (main/windows/settings-window.ts): the OS draws the
+   frame, shadow, corners, and traffic lights, and paints a vibrant "sidebar"
+   material behind the page. So the page background stays TRANSPARENT where
+   the sidebar is, and only the detail pane paints its own system-like colour —
+   the System Settings arrangement. */
 :root {
   color-scheme: light dark;
   --text: rgba(255, 255, 255, 0.94);
@@ -5,14 +10,12 @@
   --accent: #74b7ff;
   --working: #74b7ff;
   --done: #4ecb8d;
-  --window-bg: linear-gradient(180deg, #171b22, #0c0f14 60%, #080a0d);
-  --window-edge: rgba(255, 255, 255, 0.09);
-  --group-bg: rgba(255, 255, 255, 0.04);
+  --pane-bg: #232326;
+  --group-bg: rgba(255, 255, 255, 0.05);
   --group-edge: rgba(255, 255, 255, 0.07);
-  --divider: rgba(255, 255, 255, 0.06);
+  --divider: rgba(255, 255, 255, 0.08);
   --switch-off: rgba(255, 255, 255, 0.14);
   --thumb: #f8fbff;
-  --sidebar-bg: rgba(255, 255, 255, 0.025);
   --spring: cubic-bezier(0.34, 1.2, 0.64, 1);
 }
 
@@ -23,14 +26,12 @@
     --accent: #397fc9;
     --working: #397fc9;
     --done: #2f9464;
-    --window-bg: linear-gradient(180deg, #f8fbff, #edf3f9);
-    --window-edge: rgba(38, 71, 108, 0.16);
-    --group-bg: rgba(255, 255, 255, 0.72);
-    --group-edge: rgba(38, 71, 108, 0.13);
-    --divider: rgba(38, 71, 108, 0.1);
+    --pane-bg: #f2f2f5;
+    --group-bg: #ffffff;
+    --group-edge: rgba(38, 71, 108, 0.12);
+    --divider: rgba(38, 71, 108, 0.12);
     --switch-off: rgba(38, 71, 108, 0.2);
     --thumb: #ffffff;
-    --sidebar-bg: rgba(38, 71, 108, 0.05);
   }
 }
 
@@ -59,37 +60,43 @@ body {
   position: relative;
   height: 100%;
   display: flex;
-  background: var(--window-bg);
-  border: 1px solid var(--window-edge);
-  border-radius: 20px;
-  overflow: hidden;
-  animation: card-in 0.4s var(--spring);
-}
-@keyframes card-in {
-  from {
-    opacity: 0;
-    transform: scale(0.97) translateY(8px);
-  }
+  background: transparent;
 }
 
-/* ---- Left sidebar: draggable, holds the section nav ---- */
+/* The hidden title bar is still the place people grab a window: a full-width
+   strip across the top drags it (double-click zooms, as macOS does). The
+   native traffic lights float over its left end; nothing interactive lives
+   under it. */
+.title-drag {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 28px;
+  z-index: 5;
+  -webkit-app-region: drag;
+}
+
+/* ---- Left sidebar: vibrant (the OS material shows through), holds the nav.
+   Not a drag region itself — a button inside a drag region can lose its first
+   click to a window-drag session, which is exactly the "two clicks" bug. ---- */
 .s-sidebar {
   position: relative;
   flex: none;
-  width: 168px;
+  width: 196px;
   display: flex;
   flex-direction: column;
-  padding: 40px 12px 12px;
-  background: var(--sidebar-bg);
+  /* Clear of the traffic lights (hidden-inset title bar). */
+  padding: 52px 10px 10px;
+  background: transparent;
   border-right: 1px solid var(--divider);
-  -webkit-app-region: drag;
 }
 .drag-strip {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
-  height: 40px;
+  height: 52px;
   -webkit-app-region: drag;
 }
 .s-brand {
@@ -103,7 +110,6 @@ body {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  -webkit-app-region: no-drag;
 }
 .s-nav-item {
   position: relative;
@@ -157,14 +163,15 @@ body {
   gap: 2px;
   font-size: 10px;
   color: var(--text-dim);
-  -webkit-app-region: no-drag;
 }
 
-/* ---- Right detail pane: the selected section ---- */
+/* ---- Right detail pane: the selected section. Opaque, so the vibrancy stays
+   in the sidebar; scrolls on its own so the window can be small. ---- */
 .s-detail {
   flex: 1;
   min-width: 0;
   padding: 38px 24px 22px;
+  background: var(--pane-bg);
   overflow-y: auto;
 }
 
@@ -200,6 +207,7 @@ h1 {
   justify-content: center;
   color: var(--accent);
 }
+.s-icon .claude-sprite,
 .s-icon .openai-sprite,
 .s-icon .cursor-sprite {
   color: var(--working);
@@ -258,9 +266,7 @@ h1 {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .settings,
   .switch i {
-    animation: none;
     transition: none;
   }
 }

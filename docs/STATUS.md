@@ -1,6 +1,6 @@
 # Agent Island — Session Memory / Resume Notes
 
-_Last updated: 2026-07-19 (afternoon session). Branch: `feat/agent-island-m1-m4`._
+_Last updated: 2026-09-06 (v1.5.0). Branch: `main`._
 
 ## What exists and WORKS (all committed)
 
@@ -148,6 +148,41 @@ were implemented directly from the spec at the user's request.
   existed, so a versioned migration (`settingsVersion` 2) resets a legacy
   openWith to the swipe default once; and an empty prompt bar now closes itself
   when the pointer leaves or the window blurs, so ✎ can't pin the island open.
+
+- **Third live review (2026-09-06, "opening animation is double-layer, not deep
+  black; real logos instead of Pac-Man; steadier")**: root cause of the double
+  layer was the material split — the band is `#000` while the panel painted a
+  0.8 scrim over a native glass sheet that trails the CSS spring by several IPC
+  hops (ResizeObserver → rAF → IPC → stdin → setFrame), so mid-open the leading
+  edge was scrim-only (lighter) and the body scrim+glass (darker); the CSS tier
+  also drew a 1px specular rim at the band/panel junction. Fix: the island is
+  **one solid `#000` body** (`--panel-bg: #000`, rim removed, `.panel-wrap`
+  radius inherited from the island), and **glass is opt-in** (default off;
+  `settingsVersion` 3 resets a v2 file's `glass: true` — only ever the old
+  default — once). Choreography simplified to "the shape moves, the contents
+  don't": panel translate/scale removed, rows/cards fade only (18ms cascade),
+  open spring damping 28 → 32 (~4% → ~1% overshoot, ~360ms). Wing: Pac-Man
+  feast and the pixel crab deleted; **real marks** everywhere (`ClaudeSprite`
+  = the Claude spark, Simple Icons geometry; `CursorSprite` = Cursor's real
+  cube; blossom unchanged) with one steady `transform` each: spark turns 8s and
+  breathes, blossom spins 4s, cube floats 2s. Onboarding demo and Settings
+  icons updated to match.
+
+- **Settings window → a real macOS window (same review)**: reported "can't
+  toggle anything at one click; want the three window buttons and full
+  screen". The window was frameless + transparent with two fake traffic
+  lights, `resizable: false`, the whole sidebar a `-webkit-app-region: drag`
+  region, and default activation — this app has no Dock icon, so Settings
+  opened inactive and the first click was spent activating it (a button inside
+  a drag region can also lose its first click to a window-drag session). Now:
+  `titleBarStyle: "hiddenInset"` (native close / minimize / zoom-fullscreen),
+  `vibrancy: "sidebar"` with a transparent sidebar and an opaque detail pane
+  (System Settings arrangement), resizable with a 640×400 minimum,
+  fullscreenable, `acceptFirstMouse: true`, `app.focus({ steal: true })` on
+  open, drag regions reduced to the title strip, last size remembered for the
+  run. "Open at login" reports SMAppService's `requires-approval` as
+  on-but-pending with a hint instead of snapping back off. The onboarding window
+  still uses the shared `TrafficLights` component.
 
 **Verified by machine (screenshots in the session)**: glass native tier under a
 real approval card, dark tint, staggered rows, battery ring 80% charging, meter

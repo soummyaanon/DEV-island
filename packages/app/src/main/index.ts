@@ -311,10 +311,17 @@ if (!app.requestSingleInstanceLock()) {
     }
 
     function settingsState() {
+      // macOS 13+ registers login items through SMAppService, which can park
+      // the request as "requires-approval" until the user allows it in System
+      // Settings. Report that as on-but-pending rather than snapping the
+      // toggle back off, which read as a broken switch.
+      const login = app.getLoginItemSettings();
+      const loginNeedsApproval = login.status === "requires-approval";
       return {
         ...settings,
         customSounds: customSoundData(),
-        openAtLogin: app.getLoginItemSettings().openAtLogin,
+        openAtLogin: login.openAtLogin || loginNeedsApproval,
+        loginNeedsApproval,
         version: app.getVersion(),
         update: getPendingUpdate(),
         // So Settings can explain why the haptics toggle may do nothing.

@@ -1,6 +1,6 @@
 import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { PixelSprite } from "./PixelSprite";
+import { ClaudeSprite } from "./ClaudeSprite";
 import { OpenAiSprite } from "./OpenAiSprite";
 import { CursorSprite } from "./CursorSprite";
 import { TrafficLights } from "./TrafficLights";
@@ -19,7 +19,7 @@ function IslandDemo() {
       <div className="demo-island">
         <div className="demo-band">
           <span className="demo-sprites">
-            <PixelSprite live />
+            <ClaudeSprite live />
             <OpenAiSprite live />
             <CursorSprite live />
           </span>
