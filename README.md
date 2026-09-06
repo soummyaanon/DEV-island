@@ -70,6 +70,33 @@ MacBook (Pro 14"/16", Air 13"/15", or no notch at all).
   thunderstorm, a crescent and stars at night, sunrise and sunset, a rainbow
   after the rain clears. Agents always take priority, so it never competes with
   work. Off by default; see [Privacy](#privacy).
+- **Moves like a real object** — every open, close, and resize runs on a
+  damped spring sampled once into a CSS `linear()` curve (no frame loop, no
+  hand-tuned bezier). Rows stagger in, cards slide in, a new agent's sprite pops
+  into the wing, the count rolls like a counter. Reduce Motion makes it instant.
+- **Liquid Glass, for real** — on macOS 26 the panel below the notch is a
+  native `NSGlassEffectView` sheet (a dark tint over your wallpaper's light),
+  owned by the Swift sidecar and ordered directly beneath the island. Older
+  macOS gets true see-through blur; a build without the helper gets a
+  translucent CSS panel. The notch band itself stays pure black so it keeps
+  merging with the hardware. Reduce Transparency and Increase Contrast switch
+  it off automatically.
+- **Gestures** — two-finger swipe up over the open island closes it. Settings →
+  Appearance → Open with: *Swipe* makes the wings ignore a grazing pointer and
+  open on a swipe down (or a click), with a rubber-band stretch under your
+  fingers. Natural-scrolling aware, so "down" means your fingers moved down.
+- **Battery live activity** — plug in and the wings show a small ring gauge
+  with a bolt for a few seconds, then yield; under 20% on battery a red ring
+  stays while idle. The ring also lives in the panel footer.
+- **What your agents cost** — each row shows the CPU and memory of that agent's
+  whole process tree (the agent, its shells, the test run it started), summed
+  from one `ps` every two seconds *only while the panel is open*. Warms toward
+  amber past a core and a half, red past three.
+- **Quiet during Focus** — macOS keeps Focus state private, so a two-link
+  Shortcuts automation (`agent-island://focus/on`, `…/off`) tells the island
+  when a Focus starts and ends. Sounds and notification taps go quiet;
+  approvals and questions still open the island. `agent-island://toggle` and
+  `agent-island://settings` work from Shortcuts too.
 - **Sized to what it's showing** — the expanded panel measures its content and
   grows to fit, up to 720px, so a long diff is readable instead of scrolled.
 - **Accessible on purpose** — <kbd>⌃⌥⌘I</kbd> hands the island keyboard focus
@@ -98,6 +125,9 @@ Exactly two things ever leave your machine, both listed here in full:
 
 **Nothing about your sessions, prompts, projects, or agents is ever
 transmitted**, to either endpoint.
+
+Battery level, per-agent CPU/memory, Focus state, and the glass panel are all
+read and drawn locally — none of it is transmitted anywhere.
 
 On weather specifically: it is off until you switch it on, and while it's off
 no weather request is made at all. Your location is resolved locally, in this

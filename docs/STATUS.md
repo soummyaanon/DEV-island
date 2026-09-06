@@ -97,6 +97,51 @@ Stage B is nearly additive.
   prompt and times out — the timezone layer carries it invisibly. May work in a
   signed packaged build; unverified there.
 
+## Glass Island (spec: docs/superpowers/specs/2026-09-06-glass-island-design.md)
+
+Branch `feat/glass-island`, three stages, all landed 2026-09-06. Stage 1 has a
+written plan (docs/superpowers/plans/…stage-1-motion-gestures.md); Stages 2–3
+were implemented directly from the spec at the user's request.
+
+- **Stage 1 — Motion + gestures — DONE**: `renderer/motion.ts` samples two
+  damped springs into CSS `linear()` easings published as `--spring-open` /
+  `--dur-open` / `--spring-settle` / `--dur-settle` (+ `--dur-close`) on `<html>`;
+  choreography = `row-in` (stagger via `--i`), `card-in`, `sprite-pop` on
+  `.sprite-slot`, `count-roll`. `renderer/gesture.ts` (WheelGesture) + the
+  `openWith` setting (hover | swipe) in a new Appearance section; swipe-up always
+  closes; `--rubber` drives the rubber band. `main/scroll-direction.ts` reads
+  natural scrolling once so swipes are finger motion.
+- **Stage 2 — Liquid Glass — DONE**: sidecar `glass caps|show|hide` owns a
+  click-through NSPanel with `NSGlassEffectView` (looked up by name → compiles
+  on the macos-14 runner; falls back to NSVisualEffectView `.hudWindow`),
+  ordered `.below` the Electron window (CGWindowID from `getMediaSourceId()`),
+  re-asserted on Space change. `main/glass.ts` follows the `.panel-wrap` rect
+  (renderer reports island + panel rects per frame via ResizeObserver, 1s
+  heartbeat). Tiers stamped as `data-glass` = native | vibrancy | css →
+  `--panel-bg`. **Spike verified by screenshot**: NSGlassEffectView refracts
+  content behind a transparent window. Tint is black @ 0.82 + a 0.55 CSS scrim:
+  the user asked for "fully dark" after seeing the first grey frost.
+- **Stage 3 — Live activities — DONE**: `main/power.ts` (powerMonitor + pmset,
+  60s, off on desktops), `main/proc-stats.ts` (one `ps` / 2s while the panel is
+  open, subtree sums; PID from `X-Agent-Pid: $PPID` in both hook bridge scripts,
+  `lsof -t` for Codex), `main/focus.ts` + `main/deep-link.ts`
+  (`agent-island://focus/on|off`, `toggle`, `settings`; protocol registered in
+  packaged builds only), `renderer/wing-priority.ts` (attention > working >
+  activity > low battery > weather > empty), `LiveActivity.tsx`,
+  `StatusFooter.tsx` (replaces UsageFooter), `Icons.tsx` (SF-style SVG icons +
+  `BatteryRing`). Settings → Live activities: battery, meter, Quiet during Focus,
+  Focus status + Open Shortcuts + copyable links.
+
+**Verified by machine (screenshots in the session)**: glass native tier under a
+real approval card, dark tint, staggered rows, battery ring 80% charging, meter
+"0% · 4 MB" on a fake session with `X-Agent-Pid`, SF-style icons, this very
+Claude Code session appearing as a row via the installed hooks.
+**Not verified by machine**: gesture feel on a trackpad, plug/unplug moment in
+the wing, the macOS 26 Shortcuts Focus trigger firing `agent-island://` (needs a
+packaged build for the scheme), Codex `lsof` PID in the wild, whether Cursor's
+hook-runner subtree reads as noise (spec says blank it if so), Space-switch
+re-ordering of the glass panel over a full-screen app.
+
 ## Next up (agreed backlog, in rough priority)
 
 1. **Stability + size reduction** (user's stated goal 2026-07-19): shrink
