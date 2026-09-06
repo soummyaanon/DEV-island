@@ -40,17 +40,24 @@ jobs:
       - name: Build release DMG
         run: pnpm package
 
-      # Notes come from THIS (source) repo's commits — the public repo has no
-      # history of its own worth summarizing.
-      - name: Generate release notes
+      # Notes: the annotated tag's message, written for users (git tag -a).
+      # GitHub's generated notes only link into THIS private repo, which the
+      # public can't open — they are the fallback for a lightweight tag.
+      - name: Release notes from the tag message
         id: notes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
         run: |
+          git fetch --force --quiet origin "refs/tags/$TAG:refs/tags/$TAG" || true
+          body="$(git tag -l --format='%(contents)' "$TAG" | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}')"
+          if [ -z "$(printf '%s' "$body" | tr -d '[:space:]')" ]; then
+            body="$(gh api "repos/${{ github.repository }}/releases/generate-notes" \
+              -f tag_name="$TAG" --jq .body)"
+          fi
           {
             echo "body<<__NOTES__"
-            gh api "repos/${{ github.repository }}/releases/generate-notes" \
-              -f tag_name="${{ github.ref_name }}" --jq .body
+            printf '%s\n' "$body"
             echo "__NOTES__"
           } >> "$GITHUB_OUTPUT"
 
