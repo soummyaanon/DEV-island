@@ -1,5 +1,10 @@
 appId: com.agentisland.app
 productName: Agent Island
+# No native Node modules in this app (ws's optional natives aren't installed),
+# so there is nothing for @electron/rebuild to do — and its node_modules walk
+# trips over pnpm's dangling symlinks for other platforms' optional binaries
+# (@esbuild/aix-ppc64, @rollup/rollup-linux-*), which fails the pack step.
+npmRebuild: false
 directories:
   output: release
 afterPack: build/after-pack.cjs
