@@ -19,8 +19,8 @@
      covers the one-frame lag and keeps text legible over a bright wallpaper;
      `css` paints a translucent panel with one static specular rim — the
      honest fallback, no refraction. The notch band is #000 in every tier. */
-  --panel-scrim: rgba(8, 8, 10, 0.35);
-  --panel-bg: rgba(11, 11, 13, 0.82);
+  --panel-scrim: rgba(6, 6, 8, 0.55);
+  --panel-bg: rgba(9, 9, 11, 0.93);
   --panel-rim:
     inset 0 1px 0 rgba(255, 255, 255, 0.12),
     inset 0 -1px 0 rgba(255, 255, 255, 0.04);
@@ -300,58 +300,16 @@ body {
   gap: 4px;
   height: 14px;
 }
-.la-batt {
-  position: relative;
-  width: 22px;
-  height: 10px;
-  border: 1.5px solid currentColor;
-  border-radius: 3px;
-  overflow: hidden;
-}
-/* The fill grows in from the left — transform only. */
-.la-batt-fill {
-  position: absolute;
-  inset: 1px;
-  background: currentColor;
-  transform-origin: left center;
-  animation: fill-in var(--dur-open) var(--spring-open) both;
-}
-@keyframes fill-in {
-  from {
-    transform: scaleX(0);
-  }
-}
-.la-battery.battery-plugged {
-  color: var(--done);
-}
-.la-battery.battery-unplugged {
+.la-battery {
   color: var(--text);
 }
 .la-battery.battery-low,
 .wing-low {
   color: var(--failed);
 }
-.la-bolt {
-  font-size: var(--fs-small);
-  line-height: 1;
-  animation: bolt-pop var(--dur-open) var(--spring-open) both;
-}
-@keyframes bolt-pop {
-  from {
-    opacity: 0;
-    transform: scale(0.5);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-/* A crescent from one static inset shadow. */
-.la-moon {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  box-shadow: inset 3px -2px 0 0 currentColor;
+.ring {
+  display: block;
+  flex: none;
 }
 .la-focus.focus-on {
   color: #c9b8ff;
@@ -373,6 +331,11 @@ body {
 }
 .meter.burning {
   color: var(--failed);
+}
+.usage-item.power,
+.usage-item.meter-total,
+.usage-item.focus-chip {
+  align-items: center;
 }
 .usage-item.power.low b {
   color: var(--failed);
@@ -701,11 +664,6 @@ body {
 }
 .ctl.icon.prompt-send {
   color: var(--accent);
-  font-size: var(--fs-icon);
-}
-/* The power glyph renders heavier than the others — knock it down to match. */
-.ctl.icon.quit {
-  font-size: var(--fs-body);
 }
 .ctl.icon.prompt-send:disabled {
   color: var(--text-dim);
@@ -762,14 +720,21 @@ body {
   align-items: center;
   gap: 2px;
 }
+/* Icon controls hold one inline SVG (Icons.tsx) sized with the type scale. */
 .ctl.icon {
-  font-size: var(--fs-icon);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   line-height: 1;
-  padding: 4px 7px;
+  padding: 4px 6px;
+}
+.ctl.icon svg {
+  width: calc(15px * var(--ui-scale));
+  height: calc(15px * var(--ui-scale));
+  display: block;
 }
 .ctl.icon.off {
-  color: rgba(255, 255, 255, 0.25);
-  text-decoration: line-through;
+  color: rgba(255, 255, 255, 0.3);
 }
 .ctl.update {
   color: var(--accent);
@@ -1297,10 +1262,6 @@ body {
     transform: none;
     transition: none;
   }
-  .la-batt-fill,
-  .la-bolt {
-    animation: none;
-  }
   .pixel-sprite.live g.f1,
   .pixel-sprite.live g.f2,
   .openai-sprite.live,
@@ -1469,9 +1430,6 @@ body {
 
 /* The prompt toggle. The bar itself is transient — this is how you summon it
    when no agent is currently asking you anything. */
-.ctl.icon.prompt-toggle {
-  font-size: calc(var(--fs-body) * 1.1);
-}
 .ctl.icon.prompt-toggle.on {
   color: var(--accent);
   background: rgba(116, 183, 255, 0.14);

@@ -10,6 +10,7 @@ import { PacFeast } from "./PacFeast";
 import { StatusFooter } from "./StatusFooter";
 import { LIVE_ACTIVITY_MS, LiveActivity, type LiveActivityKind } from "./LiveActivity";
 import { wingContent } from "./wing-priority";
+import { Icon } from "./Icons";
 import { playSound } from "./sounds";
 import { DEFAULT_SOUND_PREFS, type SoundPrefs, type SoundTheme } from "./sound-prefs";
 import { summarizeTransitions, useAnnouncer, useFocusTrap, useReducedMotion } from "./a11y";
@@ -879,7 +880,7 @@ export function App() {
                     disabled={!promptText.trim()}
                     onClick={(e) => e.stopPropagation()}
                   >
-                    ↵
+                    <Icon name="send" />
                   </button>
                 </form>
               )}
@@ -909,7 +910,7 @@ export function App() {
                       window.agentIsland.setSounds(!sound.on);
                     }}
                   >
-                    ♪
+                    <Icon name={sound.on ? "speaker" : "speaker-slash"} />
                   </button>
                   {promptTarget && (
                     <button
@@ -922,7 +923,7 @@ export function App() {
                         togglePrompt();
                       }}
                     >
-                      ✎
+                      <Icon name="compose" />
                     </button>
                   )}
                 </span>
@@ -950,7 +951,7 @@ export function App() {
                       window.agentIsland.openSettings();
                     }}
                   >
-                    ⚙
+                    <Icon name="gear" />
                   </button>
                   <button
                     className="ctl icon quit"
@@ -962,7 +963,7 @@ export function App() {
                       window.agentIsland.quit();
                     }}
                   >
-                    ⏻
+                    <Icon name="power" />
                   </button>
                 </span>
               </div>

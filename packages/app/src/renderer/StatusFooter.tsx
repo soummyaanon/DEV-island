@@ -1,4 +1,5 @@
 import type { AgentUsage } from "@agent-island/shared";
+import { BatteryRing, Icon } from "./Icons";
 
 /**
  * One footer row: agent quotas (as before), then the ambient facts — battery,
@@ -66,21 +67,15 @@ export function StatusFooter({
   const showTotals = totals !== null && totals.cpu + totals.rssMb > 0;
   if (summaries.length === 0 && !power && !showFocus && !showTotals) return null;
 
-  const powerGlyph = power
-    ? power.state === "discharging"
-      ? "▮"
-      : power.state === "charged"
-        ? "▮"
-        : "⚡︎"
-    : "";
+  // Spoken/tooltip detail; the ring itself carries the number visually.
   const powerDetail = power
     ? power.state === "discharging"
-      ? formatRemaining(power.minutesRemaining)
+      ? `${power.percent}% battery${power.minutesRemaining ? `, ${formatRemaining(power.minutesRemaining)} left` : ""}`
       : power.state === "charging"
-        ? `${formatRemaining(power.minutesRemaining)} to full`.trim()
+        ? `${power.percent}%, charging${power.minutesRemaining ? `, ${formatRemaining(power.minutesRemaining)} to full` : ""}`
         : power.state === "charged"
-          ? "full"
-          : "on power"
+          ? "Fully charged"
+          : `${power.percent}%, on power`
     : "";
 
   return (
@@ -93,11 +88,9 @@ export function StatusFooter({
         </span>
       ))}
       {power && (
-        <span className={`usage-item power${power.low ? " low" : ""}`} title="Battery">
-          <b>
-            {powerGlyph} {power.percent}%
-          </b>
-          {powerDetail && <span>{powerDetail}</span>}
+        <span className={`usage-item power${power.low ? " low" : ""}`} title={powerDetail} aria-label={powerDetail}>
+          <BatteryRing percent={power.percent} charging={power.state !== "discharging"} low={power.low} />
+          <b>{power.percent}%</b>
         </span>
       )}
       {showFocus && (
@@ -110,12 +103,14 @@ export function StatusFooter({
             onClearFocus();
           }}
         >
-          <b>☾ {focus?.name ?? "Focus"}</b>
+          <Icon name="moon" size={12} />
+          <b>{focus?.name ?? "Focus"}</b>
         </button>
       )}
       {showTotals && totals && (
         <span className="usage-item meter-total" title="What your agents are using right now">
-          <b>{totals.cpu}% cpu</b>
+          <Icon name="cpu" size={12} />
+          <b>{totals.cpu}%</b>
           <span>{formatMemory(totals.rssMb)}</span>
         </span>
       )}

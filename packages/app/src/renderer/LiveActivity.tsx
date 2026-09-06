@@ -4,6 +4,8 @@
  * Decorative: the aria-label on the wing carries the meaning.
  */
 
+import { BatteryRing, Icon } from "./Icons";
+
 export type LiveActivityKind = "battery-plugged" | "battery-unplugged" | "battery-low" | "focus-on" | "focus-off";
 
 export interface LiveActivityProps {
@@ -25,17 +27,13 @@ export function LiveActivity({ kind, percent = 0 }: LiveActivityProps) {
   if (kind === "focus-on" || kind === "focus-off") {
     return (
       <span className={`la la-focus ${kind}`} aria-hidden>
-        <span className="la-moon" />
+        <Icon name="moon" size={11} />
       </span>
     );
   }
-  const fill = Math.max(0, Math.min(100, percent)) / 100;
   return (
     <span className={`la la-battery ${kind}`} aria-hidden>
-      <span className="la-batt">
-        <span className="la-batt-fill" style={{ transform: `scaleX(${fill})` }} />
-      </span>
-      {kind === "battery-plugged" && <span className="la-bolt">⚡︎</span>}
+      <BatteryRing size={12} percent={percent} charging={kind === "battery-plugged"} low={kind === "battery-low"} />
     </span>
   );
 }

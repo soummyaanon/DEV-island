@@ -223,7 +223,9 @@ private final class GlassPanel {
     if let glassClass = NSClassFromString("NSGlassEffectView") as? NSView.Type {
       let view = glassClass.init(frame: .zero)
       view.setValue(NSNumber(value: 16.0), forKey: "cornerRadius")
-      view.setValue(NSColor.black.withAlphaComponent(0.35), forKey: "tintColor")
+      // Dark glass, not frosted grey: a heavy black tint leaves only a hint of
+      // the wallpaper's light and colour bleeding through at the edges.
+      view.setValue(NSColor.black.withAlphaComponent(0.82), forKey: "tintColor")
       effect = view
       tier = "native"
     } else {
