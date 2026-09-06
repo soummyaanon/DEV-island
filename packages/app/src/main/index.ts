@@ -662,8 +662,9 @@ if (!app.requestSingleInstanceLock()) {
     // the moment the pointer leaves the window (renderer-side mouse events
     // alone proved flaky and left it stuck open).
     let cursorWatch: ReturnType<typeof setInterval> | null = null;
-    ipcMain.on("agent-island:set-interactive", (_e, interactive: boolean) => {
-      console.log(`[notch] interactive=${interactive}`);
+    ipcMain.on("agent-island:set-interactive", (_e, interactive: boolean, reason?: unknown) => {
+      const why = typeof reason === "string" && reason ? ` (${reason})` : "";
+      console.log(`[notch] interactive=${interactive}${why}`);
       if (notch && !notch.isDestroyed()) notch.setIgnoreMouseEvents(!interactive, { forward: true });
       // The meter samples only while someone can see it.
       setProcStatsActive(interactive);

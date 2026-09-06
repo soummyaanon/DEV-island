@@ -252,6 +252,9 @@ private final class GlassPanel {
     panel.ignoresMouseEvents = true
     panel.hidesOnDeactivate = false
     panel.isReleasedWhenClosed = false
+    // Dark glass regardless of the system appearance: in the light appearance
+    // the material lifts toward white and no tint gets it back to black.
+    panel.appearance = NSAppearance(named: .darkAqua)
     // Same level Electron uses for "screen-saver"; ordering below the overlay
     // keeps the glass beneath the web content at that level.
     panel.level = .screenSaver

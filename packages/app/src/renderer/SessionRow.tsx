@@ -2,6 +2,7 @@ import type { CSSProperties } from "react";
 import type { SessionSnapshot, SessionState } from "@agent-island/shared";
 import { describeSession } from "./a11y";
 import { formatMemory } from "./StatusFooter";
+import { AgentRing } from "./AgentRing";
 
 const AGENT_LABEL: Record<string, string> = {
   "claude-code": "claude",
@@ -120,7 +121,7 @@ export function SessionRow({
           onJump(session);
         }}
       >
-        <StatusDot state={session.state} />
+        <AgentRing agent={session.agent} state={session.state} />
         <div className="row-main" aria-hidden>
           <div className="row-heading">
             <span className="project">{projectName(session.cwd)}</span>

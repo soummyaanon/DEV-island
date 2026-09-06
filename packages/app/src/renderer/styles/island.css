@@ -19,7 +19,7 @@
      covers the one-frame lag and keeps text legible over a bright wallpaper;
      `css` paints a translucent panel with one static specular rim — the
      honest fallback, no refraction. The notch band is #000 in every tier. */
-  --panel-scrim: rgba(4, 4, 6, 0.62);
+  --panel-scrim: rgba(0, 0, 0, 0.8);
   --panel-bg: rgba(7, 7, 9, 0.96);
   --panel-rim:
     inset 0 1px 0 rgba(255, 255, 255, 0.12),
@@ -544,8 +544,57 @@ body {
   transition: background 0.1s ease;
   cursor: pointer;
 }
-.row > .dot {
-  margin-top: 5px;
+.row > .agent-ring {
+  margin-top: 1px;
+}
+
+/* ---- Agent ring: the session's state around its agent's logo ---- */
+.agent-ring {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--idle);
+}
+.agent-ring.state-working,
+.agent-ring.state-starting {
+  color: var(--working);
+}
+.agent-ring.state-waiting-for-approval {
+  color: var(--waiting);
+  animation: count-pulse 1.4s ease-in-out infinite alternate;
+}
+.agent-ring.state-done {
+  color: var(--done);
+}
+.agent-ring.state-failed {
+  color: var(--failed);
+}
+.agent-ring .ring-arc {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+/* Busy: the three-quarter arc turns. Transform only. */
+.agent-ring .ring-arc.spinning {
+  animation: ring-spin 1.1s linear infinite;
+}
+@keyframes ring-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.agent-ring-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text);
+}
+.agent-ring-logo .pixel-sprite,
+.agent-ring-logo .openai-sprite,
+.agent-ring-logo .cursor-sprite {
+  filter: none;
 }
 .row:hover {
   background: rgba(255, 255, 255, 0.06);
@@ -611,9 +660,8 @@ body {
 
 .usage-compact {
   min-height: 25px;
-  margin: 0 8px;
-  padding: 6px 6px 7px;
-  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  margin: 2px 8px 0;
+  padding: 4px 6px 5px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -697,8 +745,7 @@ body {
   justify-content: space-between;
   gap: 8px;
   margin: 0 8px;
-  padding: 4px 4px 6px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 2px 4px 6px;
 }
 .ctl {
   font: inherit;
@@ -1004,9 +1051,7 @@ body {
 }
 /* Multi-question cards: each sub-question is a block; picks glow until sent. */
 .q-block + .q-block {
-  margin-top: 6px;
-  padding-top: 6px;
-  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  margin-top: 10px;
 }
 .q-option.picked {
   background: rgba(78, 203, 141, 0.16);
@@ -1254,6 +1299,10 @@ body {
   .island.expanded .question,
   .sprite-slot,
   .spacer-info > span {
+    animation: none;
+  }
+  .agent-ring,
+  .agent-ring .ring-arc.spinning {
     animation: none;
   }
   .island:not(.expanded) .notch-spacer > .sprites,

@@ -138,6 +138,17 @@ were implemented directly from the spec at the user's request.
   to components; Settings sidebar too); battery text → `BatteryRing` gauge;
   `openWith` now **defaults to swipe** (hover remains in Settings → Appearance).
 
+- **Second live review**: glass panel forced to `.darkAqua` appearance (in the
+  light appearance the material lifts to grey whatever the tint) + scrim 0.8 →
+  deep black. Separator hairlines removed (footer, controls, question blocks).
+  Session status is now `AgentRing` — ring in the state colour around the agent
+  logo, spinning while busy. "Won't close" report: the reason the island is
+  open is now logged (`[notch] interactive=true (hover|gesture|prompt|…)`); the
+  user's settings.json had `openWith: "hover"` persisted before Appearance
+  existed, so a versioned migration (`settingsVersion` 2) resets a legacy
+  openWith to the swipe default once; and an empty prompt bar now closes itself
+  when the pointer leaves or the window blurs, so ✎ can't pin the island open.
+
 **Verified by machine (screenshots in the session)**: glass native tier under a
 real approval card, dark tint, staggered rows, battery ring 80% charging, meter
 "0% · 4 MB" on a fake session with `X-Agent-Pid`, SF-style icons, this very

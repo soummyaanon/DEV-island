@@ -26,8 +26,16 @@ export type TemperatureUnit = (typeof TEMPERATURE_UNITS)[number];
 export const OPEN_WITH = ["hover", "swipe"] as const;
 export type OpenWith = (typeof OPEN_WITH)[number];
 
+/**
+ * Bumped when a stored field's meaning changes. v1 files (no version) were
+ * written before "Open with" existed in Settings, so their `openWith` was
+ * only ever the old implicit default — it is reset to the new default once.
+ */
+export const SETTINGS_VERSION = 2;
+
 /** Everything the Settings window can change, persisted across launches. */
 export interface AppSettings {
+  settingsVersion: number;
   agents: Record<AgentKind, boolean>;
   sounds: boolean;
   /** Which sound set plays; per-event overrides win over the theme. */
@@ -69,6 +77,7 @@ export interface AppSettings {
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
+  settingsVersion: SETTINGS_VERSION,
   agents: { "claude-code": true, codex: true, cursor: true },
   sounds: true,
   soundTheme: "8bit",
@@ -125,21 +134,35 @@ export function loadSettings(): AppSettings {
   } catch {
     /* corrupt settings -> defaults; the next save repairs the file */
   }
-  cached = {
+  cached = normalizeSettings(stored);
+  // A migrated file is written back once, so the migration doesn't re-run
+  // (and re-reset the field) on every launch.
+  if (typeof stored.settingsVersion !== "number") saveSettings(cached);
+  return cached;
+}
+
+/**
+ * Merge a stored file over the defaults, validating enums and applying
+ * migrations. Pure, so it is unit-tested without Electron.
+ */
+export function normalizeSettings(stored: Partial<AppSettings>): AppSettings {
+  const legacy = typeof stored.settingsVersion !== "number";
+  return {
     ...DEFAULT_SETTINGS,
     ...stored,
+    settingsVersion: SETTINGS_VERSION,
     agents: { ...DEFAULT_SETTINGS.agents, ...(stored.agents ?? {}) },
     soundTheme: isSoundTheme(stored.soundTheme) ? stored.soundTheme : DEFAULT_SETTINGS.soundTheme,
     textSize: isTextSize(stored.textSize) ? stored.textSize : DEFAULT_SETTINGS.textSize,
     weatherUnits: isTemperatureUnit(stored.weatherUnits)
       ? stored.weatherUnits
       : DEFAULT_SETTINGS.weatherUnits,
-    openWith: isOpenWith(stored.openWith) ? stored.openWith : DEFAULT_SETTINGS.openWith,
+    // Migration: a v1 file's openWith was never a choice, only the old default.
+    openWith: !legacy && isOpenWith(stored.openWith) ? stored.openWith : DEFAULT_SETTINGS.openWith,
     soundOverrides: { ...(stored.soundOverrides ?? {}) },
     customSounds: { ...(stored.customSounds ?? {}) },
     customSoundNames: { ...(stored.customSoundNames ?? {}) },
   };
-  return cached;
 }
 
 export function saveSettings(next: AppSettings): void {

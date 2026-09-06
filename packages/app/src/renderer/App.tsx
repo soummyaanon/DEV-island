@@ -180,6 +180,27 @@ export function App() {
     return window.agentIsland.onCursorLeft(() => setHovering(false));
   }, []);
 
+  // A focused prompt input holds the island open on purpose — but only while
+  // it's worth holding: with nothing typed, leaving the island (or the window
+  // losing focus) closes the bar, otherwise one click on ✎ pins the island open
+  // until someone finds Escape.
+  const promptTextRef = useRef("");
+  promptTextRef.current = promptText;
+  const closeEmptyPrompt = useCallback(() => {
+    if (promptTextRef.current.trim() !== "") return;
+    promptInputRef.current?.blur();
+    setPromptFocused(false);
+    setPromptOpen(false);
+    window.agentIsland.setPromptComposing(false);
+  }, []);
+  useEffect(() => {
+    if (!hovering) closeEmptyPrompt();
+  }, [hovering, closeEmptyPrompt]);
+  useEffect(() => {
+    window.addEventListener("blur", closeEmptyPrompt);
+    return () => window.removeEventListener("blur", closeEmptyPrompt);
+  }, [closeEmptyPrompt]);
+
   // Freeze animations while the Mac is locked/asleep (battery); resume on wake.
   // Optional-chained so an older preload (mid dev-reload) can never crash render.
   const [animated, setAnimated] = useState(true);
@@ -564,12 +585,25 @@ export function App() {
   }, [promptFocused, naturalScroll, expanded, openWith]);
 
   // Capture the mouse only while needed so the rest of the desktop stays clickable.
+  // The reason travels along so main's log says WHY the island is open.
+  const openReason = [
+    hoverExpands && (gestureOpen ? "gesture" : "hover"),
+    pinned && "pinned",
+    promptFocused && "prompt",
+    a11yFocused && "a11y",
+    pending.length > 0 && "approval",
+    asking.length > 0 && "question",
+    needsYou.length > 0 && "needs-you",
+    !expanded && hovering && "wings",
+  ]
+    .filter(Boolean)
+    .join(",");
   useEffect(() => {
     if (interactive !== interactiveRef.current) {
       interactiveRef.current = interactive;
-      window.agentIsland.setInteractive(interactive);
+      window.agentIsland.setInteractive(interactive, openReason);
     }
-  }, [interactive]);
+  }, [interactive, openReason]);
 
   const active = useMemo(() => sessions.filter((s) => ACTIVE_STATES.has(s.state)), [sessions]);
   const visible = useMemo(() => sessions.slice(0, MAX_ROWS), [sessions]);

@@ -255,9 +255,10 @@ const api = {
     return () => ipcRenderer.removeListener("agent-island:usage", listener);
   },
 
-  /** Flip window click-through: true = capture mouse, false = pass through. */
-  setInteractive: (interactive: boolean): void =>
-    ipcRenderer.send("agent-island:set-interactive", interactive),
+  /** Flip window click-through: true = capture mouse, false = pass through.
+   *  `reason` is a comma list of what holds the island open, for the log. */
+  setInteractive: (interactive: boolean, reason = ""): void =>
+    ipcRenderer.send("agent-island:set-interactive", interactive, reason),
 
   /** Bring the session's terminal to the front. */
   jump: (session: SessionSnapshot): void => ipcRenderer.send("agent-island:jump", session),
