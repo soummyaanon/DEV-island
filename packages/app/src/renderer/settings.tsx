@@ -37,6 +37,12 @@ interface SettingsState {
   openWith: string;
   glass: boolean;
   glassSupport: string;
+  battery: boolean;
+  procStats: boolean;
+  respectFocus: boolean;
+  focus: { active: boolean; name: string | null; since: string };
+  focusLinks: { on: string; off: string };
+  deepLinksRegistered: boolean;
   openAtLogin: boolean;
   version: string;
   update: { version: string } | null;
@@ -61,6 +67,12 @@ const DEFAULTS: SettingsState = {
   openWith: "hover",
   glass: true,
   glassSupport: "none",
+  battery: true,
+  procStats: true,
+  respectFocus: true,
+  focus: { active: false, name: null, since: "" },
+  focusLinks: { on: "agent-island://focus/on?name=Work", off: "agent-island://focus/off" },
+  deepLinksRegistered: false,
   openAtLogin: false,
   version: "",
   update: null,
@@ -71,6 +83,7 @@ const NAV = [
   { id: "appearance", label: "Appearance", icon: "◐" },
   { id: "sounds", label: "Sounds", icon: "♪" },
   { id: "weather", label: "Weather", icon: "☂" },
+  { id: "live", label: "Live activities", icon: "◉" },
   { id: "accessibility", label: "Accessibility", icon: "◍" },
   { id: "general", label: "General", icon: "⚙" },
   { id: "updates", label: "Updates", icon: "↑" },
@@ -181,6 +194,33 @@ function Segmented({
           {o.label}
         </button>
       ))}
+    </div>
+  );
+}
+
+/** One agent-island:// URL with a copy button, for the Focus automation. */
+function LinkRow({ label, url }: { label: string; url: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="s-row s-sub">
+      <div className="s-text">
+        <b>{label}</b>
+        <span>
+          <code className="s-code">{url}</code>
+        </span>
+      </div>
+      <button
+        type="button"
+        className="s-import"
+        onClick={() => {
+          void navigator.clipboard.writeText(url).then(() => {
+            setCopied(true);
+            window.setTimeout(() => setCopied(false), 1200);
+          });
+        }}
+      >
+        {copied ? "Copied" : "Copy"}
+      </button>
     </div>
   );
 }
@@ -483,6 +523,60 @@ function Settings() {
                 </span>
               </div>
             </div>
+          </div>
+        )}
+
+        {section === "live" && (
+          <div className="s-group">
+            <Row
+              title="Battery"
+              detail="A moment in the notch when the charger comes or goes, and a small red battery under 20%. Nothing on desktop Macs."
+              on={state.battery}
+              onChange={(v) => set("battery", v)}
+            />
+            <Row
+              title="Agent resource meter"
+              detail="CPU and memory per session, summed over the agent's whole process tree. Sampled only while the island is open."
+              on={state.procStats}
+              onChange={(v) => set("procStats", v)}
+            />
+            <Row
+              title="Quiet during Focus"
+              detail="Mutes sounds and notification taps while a Focus is on. Approvals and questions still open the island."
+              on={state.respectFocus}
+              onChange={(v) => set("respectFocus", v)}
+            />
+            <div className="s-row s-sub">
+              <div className="s-text">
+                <b>Focus status</b>
+                <span>
+                  {state.focus.active
+                    ? `On — ${state.focus.name ?? "Focus"}, since ${new Date(state.focus.since).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}. If it stayed on by mistake, click the ☾ chip in the island.`
+                    : "Off, or no signal yet. macOS keeps Focus state private, so a Shortcuts automation tells Agent Island instead — two links, set up once."}
+                </span>
+              </div>
+              <button
+                type="button"
+                className="s-import"
+                onClick={() => window.agentIsland?.settings?.openShortcuts?.()}
+              >
+                Open Shortcuts
+              </button>
+            </div>
+            <div className="s-row s-sub">
+              <div className="s-text">
+                <span>
+                  In Shortcuts: Automation → New → Focus → choose the Focus → <b>When turning on</b> →
+                  Run immediately → add the action <b>Open URLs</b> with the first link below. Repeat with{" "}
+                  <b>When turning off</b> and the second link. One pair per Focus you use.
+                  {state.deepLinksRegistered
+                    ? ""
+                    : " Links register the first time the installed app runs (not from a dev build)."}
+                </span>
+              </div>
+            </div>
+            <LinkRow label="Focus turned on" url={state.focusLinks.on} />
+            <LinkRow label="Focus turned off" url={state.focusLinks.off} />
           </div>
         )}
 

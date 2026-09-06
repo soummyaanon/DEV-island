@@ -6,6 +6,7 @@ import {
   ipcMain,
   powerMonitor,
   screen,
+  shell,
   type Tray,
 } from "electron";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
@@ -31,7 +32,17 @@ import {
   loadSettings,
   saveSettings,
 } from "./settings";
-import { haptic, hapticsSupported, isHapticPattern, setHapticsEnabled } from "./haptics";
+import {
+  haptic,
+  hapticsSupported,
+  isHapticPattern,
+  setHapticsEnabled,
+  setHapticsQuiet,
+} from "./haptics";
+import { getPower, onPower, setPowerEnabled, startPower } from "./power";
+import { setProcStatsActive, setProcStatsEnabled, startProcStats } from "./proc-stats";
+import { clearFocus, getFocus, onFocus, setFocus } from "./focus";
+import { DEEP_LINK_SCHEME, focusLinks, parseDeepLink } from "./deep-link";
 import { stopHelper } from "./native-helper";
 import { readNaturalScroll } from "./scroll-direction";
 import {
@@ -170,6 +181,26 @@ if (!app.requestSingleInstanceLock()) {
   /** Latest island rectangle in window coordinates, reported by the renderer. */
   let islandRect: { x: number; y: number; width: number; height: number } | null = null;
 
+  // agent-island:// deep links. Focus can't be read (Full Disk Access, no
+  // public API), so a Shortcuts automation opens focus/on|off when it changes;
+  // toggle and settings come along for free. Registered before `ready` so a
+  // link that LAUNCHES the app is delivered too.
+  function handleDeepLink(url: string): void {
+    const link = parseDeepLink(url);
+    if (!link) {
+      console.log(`[deep-link] ignored ${url}`);
+      return;
+    }
+    console.log(`[deep-link] ${url}`);
+    if (link.kind === "focus") setFocus(link.active, link.name);
+    else if (link.kind === "toggle") sendToNotch("agent-island:toggle");
+    else showSettingsWindow();
+  }
+  app.on("open-url", (event, url) => {
+    event.preventDefault();
+    handleDeepLink(url);
+  });
+
   app.whenReady().then(async () => {
     app.dock?.hide(); // menu-bar app, no Dock icon
     notch = createNotchWindow();
@@ -193,6 +224,30 @@ if (!app.requestSingleInstanceLock()) {
     const settings = loadSettings();
     setHapticsEnabled(settings.haptics);
     setGlassEnabled(settings.glass);
+
+    // Only a packaged app should own the scheme system-wide; a dev Electron
+    // binary registering itself as a URL handler would be a mess to undo.
+    let deepLinksRegistered = false;
+    if (app.isPackaged) {
+      deepLinksRegistered = app.setAsDefaultProtocolClient(DEEP_LINK_SCHEME);
+      if (!deepLinksRegistered) console.warn(`[deep-link] could not register ${DEEP_LINK_SCHEME}://`);
+    } else {
+      console.log(`[deep-link] dev build: ${DEEP_LINK_SCHEME}:// is not registered`);
+    }
+
+    // Focus: while it's on (and the setting says so) sounds and notification
+    // haptics go quiet. Visual pulses and auto-expand are untouched — a blocked
+    // agent must still be seen.
+    const focusMuted = () => settings.respectFocus && getFocus().active;
+    const focusPayload = () => ({ ...getFocus(), mute: focusMuted() });
+    const applyFocusEffects = () => {
+      setHapticsQuiet(focusMuted());
+      sendToNotch("agent-island:focus", focusPayload());
+    };
+    onFocus(() => {
+      applyFocusEffects();
+      pushSettingsState(settingsState());
+    });
 
     // Natural scrolling inverts what a swipe looks like to the renderer; read
     // it once so gestures are defined by finger motion, not wheel sign.
@@ -266,6 +321,9 @@ if (!app.requestSingleInstanceLock()) {
         hapticsSupported: hapticsSupported(),
         // So Settings can say whether the glass toggle can bite, and how.
         glassSupport: glassSupport(),
+        focus: getFocus(),
+        focusLinks: focusLinks(),
+        deepLinksRegistered,
         a11yShortcut: a11yShortcutRegistered ? A11Y_FOCUS_SHORTCUT : null,
       };
     }
@@ -357,6 +415,18 @@ if (!app.requestSingleInstanceLock()) {
           setGlassEnabled(settings.glass);
           sendToNotch("agent-island:ui-prefs", uiPrefs());
           break;
+        case "battery":
+          settings.battery = value === true;
+          setPowerEnabled(settings.battery);
+          break;
+        case "procStats":
+          settings.procStats = value === true;
+          setProcStatsEnabled(settings.procStats);
+          break;
+        case "respectFocus":
+          settings.respectFocus = value === true;
+          applyFocusEffects();
+          break;
         case "weather":
           settings.weather = value === true;
           applyWeatherSettings();
@@ -419,6 +489,31 @@ if (!app.requestSingleInstanceLock()) {
       haptic(state.condition === "thunder" ? "rumble" : "whisper");
     });
     startWeather(weatherOptions());
+
+    // Battery: instant plug/unplug from powerMonitor, percentage from pmset.
+    onPower((payload) => sendToNotch("agent-island:power", payload));
+    startPower(settings.battery);
+    ipcMain.handle("agent-island:get-power", () => getPower());
+
+    // Focus, via deep links (see handleDeepLink).
+    ipcMain.handle("agent-island:get-focus", () => focusPayload());
+    ipcMain.on("agent-island:clear-focus", () => clearFocus());
+    ipcMain.on("agent-island:open-shortcuts", () => void shell.openExternal("shortcuts://"));
+
+    // Resource meter: one `ps` every 2s while the panel is open, summed over
+    // each session's process tree from the PID its hook bridge reported.
+    startProcStats({
+      enabled: settings.procStats,
+      roots: () => {
+        const roots = new Map<string, number>();
+        for (const s of filterSessions(daemon.list())) {
+          const pid = Number(s.meta?.pid);
+          if (Number.isInteger(pid) && pid > 0) roots.set(s.key, pid);
+        }
+        return roots;
+      },
+      onStats: (stats) => sendToNotch("agent-island:proc-stats", stats),
+    });
 
     // Renderer-initiated haptics (row clicks, control presses). Guarded because
     // this crosses the contextBridge.
@@ -570,6 +665,8 @@ if (!app.requestSingleInstanceLock()) {
     ipcMain.on("agent-island:set-interactive", (_e, interactive: boolean) => {
       console.log(`[notch] interactive=${interactive}`);
       if (notch && !notch.isDestroyed()) notch.setIgnoreMouseEvents(!interactive, { forward: true });
+      // The meter samples only while someone can see it.
+      setProcStatsActive(interactive);
       if (cursorWatch) {
         clearInterval(cursorWatch);
         cursorWatch = null;

@@ -81,6 +81,8 @@ function extractPlan(input: Record<string, unknown> | undefined): string | undef
  * "undleIdentifier" — shaped like a word, never like a bundle id.
  */
 const BUNDLE_ID = /^[\w-]+(\.[\w-]+)+$/;
+/** A PID, as the bridge script sends `$PPID` — the agent process itself. */
+const PID = /^\d{1,7}$/;
 
 /** Terminal identity forwarded by the hook (via allowedEnvVars), for jump-to-terminal. */
 function terminalMeta(headers: IncomingHttpHeaders): Record<string, string> {
@@ -89,7 +91,9 @@ function terminalMeta(headers: IncomingHttpHeaders): Record<string, string> {
   const iterm = header(headers, "x-iterm-session-id");
   const termSession = header(headers, "x-term-session-id");
   const bundleId = header(headers, "x-app-bundle-id");
+  const pid = header(headers, "x-agent-pid");
   if (term) meta.term_program = term;
+  if (pid && PID.test(pid)) meta.pid = pid;
   if (iterm) meta.iterm_session_id = iterm;
   if (termSession) meta.term_session_id = termSession;
   if (bundleId && BUNDLE_ID.test(bundleId)) meta.app_bundle_id = bundleId;

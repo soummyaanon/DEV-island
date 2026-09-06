@@ -41,6 +41,8 @@ describe("Claude zero-config", () => {
 
     const bridge = readFileSync(join(home, "bin", "claude-hook.sh"), "utf8");
     expect(bridge).toContain('X-App-Bundle-Id: ${__CFBundleIdentifier:-}');
+    // $PPID in the bridge shell is Claude Code itself — the resource meter's root.
+    expect(bridge).toContain('X-Agent-Pid: ${PPID:-}');
     expect(bridge).toContain("--data-binary @-");
   });
 

@@ -96,6 +96,7 @@ TOKEN="$(cat "$HOME/.agent-island/token" 2>/dev/null)"
   -H "X-Iterm-Session-Id: \${ITERM_SESSION_ID:-}" \\
   -H "X-Term-Session-Id: \${TERM_SESSION_ID:-}" \\
   -H "X-App-Bundle-Id: \${__CFBundleIdentifier:-}" \\
+  -H "X-Agent-Pid: \${PPID:-}" \\
   --data-binary @- >/dev/null 2>&1
 exit 0
 `;
@@ -285,6 +286,7 @@ IN="$(cat)"
 TOKEN="$(cat "$HOME/.agent-island/token" 2>/dev/null)"
 ( printf '%s' "$IN" | /usr/bin/curl -s -m 2 -X POST "http://127.0.0.1:7433/events/cursor/\${EVENT}" \\
     -H "content-type: application/json" -H "x-agent-island-token: \${TOKEN}" \\
+    -H "X-Agent-Pid: \${PPID:-}" \\
     --data-binary @- >/dev/null 2>&1 & )
 exit 0
 `;

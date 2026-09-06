@@ -35,11 +35,41 @@ export interface SettingsState {
   glass: boolean;
   /** "native" | "vibrancy" | "none" — what the sidecar can draw. */
   glassSupport: string;
+  battery: boolean;
+  procStats: boolean;
+  respectFocus: boolean;
+  focus: { active: boolean; name: string | null; since: string };
+  /** The two agent-island:// URLs a Focus automation opens. */
+  focusLinks: { on: string; off: string };
+  /** False in dev builds and when another app owns the scheme. */
+  deepLinksRegistered: boolean;
   openAtLogin: boolean;
   version: string;
   /** Newest available version, or null when up to date / not yet checked. */
   update: { version: string } | null;
 }
+
+export interface PowerPayload {
+  percent: number;
+  /** "charging" | "discharging" | "charged" | "ac" */
+  state: string;
+  minutesRemaining: number | null;
+  /** "plugged" | "unplugged" on the push that carries the transition, else null. */
+  event: string | null;
+  /** On battery at or under 20%. */
+  low: boolean;
+}
+
+export interface FocusPayload {
+  active: boolean;
+  name: string | null;
+  since: string;
+  /** Sounds and notification haptics should stay quiet right now. */
+  mute: boolean;
+}
+
+/** Session key → CPU (% of a core, summed) and memory, or null when the PID is gone. */
+export type ProcStatsPayload = Record<string, { cpu: number; rssMb: number; procs: number } | null>;
 
 export interface SessionsPayload {
   sessions: SessionSnapshot[];
@@ -137,6 +167,34 @@ const api = {
     const listener = (_e: unknown, weather: WeatherPayload | null) => cb(weather);
     ipcRenderer.on("agent-island:weather", listener);
     return () => ipcRenderer.removeListener("agent-island:weather", listener);
+  },
+
+  /** Battery, or null on desktops / when the setting is off. */
+  getPower: (): Promise<PowerPayload | null> => ipcRenderer.invoke("agent-island:get-power"),
+
+  onPower: (cb: (power: PowerPayload | null) => void): (() => void) => {
+    const listener = (_e: unknown, power: PowerPayload | null) => cb(power);
+    ipcRenderer.on("agent-island:power", listener);
+    return () => ipcRenderer.removeListener("agent-island:power", listener);
+  },
+
+  /** Focus state as reported by the user's Shortcuts automation. */
+  getFocus: (): Promise<FocusPayload> => ipcRenderer.invoke("agent-island:get-focus"),
+
+  onFocus: (cb: (focus: FocusPayload) => void): (() => void) => {
+    const listener = (_e: unknown, focus: FocusPayload) => cb(focus);
+    ipcRenderer.on("agent-island:focus", listener);
+    return () => ipcRenderer.removeListener("agent-island:focus", listener);
+  },
+
+  /** The footer chip: a Focus whose "off" automation never fired. */
+  clearFocus: (): void => ipcRenderer.send("agent-island:clear-focus"),
+
+  /** Per-session resource totals, pushed every 2s while the panel is open. */
+  onProcStats: (cb: (stats: ProcStatsPayload) => void): (() => void) => {
+    const listener = (_e: unknown, stats: ProcStatsPayload) => cb(stats);
+    ipcRenderer.on("agent-island:proc-stats", listener);
+    return () => ipcRenderer.removeListener("agent-island:proc-stats", listener);
   },
 
   onUiPrefs: (cb: (prefs: UiPrefs) => void): (() => void) => {
@@ -284,6 +342,8 @@ const api = {
       ipcRenderer.invoke("agent-island:check-updates"),
     /** Download the newest DMG and self-replace + relaunch. Resolves false if it can't. */
     installUpdate: (): Promise<boolean> => ipcRenderer.invoke("agent-island:install-update"),
+    /** Open the Shortcuts app so the user can add the Focus automations. */
+    openShortcuts: (): void => ipcRenderer.send("agent-island:open-shortcuts"),
   },
 
   /* ---- Onboarding (first-run window only) ---- */

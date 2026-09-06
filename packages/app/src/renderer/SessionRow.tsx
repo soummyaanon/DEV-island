@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import type { SessionSnapshot, SessionState } from "@agent-island/shared";
 import { describeSession } from "./a11y";
+import { formatMemory } from "./StatusFooter";
 
 const AGENT_LABEL: Record<string, string> = {
   "claude-code": "claude",
@@ -72,12 +73,15 @@ export function SessionRow({
   session,
   now,
   index = 0,
+  stats = null,
   onJump,
 }: {
   session: SessionSnapshot;
   now: number;
   /** Position in the list — drives the entrance stagger (`--i`). */
   index?: number;
+  /** Live CPU/memory over the agent's process tree; null/undefined = no meter. */
+  stats?: { cpu: number; rssMb: number } | null;
   onJump: (session: SessionSnapshot) => void;
 }) {
   const term = metaString(session, "term_program");
@@ -90,6 +94,9 @@ export function SessionRow({
   const showHost = host !== "" && host !== agent;
 
   const elapsedLabel = elapsed(session.started_at, now);
+  // Warms with load: past a core and a half it's worth a glance, past three
+  // it's probably a runaway.
+  const heat = stats ? (stats.cpu >= 300 ? " burning" : stats.cpu >= 150 ? " hot" : "") : "";
   const context =
     agent +
     (showHost ? ` · ${host}` : "") +
@@ -122,6 +129,11 @@ export function SessionRow({
           <div className="row-detail">
             <span className="activity">{session.title}</span>
             <span className="row-context">{context}</span>
+            {stats && (
+              <span className={`meter${heat}`}>
+                {stats.cpu}% · {formatMemory(stats.rssMb)}
+              </span>
+            )}
           </div>
         </div>
       </button>

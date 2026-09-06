@@ -8,6 +8,7 @@ import {
   parseRolloutLine,
   type CodexSessionContext,
 } from "./event-mapper";
+import { resolveCodexPid } from "./pid";
 
 /**
  * Where mapped events go. EventHub satisfies this via a two-line adapter in
@@ -154,6 +155,18 @@ export class CodexRolloutReader {
         if (!mapped) continue;
         if (mapped.type === "session_started") started = mapped;
         else latest = mapped;
+      }
+    }
+    // Which process this is, for the resource meter. Resolved once per attach
+    // (one `lsof`, ~30ms) and folded into the context so every later event
+    // carries it; unresolvable is simply no meter.
+    const pid = await resolveCodexPid(file);
+    if (pid !== null) {
+      ctx.meta.pid = String(pid);
+      if (started) {
+        const detail = { ...(started.detail ?? {}) };
+        detail._meta = { ...((detail._meta as Record<string, unknown> | undefined) ?? {}), pid: String(pid) };
+        started = { ...started, detail };
       }
     }
     // Identity settles as the file is read, so re-stamp before ingesting.

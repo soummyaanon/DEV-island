@@ -80,12 +80,19 @@ export function canFire(now: number, lastFiredAt: number): boolean {
 }
 
 let enabled = true;
+/** Focus is on: only interaction taps (tick, commit) get through. */
+let quiet = false;
 let lastFiredAt = Number.NEGATIVE_INFINITY;
 let batch: HapticPattern[] = [];
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 
 export function setHapticsEnabled(on: boolean): void {
   enabled = on;
+}
+
+/** While a Focus is on, notification rhythms are dropped; taps you caused stay. */
+export function setHapticsQuiet(on: boolean): void {
+  quiet = on;
 }
 
 /** True when haptics could actually be felt — for Settings to explain itself. */
@@ -113,6 +120,7 @@ function flush(): void {
  */
 export function haptic(pattern: HapticPattern): void {
   if (!enabled) return;
+  if (quiet && pattern !== "tick" && pattern !== "commit") return;
   batch.push(pattern);
   if (flushTimer === null) flushTimer = setTimeout(flush, 0);
 }

@@ -283,4 +283,33 @@ describe("Claude hook routes", () => {
     });
     expect(hub.sessions()[0]?.meta.app_bundle_id).toBe("com.todesktop.230313mzl4w4u92");
   });
+
+  it("stores the agent pid from the bridge header, rejecting anything that isn't one", async () => {
+    const app = Fastify();
+    apps.push(app);
+    const hub = new EventHub(20, 5);
+    registerClaudeRoutes(app, hub, config, "test-token");
+
+    const payload = {
+      session_id: "session-pid",
+      cwd: "/Users/me/project",
+      hook_event_name: "SessionStart",
+    };
+
+    await app.inject({
+      method: "POST",
+      url: "/events/claude/session-start",
+      headers: { "x-agent-pid": "not-a-pid" },
+      payload,
+    });
+    expect(hub.sessions()[0]?.meta.pid).toBeUndefined();
+
+    await app.inject({
+      method: "POST",
+      url: "/events/claude/session-start",
+      headers: { "x-agent-pid": "48213" },
+      payload,
+    });
+    expect(hub.sessions()[0]?.meta.pid).toBe("48213");
+  });
 });

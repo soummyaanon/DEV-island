@@ -23,6 +23,11 @@ mac:
       Agent Island uses your approximate location to show local weather in the
       notch. Coordinates are rounded to about a kilometre and sent only to
       open-meteo.com.
+# agent-island:// deep links: Focus automations from Shortcuts, toggle, settings.
+protocols:
+  - name: Agent Island
+    schemes:
+      - agent-island
 # Ship only English Electron locales — trims ~50 unused language packs.
 electronLanguages:
   - en

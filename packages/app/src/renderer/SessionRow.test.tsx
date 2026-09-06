@@ -72,4 +72,20 @@ describe("SessionRow", () => {
     );
     expect(html).toContain("--i:3");
   });
+
+  it("shows the resource meter when stats are known, warming with load", () => {
+    const now = Date.parse("2026-07-19T10:00:30.000Z");
+    const cool = renderToStaticMarkup(
+      <SessionRow session={session()} now={now} stats={{ cpu: 34, rssMb: 1229 }} onJump={() => {}} />,
+    );
+    expect(cool).toContain("34% · 1.2 GB");
+    expect(cool).not.toContain("hot");
+    const hot = renderToStaticMarkup(
+      <SessionRow session={session()} now={now} stats={{ cpu: 180, rssMb: 200 }} onJump={() => {}} />,
+    );
+    expect(hot).toContain("meter hot");
+    expect(hot).toContain("200 MB");
+    const none = renderToStaticMarkup(<SessionRow session={session()} now={now} stats={null} onJump={() => {}} />);
+    expect(none).not.toContain("meter");
+  });
 });

@@ -7,7 +7,9 @@ import { PixelSprite } from "./PixelSprite";
 import { OpenAiSprite } from "./OpenAiSprite";
 import { CursorSprite } from "./CursorSprite";
 import { PacFeast } from "./PacFeast";
-import { UsageFooter } from "./UsageFooter";
+import { StatusFooter } from "./StatusFooter";
+import { LIVE_ACTIVITY_MS, LiveActivity, type LiveActivityKind } from "./LiveActivity";
+import { wingContent } from "./wing-priority";
 import { playSound } from "./sounds";
 import { DEFAULT_SOUND_PREFS, type SoundPrefs, type SoundTheme } from "./sound-prefs";
 import { summarizeTransitions, useAnnouncer, useFocusTrap, useReducedMotion } from "./a11y";
@@ -82,6 +84,29 @@ export function App() {
     stale: boolean;
   } | null>(null);
   const [sound, setSound] = useState<SoundPrefs>(DEFAULT_SOUND_PREFS);
+  // Live activities: battery, Focus, and the per-session resource meter.
+  const [power, setPower] = useState<{
+    percent: number;
+    state: "charging" | "discharging" | "charged" | "ac";
+    minutesRemaining: number | null;
+    low: boolean;
+  } | null>(null);
+  const [focus, setFocus] = useState<{ active: boolean; name: string | null; mute: boolean } | null>(null);
+  const [procStats, setProcStats] = useState<
+    Record<string, { cpu: number; rssMb: number; procs: number } | null>
+  >({});
+  // A transient moment in the wing; `n` retriggers the CSS on repeats.
+  const [activity, setActivity] = useState<{ kind: LiveActivityKind; percent: number; n: number } | null>(
+    null,
+  );
+  const activitySeq = useRef(0);
+  const activityTimer = useRef<number | null>(null);
+  const showActivity = useCallback((kind: LiveActivityKind, percent = 0) => {
+    activitySeq.current += 1;
+    setActivity({ kind, percent, n: activitySeq.current });
+    if (activityTimer.current !== null) window.clearTimeout(activityTimer.current);
+    activityTimer.current = window.setTimeout(() => setActivity(null), LIVE_ACTIVITY_MS[kind]);
+  }, []);
   // Mirror for once-registered listeners (chimes) that must not go stale.
   const soundRef = useRef<SoundPrefs>(DEFAULT_SOUND_PREFS);
   const [update, setUpdate] = useState<{ version: string } | null>(null);
@@ -232,8 +257,8 @@ export function App() {
       const newQuestion = cur.hasQuestion && !was.hasQuestion;
       const newAction = cur.needsAction && !was.needsAction;
 
-      // Sound: unchanged behavior, still gated on the sound preference.
-      if (sound.on) {
+      // Sound: gated on the preference, and quiet while a Focus is on.
+      if (sound.on && !focus?.mute) {
         if (becameDone) playSound("success", sound);
         if (newQuestion) playSound("question", sound);
         else if (newAction) playSound("attention", sound);
@@ -267,7 +292,7 @@ export function App() {
     // One spoken sentence per snapshot, not one per session.
     const summary = summarizeTransitions(counts);
     if (summary) announce(summary.message, summary.urgency);
-  }, [sessions, sound, firePulse, announce]);
+  }, [sessions, sound, focus, firePulse, announce]);
 
   // Notch geometry, measured by main: the black body spans the band height so
   // the shape merges with the hardware notch, and every island width derives
@@ -335,6 +360,56 @@ export function App() {
     void window.agentIsland.getWeather?.().then((w) => setWeather(w ?? null));
     return window.agentIsland.onWeather?.((w) => setWeather(w ?? null));
   }, []);
+
+  // Battery. The push that carries a plug/unplug transition becomes a moment
+  // in the wing; crossing into low battery is one too.
+  const prevLow = useRef(false);
+  useEffect(() => {
+    const apply = (
+      p: {
+        percent: number;
+        state: string;
+        minutesRemaining: number | null;
+        event: string | null;
+        low: boolean;
+      } | null,
+    ) => {
+      if (!p) {
+        setPower(null);
+        prevLow.current = false;
+        return;
+      }
+      setPower({
+        percent: p.percent,
+        state: p.state as "charging" | "discharging" | "charged" | "ac",
+        minutesRemaining: p.minutesRemaining,
+        low: p.low,
+      });
+      if (p.event === "plugged") showActivity("battery-plugged", p.percent);
+      else if (p.event === "unplugged") showActivity("battery-unplugged", p.percent);
+      else if (p.low && !prevLow.current) showActivity("battery-low", p.percent);
+      prevLow.current = p.low;
+    };
+    void window.agentIsland.getPower?.().then(apply);
+    return window.agentIsland.onPower?.(apply);
+  }, [showActivity]);
+
+  // Focus, as told by the user's Shortcuts automation. A change is a moment too.
+  const prevFocus = useRef<boolean | null>(null);
+  useEffect(() => {
+    const apply = (f: { active: boolean; name: string | null; mute: boolean }) => {
+      setFocus({ active: f.active, name: f.name, mute: f.mute });
+      if (prevFocus.current !== null && prevFocus.current !== f.active) {
+        showActivity(f.active ? "focus-on" : "focus-off");
+      }
+      prevFocus.current = f.active;
+    };
+    void window.agentIsland.getFocus?.().then(apply);
+    return window.agentIsland.onFocus?.(apply);
+  }, [showActivity]);
+
+  // Resource meter, pushed only while the panel is open.
+  useEffect(() => window.agentIsland.onProcStats?.(setProcStats), []);
 
   // VoiceOver reach-in from the global shortcut.
   useEffect(() => window.agentIsland.onA11yFocus?.(setA11yFocused), []);
@@ -540,19 +615,31 @@ export function App() {
   // Active agent kinds in stable order — these become Pac's dots.
   const activeKinds = shown.map((a) => a.kind);
 
+  // What the collapsed wings show — one winner, strict order (wing-priority.ts):
+  // an agent needing you or working always beats a live activity, which beats
+  // low battery, which beats weather. Nothing shows while expanded.
+  const wing = expanded
+    ? "empty"
+    : wingContent({
+        needsYou: needsYou.length,
+        active: active.length,
+        activity: activity !== null,
+        lowBattery: power?.low === true,
+        weather: weather !== null,
+      });
   // The compact working animation is Pac-Man chomping a line of agent logos
   // (crab / blossom / cube) like dots — it takes over the whole sprite wing
   // while work is live. Events are signalled separately by the edge glow.
-  const showFeast = !expanded && active.length > 0;
+  const showFeast = (wing === "working" || wing === "attention") && active.length > 0;
   // At rest — sessions present but nothing running — the rim carries a very soft
   // green-bluish breathing glow.
   const showGlow = !expanded && sessions.length > 0 && active.length === 0;
-
-  // Weather fills the collapsed island only when no agent is working: agents
-  // always preempt it, so it never competes with the thing you're waiting on.
-  // Note this replaces the previously INVISIBLE resting state — with weather on,
-  // the island is always at least a small live scene.
-  const ambientWeather = weather !== null && !expanded && active.length === 0;
+  const liveActivity = wing === "activity" ? activity : null;
+  const lowBattery = wing === "low-battery" ? power : null;
+  // Weather fills the collapsed island only when nothing else claims it. Note
+  // this replaces the previously INVISIBLE resting state — with weather on, the
+  // island is always at least a small live scene.
+  const ambientWeather = wing === "weather";
   const condition = (weather?.condition ?? "clear-day") as WeatherCondition;
   // Right wing text. Keyed on its value so a change remounts and rolls in.
   const countText =
@@ -560,9 +647,43 @@ export function App() {
       ? `${needsYou.length}!`
       : active.length > 0
         ? String(active.length)
-        : ambientWeather
-          ? (weather?.temperature ?? "")
-          : "";
+        : liveActivity
+          ? liveActivity.kind.startsWith("battery")
+            ? `${liveActivity.percent}%`
+            : liveActivity.kind === "focus-on"
+              ? (focus?.name ?? "Focus")
+              : ""
+          : lowBattery
+            ? `${lowBattery.percent}%`
+            : ambientWeather
+              ? (weather?.temperature ?? "")
+              : "";
+  const countLabel =
+    needsYou.length > 0
+      ? `${needsYou.length} sessions need attention`
+      : liveActivity
+        ? liveActivity.kind === "battery-plugged"
+          ? `Charging, ${liveActivity.percent}%`
+          : liveActivity.kind === "battery-unplugged"
+            ? `On battery, ${liveActivity.percent}%`
+            : liveActivity.kind === "battery-low"
+              ? `Low battery, ${liveActivity.percent}%`
+              : liveActivity.kind === "focus-on"
+                ? `Focus on${focus?.name ? `: ${focus.name}` : ""}`
+                : "Focus off"
+        : lowBattery
+          ? `Low battery, ${lowBattery.percent}%`
+          : ambientWeather
+            ? weather?.summary
+            : `${active.length} active sessions`;
+  // Footer total: what every visible session's agent tree is using right now.
+  const totals = visible.reduce<{ cpu: number; rssMb: number } | null>((acc, s) => {
+    const t = procStats[s.key];
+    if (!t) return acc;
+    return { cpu: (acc?.cpu ?? 0) + t.cpu, rssMb: (acc?.rssMb ?? 0) + t.rssMb };
+  }, null);
+  // Nothing to show at all: the island shrinks to the notch and disappears.
+  const resting = sessions.length === 0 && wing === "empty";
 
   return (
     <div className={`app${animated ? "" : " paused"}${a11yFocused ? " a11y-focus" : ""}`}>
@@ -575,7 +696,7 @@ export function App() {
         {assertive}
       </div>
       <div ref={islandRef} className="island-wrap">
-        {(sessions.length > 0 || expanded) && (
+        {!resting && (
           <>
             <i className="ear ear-l" aria-hidden />
             <i className="ear ear-r" aria-hidden />
@@ -584,9 +705,11 @@ export function App() {
         <div
           className={`island ${stateCls}${expanded ? " expanded" : ""}${settled ? " settled" : ""}${
             rubber !== 0 ? " rubbering" : ""
-          }${sessions.length === 0 && !ambientWeather ? " bare" : ""}${
-            showFeast ? " has-pac" : ""
-          }${ambientWeather ? " has-weather" : ""} spr-${showFeast ? 0 : shown.length}`}
+          }${resting ? " bare" : ""}${showFeast ? " has-pac" : ""}${
+            ambientWeather ? " has-weather" : ""
+          }${liveActivity ? " has-activity" : ""}${lowBattery ? " has-low-batt" : ""} spr-${
+            showFeast ? 0 : shown.length
+          }`}
           style={{ "--rubber": rubber } as CSSProperties}
           role="region"
           aria-label="Agent Island"
@@ -621,6 +744,14 @@ export function App() {
                 <span className="sprite-slot" key="feast">
                   <PacFeast kinds={activeKinds} />
                 </span>
+              ) : liveActivity ? (
+                <span className="sprite-slot" key={`la-${liveActivity.n}`}>
+                  <LiveActivity kind={liveActivity.kind} percent={liveActivity.percent} />
+                </span>
+              ) : lowBattery ? (
+                <span className="sprite-slot wing-low" key="low-batt">
+                  <LiveActivity kind="battery-low" percent={lowBattery.percent} />
+                </span>
               ) : ambientWeather ? (
                 <span className="sprite-slot" key="weather">
                   <WeatherScene condition={condition} variant="ambient" />
@@ -633,16 +764,7 @@ export function App() {
                 ))
               )}
             </span>
-            <span
-              className="spacer-info"
-              aria-label={
-                needsYou.length > 0
-                  ? `${needsYou.length} sessions need attention`
-                  : ambientWeather
-                    ? weather?.summary
-                    : `${active.length} active sessions`
-              }
-            >
+            <span className={`spacer-info${lowBattery ? " wing-low" : ""}`} aria-label={countLabel}>
               <span key={countText}>{countText}</span>
             </span>
           </div>
@@ -675,6 +797,7 @@ export function App() {
                     session={s}
                     now={now}
                     index={i}
+                    stats={procStats[s.key] ?? null}
                     onJump={(sess) => window.agentIsland.jump(sess)}
                   />
                 ))}
@@ -696,7 +819,13 @@ export function App() {
                   </span>
                 </div>
               )}
-              <UsageFooter usage={usage} />
+              <StatusFooter
+                usage={usage}
+                power={power}
+                focus={focus}
+                totals={totals}
+                onClearFocus={() => window.agentIsland.clearFocus?.()}
+              />
               {showPrompt && (
                 <form
                   className="prompt-bar"

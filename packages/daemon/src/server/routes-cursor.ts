@@ -50,6 +50,18 @@ export function registerCursorRoutes(
         return reply.code(204).send();
       }
 
+      // The bridge script's $PPID is Cursor's hook runner — the root of the
+      // process tree the resource meter sums. Best effort; absent = no meter.
+      const rawPid = request.headers["x-agent-pid"];
+      const pid = (Array.isArray(rawPid) ? rawPid[0] : rawPid)?.trim();
+      if (pid && /^\d{1,7}$/.test(pid)) {
+        const existing =
+          mapped.detail?._meta && typeof mapped.detail._meta === "object"
+            ? (mapped.detail._meta as Record<string, unknown>)
+            : {};
+        mapped.detail = { ...(mapped.detail ?? {}), _meta: { ...existing, pid } };
+      }
+
       hub.ingest(mapped);
       return reply.code(204).send();
     },

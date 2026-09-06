@@ -287,6 +287,112 @@ body {
   }
 }
 
+/* ---- Live activities in the wing ----
+   A few seconds of "the charger came in" or "Focus is on", then it yields.
+   Same width as the weather strip so the band doesn't jump between them. */
+.island.has-activity:not(.expanded):not(.bare),
+.island.has-low-batt:not(.expanded):not(.bare) {
+  width: calc(var(--notch-width, 196px) + 104px);
+}
+.la {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 14px;
+}
+.la-batt {
+  position: relative;
+  width: 22px;
+  height: 10px;
+  border: 1.5px solid currentColor;
+  border-radius: 3px;
+  overflow: hidden;
+}
+/* The fill grows in from the left — transform only. */
+.la-batt-fill {
+  position: absolute;
+  inset: 1px;
+  background: currentColor;
+  transform-origin: left center;
+  animation: fill-in var(--dur-open) var(--spring-open) both;
+}
+@keyframes fill-in {
+  from {
+    transform: scaleX(0);
+  }
+}
+.la-battery.battery-plugged {
+  color: var(--done);
+}
+.la-battery.battery-unplugged {
+  color: var(--text);
+}
+.la-battery.battery-low,
+.wing-low {
+  color: var(--failed);
+}
+.la-bolt {
+  font-size: var(--fs-small);
+  line-height: 1;
+  animation: bolt-pop var(--dur-open) var(--spring-open) both;
+}
+@keyframes bolt-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+/* A crescent from one static inset shadow. */
+.la-moon {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  box-shadow: inset 3px -2px 0 0 currentColor;
+}
+.la-focus.focus-on {
+  color: #c9b8ff;
+}
+.la-focus.focus-off {
+  color: var(--text-dim);
+}
+
+/* ---- Resource meter ---- */
+.meter {
+  flex: none;
+  font-size: var(--fs-micro);
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.meter.hot {
+  color: var(--waiting);
+}
+.meter.burning {
+  color: var(--failed);
+}
+.usage-item.power.low b {
+  color: var(--failed);
+}
+.usage-item.focus-chip {
+  font: inherit;
+  font-size: var(--fs-micro);
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+.usage-item.focus-chip b {
+  color: #c9b8ff;
+}
+.usage-item.focus-chip:hover b {
+  text-decoration: line-through;
+}
+
 /* ---- Status dots ---- */
 .dot {
   width: 6px;
@@ -1190,6 +1296,10 @@ body {
   .island.expanded .panel-measure {
     transform: none;
     transition: none;
+  }
+  .la-batt-fill,
+  .la-bolt {
+    animation: none;
   }
   .pixel-sprite.live g.f1,
   .pixel-sprite.live g.f2,

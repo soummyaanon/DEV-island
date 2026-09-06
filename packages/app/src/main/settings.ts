@@ -60,6 +60,12 @@ export interface AppSettings {
   openWith: OpenWith;
   /** Liquid Glass under the expanded panel (native; falls back to CSS). */
   glass: boolean;
+  /** Battery live activity in the wings and footer. */
+  battery: boolean;
+  /** Per-agent CPU/memory meter (samples only while the panel is open). */
+  procStats: boolean;
+  /** Mute sounds and notification haptics while a Focus is on. */
+  respectFocus: boolean;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -78,6 +84,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   weatherUnits: "auto",
   openWith: "hover",
   glass: true,
+  battery: true,
+  procStats: true,
+  respectFocus: true,
 };
 
 export function isSoundTheme(value: unknown): value is SoundTheme {

@@ -452,3 +452,16 @@ h1 {
   outline: 2px solid var(--accent, #74b7ff);
   outline-offset: 1px;
 }
+
+/* Deep-link URLs in Live activities → Focus. */
+.s-code {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 11px;
+  color: var(--text);
+  background: var(--group-bg);
+  border: 1px solid var(--group-edge);
+  border-radius: 5px;
+  padding: 1px 6px;
+  user-select: text;
+  -webkit-user-select: text;
+}
