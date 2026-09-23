@@ -1,15 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { AgentUsage, SessionSnapshot } from "@agent-island/shared";
 import { SessionRow } from "./SessionRow";
+import { SessionBubble } from "./SessionBubble";
 import { ApprovalCard } from "./ApprovalCard";
 import { QuestionCard } from "./QuestionCard";
-import { ClaudeSprite } from "./ClaudeSprite";
-import { OpenAiSprite } from "./OpenAiSprite";
-import { CursorSprite } from "./CursorSprite";
+import { AGENT_LOOK, AgentAvatar, AgentOrb, STATE_TINT, orbState } from "./agent-avatar";
+import { AssistantBar } from "./AssistantBar";
+import { BotCrew } from "./BotCrew";
+import { BotAvatar } from "bot-avatars";
+import { IslandGlow } from "./IslandGlow";
+import { FieldBeam } from "./FieldBeam";
+import { assistantUnavailableReason } from "./assistant-context";
 import { StatusFooter } from "./StatusFooter";
 import { LIVE_ACTIVITY_MS, LiveActivity, type LiveActivityKind } from "./LiveActivity";
 import { wingContent } from "./wing-priority";
-import { Icon } from "./Icons";
+import { BatteryRing, Icon } from "./Icons";
 import { playSound } from "./sounds";
 import { DEFAULT_SOUND_PREFS, type SoundPrefs, type SoundTheme } from "./sound-prefs";
 import { summarizeTransitions, useAnnouncer, useFocusTrap, useReducedMotion } from "./a11y";
@@ -20,16 +25,17 @@ import { WeatherScene, type WeatherCondition } from "./weather/WeatherScene";
 
 const ACTIVE_STATES = new Set(["working", "starting", "waiting-for-approval"]);
 const MAX_ROWS = 5;
+/** Bubbles are small; more of them fit before the island gets wide. */
+const MAX_BUBBLES = 8;
 
 /** Discrete moments the edge spark reacts to — each gets its own color/pattern. */
 type PulseKind = "done" | "failed" | "attention" | "question" | "approve";
 
-/** Wing order: one logo per agent kind that has sessions — the real marks. */
-const AGENT_SPRITES = [
-  { kind: "claude-code", Sprite: ClaudeSprite },
-  { kind: "codex", Sprite: OpenAiSprite },
-  { kind: "cursor", Sprite: CursorSprite },
-] as const;
+/** Wing order: one thinking orb per agent kind that is working. */
+const AGENT_ORDER = ["claude-code", "codex", "cursor"] as const;
+
+/** How long a finished agent's avatar holds the wing. */
+const MOMENT_MS = 3500;
 
 export function App() {
   const [sessions, setSessions] = useState<SessionSnapshot[]>([]);
@@ -40,6 +46,10 @@ export function App() {
   // Gestures. `openWith` and `naturalScroll` come from main's ui-prefs.
   const [openWith, setOpenWith] = useState<"hover" | "swipe">("hover");
   const [naturalScroll, setNaturalScroll] = useState(true);
+  // Compact bubbles (default) or the full rows.
+  const [sessionView, setSessionView] = useState<"compact" | "detailed">("compact");
+  // Intelligence switches from Settings.
+  const [aiPrefs, setAiPrefs] = useState({ assistant: true, voice: true, speakReplies: true, edgeGlow: true });
   // Swipe mode: a swipe-down (or wing click) happened while hovering.
   const [gestureOpen, setGestureOpen] = useState(false);
   // Swipe-up while open: stay closed until the pointer leaves the island.
@@ -54,6 +64,26 @@ export function App() {
   // The prompt bar is not permanent furniture: it appears when an agent is
   // actually waiting on an answer, or when you deliberately open it.
   const [promptOpen, setPromptOpen] = useState(false);
+  // Apple Intelligence Ask bar: whether the sidecar's on-device model can
+  // answer, whether the bar is open, and whether its input holds focus.
+  const [assistantSupport, setAssistantSupport] = useState("no-helper");
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [assistantFocused, setAssistantFocused] = useState(false);
+  // An answer is streaming — the bot crew hops along with it.
+  const [assistantLive, setAssistantLive] = useState(false);
+  // The footer's left slot: text fields render into it (a portal for the Ask
+  // bar), so a field is a small pill beside the icons, not a row of its own.
+  const [fieldSlot, setFieldSlot] = useState<HTMLElement | null>(null);
+  // A session that just finished or failed takes a bow in the wing.
+  const [moment, setMoment] = useState<{ key: string; kind: "done" | "failed"; n: number } | null>(null);
+  const momentSeq = useRef(0);
+  const momentTimer = useRef<number | null>(null);
+  const showMoment = useCallback((key: string, kind: "done" | "failed") => {
+    momentSeq.current += 1;
+    setMoment({ key, kind, n: momentSeq.current });
+    if (momentTimer.current !== null) window.clearTimeout(momentTimer.current);
+    momentTimer.current = window.setTimeout(() => setMoment(null), MOMENT_MS);
+  }, []);
   const promptInputRef = useRef<HTMLInputElement>(null);
   // Set when a send was dropped for lack of Accessibility — shows a hint.
   const [needsAccess, setNeedsAccess] = useState(false);
@@ -66,6 +96,8 @@ export function App() {
   }, []);
 
   const islandRef = useRef<HTMLDivElement>(null);
+  // The island body itself (not the wrap): the edge light traces its outline.
+  const islandBodyRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   // The glass sheet follows this element, not the whole island.
   const panelWrapRef = useRef<HTMLDivElement>(null);
@@ -138,6 +170,7 @@ export function App() {
     hoverExpands ||
     pinned ||
     promptFocused ||
+    assistantFocused ||
     a11yFocused ||
     pending.length > 0 ||
     asking.length > 0 ||
@@ -300,6 +333,9 @@ export function App() {
       if (newQuestion) window.agentIsland.haptic?.("inquiry");
       if (newAction) window.agentIsland.haptic?.("attention");
 
+      if (becameDone) showMoment(key, "done");
+      else if (becameFailed) showMoment(key, "failed");
+
       if (becameDone) counts.done += 1;
       if (becameFailed) counts.failed += 1;
       if (newQuestion) counts.questions += 1;
@@ -313,7 +349,34 @@ export function App() {
     // One spoken sentence per snapshot, not one per session.
     const summary = summarizeTransitions(counts);
     if (summary) announce(summary.message, summary.urgency);
-  }, [sessions, sound, focus, firePulse, announce]);
+  }, [sessions, sound, focus, firePulse, announce, showMoment]);
+
+  // A timer the assistant set has ended: chime, bloom and say so.
+  useEffect(
+    () =>
+      window.agentIsland.onAssistantTimer?.((label) => {
+        playSound("success", soundRef.current);
+        firePulse("done");
+        announce(label ? `Timer done: ${label}` : "Timer done", "assertive");
+      }),
+    [firePulse, announce],
+  );
+
+  // Can the on-device model answer? The sidecar reports once at launch and
+  // again if it changes (e.g. the model finishes downloading).
+  useEffect(() => {
+    void window.agentIsland.getAssistant?.().then(setAssistantSupport);
+    return window.agentIsland.onAssistantSupport?.(setAssistantSupport);
+  }, []);
+  // The crew only shows where Apple Intelligence could ever work; on a Mac
+  // that can't run it at all they'd be a door to nowhere.
+  // Every Mac with the helper gets the assistant: the model where Apple
+  // Intelligence runs, the command reader everywhere else.
+  const crewAvailable = aiPrefs.assistant && (assistantSupport === "available" || assistantSupport === "basic");
+  const setAssistantFocus = useCallback((focused: boolean) => {
+    setAssistantFocused(focused);
+    window.agentIsland.setPromptComposing(focused);
+  }, []);
 
   // Notch geometry, measured by main: the black body spans the band height so
   // the shape merges with the hardware notch, and every island width derives
@@ -345,7 +408,20 @@ export function App() {
       openWith?: string;
       naturalScroll?: boolean;
       glass?: string;
+      sessionView?: string;
+      assistant?: boolean;
+      voice?: boolean;
+      speakReplies?: boolean;
+      edgeGlow?: boolean;
     }) => {
+      setSessionView(p.sessionView === "detailed" ? "detailed" : "compact");
+      setAiPrefs({
+        assistant: p.assistant ?? true,
+        voice: p.voice ?? true,
+        speakReplies: p.speakReplies ?? true,
+        edgeGlow: p.edgeGlow ?? true,
+      });
+      if (p.assistant === false) setAssistantOpen(false);
       document.documentElement.setAttribute("data-text-size", p.textSize);
       setOpenWith(p.openWith === "swipe" ? "swipe" : "hover");
       setNaturalScroll(p.naturalScroll ?? true);
@@ -589,6 +665,7 @@ export function App() {
     hoverExpands && (gestureOpen ? "gesture" : "hover"),
     pinned && "pinned",
     promptFocused && "prompt",
+    assistantFocused && "assistant",
     a11yFocused && "a11y",
     pending.length > 0 && "approval",
     asking.length > 0 && "question",
@@ -642,11 +719,17 @@ export function App() {
     });
   };
 
-  // Logos are strictly live: one per agent kind that is ACTIVELY running
-  // (working / starting / waiting), each with its own working motion. Nothing
-  // running = an empty wing.
-  const liveKinds = new Set(active.map((s) => s.agent));
-  const shown = AGENT_SPRITES.filter((a) => liveKinds.has(a.kind));
+  // Orbs are strictly live: one per agent kind that is ACTIVELY running
+  // (working / starting / waiting), tinted in that agent's colour and animated
+  // for what its most urgent session is doing. Nothing running = empty wing.
+  const shown = AGENT_ORDER.flatMap((kind) => {
+    const mine = active.filter((s) => s.agent === kind);
+    if (mine.length === 0) return [];
+    const lead = mine.find((s) => s.state === "waiting-for-approval") ?? mine[0];
+    const tint = lead.state === "waiting-for-approval" ? STATE_TINT[lead.state] : AGENT_LOOK[kind].color;
+    return [{ kind, state: orbState(lead), tint }];
+  });
+  const momentSession = moment ? (sessions.find((s) => s.key === moment.key) ?? null) : null;
 
   // What the collapsed wings show — one winner, strict order (wing-priority.ts):
   // an agent needing you or working always beats a live activity, which beats
@@ -656,6 +739,7 @@ export function App() {
     : wingContent({
         needsYou: needsYou.length,
         active: active.length,
+        moment: momentSession !== null,
         activity: activity !== null,
         lowBattery: power?.low === true,
         weather: weather !== null,
@@ -664,6 +748,10 @@ export function App() {
   // green-bluish breathing glow.
   const showGlow = !expanded && sessions.length > 0 && active.length === 0;
   const liveActivity = wing === "activity" ? activity : null;
+  // At rest — sessions present, nothing running — the battery on the left and
+  // one round bot on the right, awake: it looks around and hops now and then.
+  const sleeping = showGlow && wing === "empty";
+  const wingMoment = wing === "moment" && moment && momentSession ? { ...moment, session: momentSession } : null;
   const lowBattery = wing === "low-battery" ? power : null;
   // Weather fills the collapsed island only when nothing else claims it. Note
   // this replaces the previously INVISIBLE resting state — with weather on, the
@@ -674,7 +762,9 @@ export function App() {
   const countText =
     needsYou.length > 0
       ? `${needsYou.length}!`
-      : active.length > 0
+      : wingMoment
+        ? wingMoment.kind
+        : active.length > 0
         ? String(active.length)
         : liveActivity
           ? liveActivity.kind.startsWith("battery")
@@ -690,7 +780,11 @@ export function App() {
   const countLabel =
     needsYou.length > 0
       ? `${needsYou.length} sessions need attention`
-      : liveActivity
+      : wingMoment
+        ? `${wingMoment.session.cwd.split("/").filter(Boolean).pop() ?? ""} ${
+            wingMoment.kind === "done" ? "finished" : "failed"
+          }`
+        : liveActivity
         ? liveActivity.kind === "battery-plugged"
           ? `Charging, ${liveActivity.percent}%`
           : liveActivity.kind === "battery-unplugged"
@@ -704,7 +798,9 @@ export function App() {
           ? `Low battery, ${lowBattery.percent}%`
           : ambientWeather
             ? weather?.summary
-            : `${active.length} active sessions`;
+            : sleeping
+              ? `${sessions.length} sessions, all resting${power ? `, battery ${power.percent}%` : ""}`
+              : `${active.length} active sessions`;
   // Footer total: what every visible session's agent tree is using right now.
   const totals = visible.reduce<{ cpu: number; rssMb: number } | null>((acc, s) => {
     const t = procStats[s.key];
@@ -732,11 +828,14 @@ export function App() {
           </>
         )}
         <div
+          ref={islandBodyRef}
           className={`island ${stateCls}${expanded ? " expanded" : ""}${settled ? " settled" : ""}${
             rubber !== 0 ? " rubbering" : ""
           }${resting ? " bare" : ""}${ambientWeather ? " has-weather" : ""}${
             liveActivity ? " has-activity" : ""
-          }${lowBattery ? " has-low-batt" : ""} spr-${shown.length}`}
+          }${lowBattery ? " has-low-batt" : ""}${wingMoment ? ` has-moment moment-${wingMoment.kind}` : ""}${
+            assistantOpen ? " assistant-on" : ""
+          } spr-${shown.length}`}
           style={{ "--rubber": rubber } as CSSProperties}
           role="region"
           aria-label="Agent Island"
@@ -746,7 +845,6 @@ export function App() {
             }
           }}
         >
-          {showGlow && <div className="notch-glow" aria-hidden />}
           {pulse && (
             <div
               className="edge-spark"
@@ -767,7 +865,23 @@ export function App() {
             }}
           >
             <span className="sprites">
-              {liveActivity ? (
+              {wingMoment ? (
+                <span className="sprite-slot wing-moment" key={`m-${wingMoment.n}`}>
+                  <AgentAvatar session={wingMoment.session} now={now} size={24} interactive={false} paused={!animated} />
+                </span>
+              ) : sleeping ? (
+                power ? (
+                  <span className="sprite-slot wing-idle-battery" key="idle-batt">
+                    <BatteryRing
+                      size={12}
+                      percent={power.percent}
+                      charging={power.state !== "discharging"}
+                      low={power.low}
+                    />
+                    <b>{power.percent}%</b>
+                  </span>
+                ) : null
+              ) : liveActivity ? (
                 <span className="sprite-slot" key={`la-${liveActivity.n}`}>
                   <LiveActivity kind={liveActivity.kind} percent={liveActivity.percent} />
                 </span>
@@ -780,15 +894,21 @@ export function App() {
                   <WeatherScene condition={condition} variant="ambient" />
                 </span>
               ) : (
-                shown.map(({ kind, Sprite }) => (
+                shown.map(({ kind, state, tint }) => (
                   <span className="sprite-slot" key={kind}>
-                    <Sprite live />
+                    <AgentOrb state={state} tint={tint} bold paused={!animated} />
                   </span>
                 ))
               )}
             </span>
             <span className={`spacer-info${lowBattery ? " wing-low" : ""}`} aria-label={countLabel}>
-              <span key={countText}>{countText}</span>
+              {sleeping ? (
+                <span className="wing-sleeper" key="sleep-r">
+                  <BotAvatar type="circle" state="default" size={20} seed={0.7} theme="dark" interactive={false} paused={!animated} aria-hidden />
+                </span>
+              ) : (
+                <span key={countText}>{countText}</span>
+              )}
             </span>
           </div>
 
@@ -813,6 +933,20 @@ export function App() {
                   onAnswer={(sess, options) => window.agentIsland.answer(sess, options)}
                 />
               ))}
+              {sessionView === "compact" && visible.length > 0 ? (
+                <ul className="bubbles">
+                  {sessions.slice(0, MAX_BUBBLES).map((s, i) => (
+                    <SessionBubble
+                      key={s.key}
+                      session={s}
+                      now={now}
+                      index={i}
+                      paused={!expanded || !animated}
+                      onJump={(sess) => window.agentIsland.jump(sess)}
+                    />
+                  ))}
+                </ul>
+              ) : (
               <ul className="rows">
                 {visible.map((s, i) => (
                   <SessionRow
@@ -821,13 +955,15 @@ export function App() {
                     now={now}
                     index={i}
                     stats={procStats[s.key] ?? null}
+                    paused={!expanded || !animated}
                     onJump={(sess) => window.agentIsland.jump(sess)}
                   />
                 ))}
-                {visible.length === 0 && (
-                  <li className="empty">{connected ? "no sessions" : "offline"}</li>
+                {visible.length === 0 && !connected && (
+                  <li className="empty">offline</li>
                 )}
               </ul>
+              )}
               {weather && (
                 <div className="weather-card">
                   <WeatherScene condition={condition} variant="card" />
@@ -849,64 +985,21 @@ export function App() {
                 totals={totals}
                 onClearFocus={() => window.agentIsland.clearFocus?.()}
               />
-              {showPrompt && (
-                <form
-                  className="prompt-bar"
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    submitPrompt();
-                  }}
-                >
-                  <input
-                    ref={promptInputRef}
-                    className="prompt-input"
-                    type="text"
-                    value={promptText}
-                    placeholder={
-                      asking.length > 0
-                        ? "Reply to the agent…"
-                        : promptTarget?.agent === "cursor"
-                          ? "Ask Cursor…"
-                          : "Ask the agent…"
-                    }
-                    aria-label={
-                      promptTarget?.agent === "cursor"
-                        ? "Send a prompt to Cursor"
-                        : "Send a prompt to the agent"
-                    }
-                    spellCheck={false}
-                    autoFocus={promptOpen}
-                    onChange={(e) => setPromptText(e.target.value)}
-                    onFocus={() => {
-                      setPromptFocused(true);
-                      window.agentIsland.setPromptComposing(true);
-                    }}
-                    onBlur={() => {
-                      setPromptFocused(false);
-                      window.agentIsland.setPromptComposing(false);
-                    }}
-                    onClick={(e) => e.stopPropagation()}
-                    onKeyDown={(e) => {
-                      if (e.key === "Escape") {
-                        setPromptText("");
-                        setPromptOpen(false);
-                        e.currentTarget.blur();
-                      }
-                    }}
-                  />
-                  <button
-                    className="ctl icon prompt-send"
-                    type="submit"
-                    title="Send prompt"
-                    aria-label="Send prompt"
-                    disabled={!promptText.trim()}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <Icon name="send" />
-                  </button>
-                </form>
+              {assistantOpen && (
+                <AssistantBar
+                  sessions={sessions}
+                  hovering={hovering}
+                  paused={!animated}
+                  onFocusChange={setAssistantFocus}
+                  onLiveChange={setAssistantLive}
+                  voiceEnabled={aiPrefs.voice}
+                  speakReplies={aiPrefs.speakReplies}
+                  basic={assistantSupport === "basic"}
+                  onClose={() => setAssistantOpen(false)}
+                  fieldSlot={fieldSlot}
+                />
               )}
-              {showPrompt && needsAccess && (
+              {showPrompt && !assistantOpen && needsAccess && (
                 <button
                   type="button"
                   className="prompt-hint"
@@ -920,35 +1013,85 @@ export function App() {
                 </button>
               )}
               <div className="panel-controls">
-                <span className="ctl-cluster">
-                  <button
-                    className={`ctl icon${sound.on ? "" : " off"}`}
-                    title={sound.on ? "Sound on" : "Sound off"}
-                    aria-label={sound.on ? "Sound on" : "Sound off"}
-                    aria-pressed={sound.on}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      window.agentIsland.haptic?.("tick");
-                      window.agentIsland.setSounds(!sound.on);
-                    }}
-                  >
-                    <Icon name={sound.on ? "speaker" : "speaker-slash"} />
-                  </button>
-                  {promptTarget && (
-                    <button
-                      className={`ctl icon prompt-toggle${promptOpen ? " on" : ""}`}
-                      title={promptOpen ? "Close the prompt" : "Send a prompt to the agent"}
-                      aria-label={promptOpen ? "Close the prompt" : "Send a prompt to the agent"}
-                      aria-expanded={showPrompt}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        togglePrompt();
+                <span className="ctl-leading" ref={setFieldSlot}>
+                  {!assistantOpen && !showPrompt && crewAvailable && sessions.length === 0 && (
+                    <BotCrew
+                      mood={assistantLive ? "working" : "idle"}
+                      talk={sessions.length === 0 && connected && !assistantOpen}
+                      paused={!expanded || !animated}
+                      disabledReason={
+                        crewAvailable ? null : assistantUnavailableReason(assistantSupport)
+                      }
+                      open={assistantOpen}
+                      onClick={() => {
+                        window.agentIsland.haptic?.("tick");
+                        if (assistantOpen) setAssistantFocus(false);
+                        setAssistantOpen((open) => !open);
+                        setPromptOpen(false);
                       }}
-                    >
-                      <Icon name="compose" />
-                    </button>
+                    />
+                  )}
+                  {showPrompt && !assistantOpen && (
+                    <FieldBeam focused={promptFocused} paused={!animated}>
+                      <form
+                        className="prompt-bar"
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          submitPrompt();
+                        }}
+                      >
+                        <input
+                          ref={promptInputRef}
+                          className="prompt-input"
+                          type="text"
+                          value={promptText}
+                          placeholder={
+                            asking.length > 0
+                              ? "Reply to the agent…"
+                              : promptTarget?.agent === "cursor"
+                                ? "Ask Cursor…"
+                                : "Ask the agent…"
+                          }
+                          aria-label={
+                            promptTarget?.agent === "cursor"
+                              ? "Send a prompt to Cursor"
+                              : "Send a prompt to the agent"
+                          }
+                          spellCheck={false}
+                          autoFocus={promptOpen}
+                          onChange={(e) => setPromptText(e.target.value)}
+                          onFocus={() => {
+                            setPromptFocused(true);
+                            window.agentIsland.setPromptComposing(true);
+                          }}
+                          onBlur={() => {
+                            setPromptFocused(false);
+                            window.agentIsland.setPromptComposing(false);
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => {
+                            if (e.key === "Escape") {
+                              setPromptText("");
+                              setPromptOpen(false);
+                              e.currentTarget.blur();
+                            }
+                          }}
+                        />
+                        <button
+                          className="ctl icon prompt-send"
+                          type="submit"
+                          title="Send prompt"
+                          aria-label="Send prompt"
+                          disabled={!promptText.trim()}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Icon name="send" />
+                        </button>
+                      </form>
+                    </FieldBeam>
                   )}
                 </span>
+                <span className="ctl-right">
                 {update ? (
                   <button
                     className="ctl update"
@@ -963,6 +1106,62 @@ export function App() {
                   </button>
                 ) : null}
                 <span className="ctl-cluster">
+                  <button
+                    className={`ctl icon${sound.on ? "" : " off"}`}
+                    title={sound.on ? "Sound on" : "Sound off"}
+                    aria-label={sound.on ? "Sound on" : "Sound off"}
+                    aria-pressed={sound.on}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      window.agentIsland.haptic?.("tick");
+                      window.agentIsland.setSounds(!sound.on);
+                    }}
+                  >
+                    <Icon name={sound.on ? "speaker" : "speaker-slash"} />
+                  </button>
+                  {crewAvailable && sessions.length > 0 && (
+                    // With agents on screen the crew steps aside; Ask stays one click away.
+                    <button
+                      className={`ctl icon assistant-toggle${assistantOpen ? " on" : ""}`}
+                      disabled={!crewAvailable}
+                      title={
+                        !crewAvailable
+                          ? assistantUnavailableReason(assistantSupport)
+                          : assistantOpen
+                            ? "Close Apple Intelligence"
+                            : "Ask Apple Intelligence"
+                      }
+                      aria-label={assistantOpen ? "Close Apple Intelligence" : "Ask Apple Intelligence"}
+                      aria-expanded={assistantOpen}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        window.agentIsland.haptic?.("tick");
+                        if (assistantOpen) setAssistantFocus(false);
+                        setAssistantOpen((open) => !open);
+                        setPromptOpen(false);
+                      }}
+                    >
+                      <Icon name="sparkles" />
+                    </button>
+                  )}
+                  {promptTarget && (
+                    <button
+                      className={`ctl icon prompt-toggle${promptOpen ? " on" : ""}`}
+                      title={promptOpen ? "Close the prompt" : "Send a prompt to the agent"}
+                      aria-label={promptOpen ? "Close the prompt" : "Send a prompt to the agent"}
+                      aria-expanded={showPrompt}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (assistantOpen) {
+                          setAssistantFocus(false);
+                          setAssistantOpen(false);
+                        }
+                        togglePrompt();
+                      }}
+                    >
+                      <Icon name="compose" />
+                    </button>
+                  )}
                   <button
                     className="ctl icon"
                     title="Settings"
@@ -988,11 +1187,13 @@ export function App() {
                     <Icon name="power" />
                   </button>
                 </span>
+                </span>
               </div>
               </div>
             </div>
           </div>
         </div>
+        <IslandGlow target={islandBodyRef} active={aiPrefs.edgeGlow && assistantOpen && expanded && animated} bright={assistantLive} />
       </div>
     </div>
   );

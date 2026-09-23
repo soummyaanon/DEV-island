@@ -17,9 +17,18 @@ importers:
       '@agent-island/shared':
         specifier: workspace:*
         version: link:../shared
+      border-beam:
+        specifier: ^1.4.1
+        version: 1.4.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      bot-avatars:
+        specifier: ^0.1.1
+        version: 0.1.1(react@19.2.7)
       lucide-react:
         specifier: ^1.41.0
         version: 1.41.0(react@19.2.7)
+      thinking-orbs:
+        specifier: ^0.3.2
+        version: 0.3.2(react@19.2.7)
       ws:
         specifier: ^8.18.0
         version: 8.21.1
@@ -1024,6 +1033,17 @@ packages:
   boolean@3.2.0:
     resolution: {integrity: sha512-d0II/GO9uf9lfUHH2BQsjxzRJZBdsjgsBiW4BvhWk/3qoKwQFjIDVN19PfX8F2D/r9PCMTtLWjYVCFrpeYUzsw==}
     deprecated: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
+
+  border-beam@1.4.1:
+    resolution: {integrity: sha512-YyugmKjrhkg1PBC1ZKX7JvFo/zYzha6NXOq24VWrnvBYmDRvGCgFS9oxZoKJ+oS9Kn436l1etYGlAdGiWK+3ag==}
+    peerDependencies:
+      react: '>=18.0.0'
+      react-dom: '>=18.0.0'
+
+  bot-avatars@0.1.1:
+    resolution: {integrity: sha512-J1gamb44dLXWViX6N+qz8wQyMmVUEtv9GrrHXo+xP3GlzbVzPTO4g+bWme0F9OXpX31nyDXSnUG9/mctUi7t3w==}
+    peerDependencies:
+      react: '>=18.0.0'
 
   brace-expansion@1.1.16:
     resolution: {integrity: sha512-IDw48K2/2kRkg9LdJxurvq3lV3aBgq0REY89duEqFRthjlPdXHKMj7EnQOXVckxzgisinf3nHfrcE2FufFLXMw==}
@@ -2310,6 +2330,11 @@ packages:
   temp-file@3.4.0:
     resolution: {integrity: sha512-C5tjlC/HCtVUOi3KWVokd4vHVViOmGjtLwIh4MuzPo/nMYTV/p1urt3RnMz2IWXDdKEGJH3k5+KPxtqRsUYGtg==}
 
+  thinking-orbs@0.3.2:
+    resolution: {integrity: sha512-QZFeBaPEzqhjiZoXy961EvDgaXk2WgXacF3Rbz+Sj5IfzDzBvTC86vdREUHniBffYibJFKSwbfllxLUdI/Xv6g==}
+    peerDependencies:
+      react: '>=18.0.0'
+
   thread-stream@4.2.0:
     resolution: {integrity: sha512-e2zZ96wSChazBsbENf/Pcm/4swHt2cEKQ92rhUjkL9GCKiTDJIaTBenjE/m9DXi0QBmTMDkFDdOomUy20A1tDQ==}
     engines: {node: '>=20'}
@@ -3406,6 +3431,15 @@ snapshots:
 
   boolean@3.2.0:
     optional: true
+
+  border-beam@1.4.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7):
+    dependencies:
+      react: 19.2.7
+      react-dom: 19.2.7(react@19.2.7)
+
+  bot-avatars@0.1.1(react@19.2.7):
+    dependencies:
+      react: 19.2.7
 
   brace-expansion@1.1.16:
     dependencies:
@@ -4880,6 +4914,10 @@ snapshots:
     dependencies:
       async-exit-hook: 2.0.1
       fs-extra: 10.1.0
+
+  thinking-orbs@0.3.2(react@19.2.7):
+    dependencies:
+      react: 19.2.7
 
   thread-stream@4.2.0:
     dependencies:

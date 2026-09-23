@@ -1,4 +1,5 @@
 import type { PendingApproval, SessionSnapshot, ApprovalDecision } from "@agent-island/shared";
+import { AgentAvatar } from "./agent-avatar";
 import { renderMarkdown } from "./markdown";
 
 function projectName(cwd: string): string {
@@ -102,7 +103,7 @@ export function ApprovalCard({
     <div className="approval" onClick={(e) => e.stopPropagation()}>
       <div className="approval-top">
         <span className="approval-kicker">
-          <span className="approval-mark" />
+          <AgentAvatar session={session} now={Date.now()} size={26} />
           Permission Request
         </span>
         <span className="approval-project">{projectName(session.cwd)}</span>

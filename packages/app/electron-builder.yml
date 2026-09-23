@@ -28,6 +28,15 @@ mac:
       Agent Island uses your approximate location to show local weather in the
       notch. Coordinates are rounded to about a kilometre and sent only to
       open-meteo.com.
+    # Voice mode. The sidecar captures the mic, but TCC asks on behalf of the
+    # responsible app — this one — so the description lives here too.
+    NSMicrophoneUsageDescription: >-
+      Agent Island listens only while voice mode is on, to hear your question.
+      Speech is transcribed on this Mac and never sent anywhere.
+    # macOS 12–15 only: the older recognizer needs its own grant.
+    NSSpeechRecognitionUsageDescription: >-
+      On macOS 15 and earlier, Agent Island uses on-device speech recognition
+      to understand what you say in voice mode.
 # agent-island:// deep links: Focus automations from Shortcuts, toggle, settings.
 protocols:
   - name: Agent Island

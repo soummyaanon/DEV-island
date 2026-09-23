@@ -132,8 +132,11 @@ body {
   background: var(--group-bg);
 }
 .s-nav-item.active {
-  background: var(--accent);
+  background: linear-gradient(180deg, color-mix(in oklab, var(--accent) 92%, #fff), var(--accent));
   color: #fff;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.25),
+    0 1px 3px rgba(0, 0, 0, 0.25);
 }
 .s-nav-ic {
   flex: none;
@@ -175,17 +178,62 @@ body {
   overflow-y: auto;
 }
 
+/* ---- Section header: a title and one plain line under it ---- */
+.s-head {
+  margin: 0 0 16px;
+}
 h1 {
-  font-size: 17px;
+  font-size: 20px;
   font-weight: 750;
-  letter-spacing: -0.01em;
-  margin: 0 0 14px;
+  letter-spacing: -0.015em;
+  margin: 0 0 3px;
+}
+.s-head p {
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.s-sub-h {
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin: 20px 4px 8px;
+}
+
+/* ---- Status card (Intelligence): one line, a coloured dot ---- */
+.s-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 12px;
+  padding: 11px 14px;
+  border-radius: 12px;
+  font-size: 12.5px;
+  background: var(--group-bg);
+  border: 1px solid var(--group-edge);
+}
+.s-status i {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-dim);
+}
+.s-status.ok i {
+  background: var(--done);
+  box-shadow: 0 0 8px var(--done);
+}
+.s-status.warn i {
+  background: #ffb020;
+  box-shadow: 0 0 8px rgba(255, 176, 32, 0.6);
 }
 
 .s-group {
   display: flex;
   flex-direction: column;
-  border-radius: 13px;
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
   background: var(--group-bg);
   border: 1px solid var(--group-edge);
   overflow: hidden;

@@ -38,7 +38,7 @@ _Last updated: 2026-09-06 (v1.5.0). Branch: `main`._
   no notch. spr-2/spr-3 classes widen the wings per sprite count.
 - **Round-2 UX**: electric working feel (bottom scanline sweep, neon glow on
   live sprites, count pulse, spring easing — all reduced-motion aware); real
-  app icon (glowing crab, build/icon.icns via headless-Chrome+iconutil);
+  app icon (orange mech bot under the notch; scripts/icon/render-icon.swift → iconutil);
   ⌘1–9 answers pending questions from anywhere (iTerm write-text; other
   terminals via Accessibility keystroke once granted; else jump), options
   clickable in the ask card; first-run ONBOARDING window (animated island

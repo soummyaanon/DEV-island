@@ -35,11 +35,13 @@ terminal.
 | **Codex** | read-only tail of its local rollout logs | none at all |
 | **Cursor** | hooks + a fire-and-forget bridge script | automatic on first launch |
 
-Each running agent shows its real mark in the notch wing — Claude's spark,
-the OpenAI blossom, Cursor's cube — each with its own steady working motion
-(the spark turns and breathes, the blossom spins, the cube floats), shown
-**only while that agent is actually working**, side by side when several run
-at once. The island measures your hardware notch at startup and adapts to any
+Every session is a little robot: Claude Code is a clay-orange mech, Codex a
+green droid, Cursor a blue hexagon ([bot-avatars](https://libraries.dev/bots.html)).
+They hop while they work, look around while they wait on you, and doze off
+after ten quiet minutes. While an agent thinks, the wing shows a dotted
+[thinking orb](https://libraries.dev/orbs.html) in its colour, one per working
+agent, and its animation follows what the agent is doing: a scanning globe
+for search, a flowing sash for edits, orbiting particles for commands. The island measures your hardware notch at startup and adapts to any
 MacBook (Pro 14"/16", Air 13"/15", or no notch at all).
 
 ## Features
@@ -47,6 +49,41 @@ MacBook (Pro 14"/16", Air 13"/15", or no notch at all).
 - **Live session rows** — project, elapsed time, current activity ("Running
   pnpm test", "Editing index.ts"), agent, host app, and permission mode. Color-
   coded states: working, waiting on you, done, failed.
+- **Ask Apple Intelligence** — with nothing running, three little bots sit in
+  the footer's left corner and offer to help; once an agent is working they
+  step aside for a ✦ button on the right. Click either for a Siri-style bar
+  backed by Apple's on-device model (macOS 26, Apple Intelligence on). It's a
+  general assistant — questions, explanations, drafts, rewrites, quick maths,
+  with a copy button on each answer — that also knows your agents: ask "what
+  is Claude doing?", say "open the api project" to jump there, or "tell
+  website to run the tests" to get a draft you confirm with **Send** before
+  anything is typed.
+  Only one line per session (project, state, activity) goes to the model, and
+  nothing leaves the Mac.
+- **It acts, not just answers** — like the new Siri, the Ask bar is an agent.
+  It can open apps and websites, search the web, read or fill the clipboard,
+  set the volume, start timers (the island chimes when they end), list your
+  Shortcuts and jump to sessions, and it chains steps for one request, showing
+  each step as it goes. Anything that does real work for you, like running
+  one of your Shortcuts or messaging an agent, waits for your **Run** or
+  **Send**. The orb shows each phase: connecting, solving, searching or
+  working while a tool runs, composing as it writes, shaping while it waits
+  on you.
+- **Talk to it** — the mic in the Ask bar hears your question on-device
+  (nothing is recorded or sent anywhere), sends it when you pause, and reads
+  the answer back in a voice matched to your Siri (same gender, language and
+  region). Settings → Intelligence turns voice, spoken answers, the assistant,
+  Apple Intelligence and the edge glow on or off.
+- **Every Apple Silicon Mac** — without Apple Intelligence (macOS 12–15, or the
+  feature off) the Ask bar still opens apps, sites and sessions, searches,
+  sets timers and the volume, and runs your Shortcuts; answers need Apple
+  Intelligence on macOS 26.
+- **Closed sessions leave** — quitting Claude (or closing its terminal) removes
+  the session from the island within seconds; finished sessions with no
+  process behind them age out after 30 quiet minutes.
+- **Agents take a bow** — when a session finishes or fails, its avatar pops
+  into the wing for a few seconds; approval and question cards carry the
+  asking agent's avatar.
 - **Approve from the notch** — Claude permission requests appear as a card with
   the full command or diff. <kbd>⌘Y</kbd> / <kbd>⌘N</kbd> decide from anywhere;
   if you don't answer, Claude's own prompt takes over untouched.
@@ -64,8 +101,17 @@ MacBook (Pro 14"/16", Air 13"/15", or no notch at all).
   pack in Settings, with per-event overrides and previews: distinct sounds for
   done, needs-you, question-asked, and a confirm chime when you allow something.
   Quick toggle in the panel footer.
-- **Codex usage footer** — your plan's remaining quota, read locally from
-  Codex's own logs.
+- **Usage limits** — Claude Code's and Codex's 5-hour and weekly limits as
+  small rings in the footer (green, then amber past 70%, red past 90%; hover
+  for when each resets). Codex's come from its own logs. Claude's come from
+  the JSON Claude Code already hands its status line: Agent Island installs a
+  status line that forwards it and prints nothing (or runs your own status
+  line, if you had one), and puts your setting back on quit. No token, no
+  network.
+- **Compact sessions** — by default each session is just its robot (a
+  small dot on its shoulder carries the state) with the project name underneath; hover for what it's doing,
+  click to jump. Settings → Appearance → Sessions → Detailed brings back the
+  full rows.
 - **Weather in the quiet moments** — with nothing running, the island becomes a
   small live weather scene: drifting clouds, falling rain, lightning in a
   thunderstorm, a crescent and stars at night, sunrise and sunset, a rainbow

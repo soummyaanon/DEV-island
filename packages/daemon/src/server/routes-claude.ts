@@ -7,6 +7,7 @@ import type { DaemonConfig } from "../config";
 import { makeAuthGuard } from "./auth-guard";
 import { ClaudeHookPayloadSchema } from "../adapters/claude/hook-payload";
 import { mapClaudeHook, resolveHookEventName } from "../adapters/claude/event-mapper";
+import { parseClaudeUsage } from "../adapters/claude/usage";
 
 function header(headers: IncomingHttpHeaders, name: string): string | undefined {
   const raw = headers[name];
@@ -117,6 +118,14 @@ export function registerClaudeRoutes(
 ): void {
   const authGuard = makeAuthGuard(config, token);
 
+  // Claude Code's status line JSON, forwarded by our status line script: the
+  // subscription's 5-hour and weekly limits. Same empty-204 contract as hooks.
+  app.post("/usage/claude", { preHandler: authGuard }, async (request, reply) => {
+    const usage = parseClaudeUsage(request.body);
+    if (usage) hub.setAgentUsage("claude-code", usage);
+    return reply.code(204).send();
+  });
+
   app.post<{ Params: { hookEvent: string } }>(
     "/events/claude/:hookEvent",
     { preHandler: authGuard },
@@ -129,6 +138,11 @@ export function registerClaudeRoutes(
 
       const payload = parsed.data;
       const eventName = resolveHookEventName(request.params.hookEvent, payload);
+      // The session closed (exit, /clear, logout): it leaves the island now.
+      if (eventName === "SessionEnd") {
+        hub.endSession("claude-code", payload.session_id);
+        return reply.code(204).send();
+      }
       const fallbackCwd = hub.getSession("claude-code", payload.session_id)?.cwd ?? "(unknown)";
 
       const mapped = mapClaudeHook(eventName, payload, fallbackCwd);

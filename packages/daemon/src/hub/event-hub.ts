@@ -74,6 +74,36 @@ export class EventHub {
     this.broadcast({ type: "usage", usage });
   }
 
+  /**
+   * Replace ONE agent's quota (null clears it), keeping the others. Codex is
+   * polled from its logs and Claude pushed by its status line, on different
+   * clocks — neither may wipe the other's reading.
+   */
+  setAgentUsage(agent: AgentUsage["agent"], usage: AgentUsage | null): void {
+    const rest = this.usage.filter((u) => u.agent !== agent);
+    const next = usage ? [...rest, usage] : rest;
+    // A status line refresh repeats the same numbers most of the time.
+    if (JSON.stringify(stripTime(next)) === JSON.stringify(stripTime(this.usage))) {
+      this.usage = next;
+      return;
+    }
+    this.setUsage(next);
+  }
+
+  /** A session ended for good: drop it and send everyone the new list. */
+  endSession(agent: AgentUsage["agent"], sessionId: string): void {
+    if (this.registry.remove(sessionKey(agent, sessionId))) {
+      this.broadcast({ type: "snapshot", sessions: this.registry.list() });
+    }
+  }
+
+  /** Sweep out sessions whose agent is gone; see SessionRegistry.prune. */
+  pruneSessions(isAlive: (pid: number) => boolean, staleMs: number, now = Date.now()): string[] {
+    const removed = this.registry.prune(isAlive, now, staleMs);
+    if (removed.length > 0) this.broadcast({ type: "snapshot", sessions: this.registry.list() });
+    return removed;
+  }
+
   getUsage(): AgentUsage[] {
     return this.usage;
   }
@@ -178,4 +208,8 @@ export class EventHub {
   subscriberCount(): number {
     return this.subscribers.size;
   }
+}
+
+function stripTime(usage: AgentUsage[]): unknown {
+  return usage.map(({ updated_at: _, ...rest }) => rest);
 }

@@ -14,5 +14,9 @@
     <string>Agent Island</string>
     <key>NSLocationWhenInUseUsageDescription</key>
     <string>Agent Island uses your approximate location to show local weather in the notch. Coordinates are rounded to about a kilometre and sent only to open-meteo.com.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Agent Island listens only while you hold voice mode on, to hear your question. Speech is transcribed on this Mac and never sent anywhere.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>On macOS 15 and earlier, Agent Island uses on-device speech recognition to understand what you say in voice mode.</string>
   </dict>
 </plist>

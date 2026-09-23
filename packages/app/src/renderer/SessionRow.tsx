@@ -2,7 +2,7 @@ import type { CSSProperties } from "react";
 import type { SessionSnapshot, SessionState } from "@agent-island/shared";
 import { describeSession } from "./a11y";
 import { formatMemory } from "./StatusFooter";
-import { AgentRing } from "./AgentRing";
+import { AgentAvatar, AgentOrb, STATE_TINT, isThinking, orbState } from "./agent-avatar";
 
 const AGENT_LABEL: Record<string, string> = {
   "claude-code": "claude",
@@ -75,6 +75,7 @@ export function SessionRow({
   now,
   index = 0,
   stats = null,
+  paused = false,
   onJump,
 }: {
   session: SessionSnapshot;
@@ -83,6 +84,8 @@ export function SessionRow({
   index?: number;
   /** Live CPU/memory over the agent's process tree; null/undefined = no meter. */
   stats?: { cpu: number; rssMb: number } | null;
+  /** Freeze the avatar and orb (collapsed panel, locked Mac). */
+  paused?: boolean;
   onJump: (session: SessionSnapshot) => void;
 }) {
   const term = metaString(session, "term_program");
@@ -121,14 +124,19 @@ export function SessionRow({
           onJump(session);
         }}
       >
-        <AgentRing agent={session.agent} state={session.state} />
+        <AgentAvatar session={session} now={now} paused={paused} />
         <div className="row-main" aria-hidden>
           <div className="row-heading">
             <span className="project">{projectName(session.cwd)}</span>
             <span className="elapsed">{elapsedLabel}</span>
           </div>
           <div className="row-detail">
-            <span className="activity">{session.title}</span>
+            <span className="activity">
+              {isThinking(session.state) && (
+                <AgentOrb state={orbState(session)} tint={STATE_TINT[session.state]} paused={paused} />
+              )}
+              {session.title}
+            </span>
             <span className="row-context">{context}</span>
             {stats && (
               <span className={`meter${heat}`}>

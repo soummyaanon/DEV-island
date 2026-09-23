@@ -69,6 +69,8 @@ body {
 .island-wrap {
   position: relative;
   min-height: 26px;
+  /* Never let the centred pill land on a half pixel against the notch. */
+  flex: none;
 }
 
 /* Motion comes from the spring tokens in tokens.css (published by
@@ -148,7 +150,11 @@ body {
 .notch-spacer {
   /* Pure black, always: this strip merges with the hardware notch. */
   background: #000;
-  height: calc(var(--notch-inset, 33px) - 1px);
+  /* A little taller than the hardware notch, never shorter: at `inset - 1`
+     the real notch's bottom edge peeked out under the wings — most visibly
+     while the width animated — so the island looked detached from it. Now
+     the band always covers the notch and extends a few px below it. */
+  height: calc(var(--notch-inset, 33px) + var(--band-extra, 5px));
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -509,58 +515,6 @@ body {
   transition: background 0.1s ease;
   cursor: pointer;
 }
-.row > .agent-ring {
-  margin-top: 1px;
-}
-
-/* ---- Agent ring: the session's state around its agent's logo ---- */
-.agent-ring {
-  position: relative;
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--idle);
-}
-.agent-ring.state-working,
-.agent-ring.state-starting {
-  color: var(--working);
-}
-.agent-ring.state-waiting-for-approval {
-  color: var(--waiting);
-  animation: count-pulse 1.4s ease-in-out infinite alternate;
-}
-.agent-ring.state-done {
-  color: var(--done);
-}
-.agent-ring.state-failed {
-  color: var(--failed);
-}
-.agent-ring .ring-arc {
-  position: absolute;
-  inset: 0;
-  display: block;
-}
-/* Busy: the three-quarter arc turns. Transform only. */
-.agent-ring .ring-arc.spinning {
-  animation: ring-spin 1.1s linear infinite;
-}
-@keyframes ring-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-.agent-ring-logo {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text);
-}
-.agent-ring-logo .claude-sprite,
-.agent-ring-logo .openai-sprite,
-.agent-ring-logo .cursor-sprite {
-  filter: none;
-}
 .row:hover {
   background: rgba(255, 255, 255, 0.06);
 }
@@ -650,41 +604,84 @@ body {
 .prompt-bar {
   display: flex;
   align-items: center;
-  gap: 4px;
-  margin: 4px 8px 0;
-  padding: 3px 3px 3px 8px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  gap: 6px;
+  margin: 0;
+  height: calc(28px * var(--ui-scale));
+  padding: 0 3px 0 8px;
+  border-radius: 14px;
+  /* A quiet recessed pill: faint top-lit fill, a hairline, no focus ring —
+     FieldBeam's sunset pulse is the focus state. */
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.035));
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.07),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transition: background 0.18s ease;
 }
 .prompt-bar:focus-within {
-  border-color: rgba(116, 183, 255, 0.5);
-  background: rgba(255, 255, 255, 0.07);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.045));
+}
+/* Fields are small pills in the footer's left slot, beside the icons. */
+.ctl-leading {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+.field-beam {
+  display: block;
+  flex: 0 1 250px;
+  min-width: 150px;
 }
 .prompt-input {
   flex: 1;
   min-width: 0;
   font: inherit;
   font-size: var(--fs-body-sm);
+  letter-spacing: 0.005em;
   color: var(--text);
+  caret-color: #8fb3ff;
   background: none;
   border: none;
   outline: none;
-  padding: 3px 0;
+  padding: 4px 0;
 }
 .prompt-input::placeholder {
-  color: var(--text-dim);
+  color: rgba(255, 255, 255, 0.34);
 }
+@media (prefers-contrast: more) {
+  .prompt-bar:focus-within {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+}
+/* Send: a small round key that lights up once there's something to send. */
 .ctl.icon.prompt-send {
-  color: var(--accent);
+  width: calc(22px * var(--ui-scale));
+  height: calc(22px * var(--ui-scale));
+  padding: 0;
+  border-radius: 50%;
+  color: #fff;
+  background: linear-gradient(180deg, #6f8dff, #5566e8);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    0 1px 3px rgba(40, 60, 200, 0.45);
+  transition:
+    transform 90ms ease-out,
+    opacity 0.15s ease;
 }
-.ctl.icon.prompt-send:disabled {
-  color: var(--text-dim);
-  opacity: 0.5;
-  cursor: default;
+.ctl.icon.prompt-send svg {
+  width: calc(11px * var(--ui-scale));
+  height: calc(11px * var(--ui-scale));
 }
+.ctl.icon.prompt-send:active {
+  transform: scale(0.94);
+}
+.ctl.icon.prompt-send:disabled,
 .ctl.icon.prompt-send:disabled:hover {
-  background: none;
+  color: rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: none;
+  cursor: default;
 }
 .prompt-hint {
   display: block;
@@ -1034,28 +1031,6 @@ body {
   background: var(--done);
 }
 
-/* ---- Idle glow: at rest (sessions present, nothing running) the bottom rim
-   carries a whisper-soft green-bluish glow that slowly breathes. Deliberately
-   faint — a sign of life, not a spotlight. */
-.notch-glow {
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  z-index: 2;
-  --glow: color-mix(in oklab, var(--done) 55%, var(--working));
-  box-shadow: inset 0 -9px 15px -8px var(--glow);
-  animation: glow-breathe 4.5s ease-in-out infinite;
-}
-@keyframes glow-breathe {
-  0%,
-  100% {
-    opacity: 0.28;
-  }
-  50% {
-    opacity: 0.6;
-  }
-}
 
 /* ---- Event glow: a soft colored bloom washes the notch on each event — no
    ring, no sweep, just a glow that fades in and out. Fires once, then App
@@ -1179,8 +1154,7 @@ body {
   .spacer-info > span {
     animation: none;
   }
-  .agent-ring,
-  .agent-ring .ring-arc.spinning {
+  .agent-avatar-badge {
     animation: none;
   }
   .island:not(.expanded) .notch-spacer > .sprites,
@@ -1189,17 +1163,13 @@ body {
     transform: none;
     transition: none;
   }
-  /* The logos hold still; the glow stops breathing. The event bloom keeps
+  /* The logos hold still. The event bloom keeps
      only a gentle fade so events still register without motion. */
   .claude-sprite.live,
   .openai-sprite.live,
   .cursor-sprite.live,
   .notch-spacer.state-working .spacer-info {
     animation: none;
-  }
-  .notch-glow {
-    animation: none;
-    opacity: 0.4;
   }
   .edge-spark {
     animation-name: spark-life;
@@ -1219,10 +1189,8 @@ body {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
-.prompt-bar:has(.prompt-input:focus-visible) {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
+/* The field's focus is the ocean beam (FieldBeam); only Increase Contrast
+   also gets a hard ring, below. */
 /* While VoiceOver holds the island, make the whole panel read as active. */
 .app.a11y-focus .island {
   box-shadow: 0 0 0 1px rgba(116, 183, 255, 0.55);
@@ -1266,9 +1234,6 @@ body {
   }
   /* Decorative blooms carry no information at high contrast — the border
      flash does the same job without washing out the text under it. */
-  .notch-glow {
-    display: none;
-  }
   .edge-spark {
     box-shadow: inset 0 0 0 2px var(--fx, var(--accent));
   }
@@ -1345,4 +1310,496 @@ body {
 .ctl.icon.prompt-toggle.on {
   color: var(--accent);
   background: rgba(116, 183, 255, 0.14);
+}
+
+/* ---- Bot avatars & thinking orbs (Libraries.dev) ----
+   Each session is a small glossy character; each thought is a dotted orb.
+   Both are canvases that animate themselves, so CSS only places them. */
+.agent-avatar {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--idle);
+}
+.agent-avatar canvas {
+  display: block;
+}
+.row > .agent-avatar {
+  margin: -2px 0 -2px -2px;
+}
+/* The state rides as a small badge on the avatar's shoulder, in the same
+   colours the rings used. */
+.agent-avatar-badge {
+  position: absolute;
+  right: -1px;
+  bottom: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 2px #000;
+}
+.agent-avatar.state-working,
+.agent-avatar.state-starting {
+  color: var(--working);
+}
+.agent-avatar.state-waiting-for-approval {
+  color: var(--waiting);
+}
+.agent-avatar.state-waiting-for-approval .agent-avatar-badge {
+  animation: count-pulse 1.4s ease-in-out infinite alternate;
+}
+.agent-avatar.state-done {
+  color: var(--done);
+}
+.agent-avatar.state-failed {
+  color: var(--failed);
+}
+.approval-kicker .agent-avatar {
+  margin: -6px 0 -6px -4px;
+}
+.approval-kicker .agent-avatar-badge {
+  display: none;
+}
+
+.agent-orb {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+}
+.agent-orb canvas {
+  display: block;
+}
+/* Inline with the activity text: centred on the line without growing it. */
+.activity > .agent-orb {
+  vertical-align: middle;
+  margin: -6px 3px -4px -2px;
+}
+
+/* A finished agent's avatar takes a bow in the wing. */
+.island.has-moment:not(.expanded):not(.bare) {
+  width: calc(var(--notch-width, 196px) + 104px);
+}
+.wing-moment {
+  margin: -4px 0 -2px;
+}
+.island.moment-done .notch-spacer {
+  color: var(--done);
+}
+.island.moment-failed .notch-spacer {
+  color: var(--failed);
+}
+
+/* ---- Apple Intelligence Ask bar ---- */
+.assistant {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 2px 0 0;
+}
+.assistant-bar {
+  padding-left: 5px;
+}
+
+.assistant-turns {
+  list-style: none;
+  margin: 0 8px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: calc(240px * var(--ui-scale));
+  overflow-y: auto;
+  /* Wide answers wrap instead of asking for a wider island. */
+  max-width: 46ch;
+}
+.assistant-turn {
+  animation: row-in 220ms ease-out both;
+}
+.assistant-q {
+  font-size: var(--fs-micro);
+  color: var(--text-dim);
+  margin-bottom: 2px;
+}
+.assistant-a {
+  font-size: var(--fs-body);
+  line-height: 1.4;
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.ctl.icon.assistant-copy {
+  display: inline-flex;
+  vertical-align: middle;
+  margin-left: 4px;
+  width: 20px;
+  height: 20px;
+  opacity: 0.6;
+}
+.ctl.icon.assistant-copy:hover {
+  opacity: 1;
+}
+.assistant-wait {
+  color: var(--text-dim);
+  animation: count-pulse 1.2s ease-in-out infinite alternate;
+}
+.assistant-error {
+  color: var(--failed);
+}
+.assistant-draft {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 8px;
+  padding: 6px 6px 6px 10px;
+  border-radius: 9px;
+  background: rgba(177, 140, 255, 0.1);
+  border: 1px solid rgba(177, 140, 255, 0.25);
+}
+.assistant-draft-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: var(--fs-body-sm);
+  color: var(--text);
+}
+.assistant-draft-to {
+  font-size: var(--fs-micro);
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.assistant-draft .btn {
+  flex: none;
+}
+/* ---- Footer: the bot crew on the left, every control on the right ---- */
+.ctl-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+.bot-crew {
+  font: inherit;
+  color: var(--text-dim);
+  background: none;
+  border: 0;
+  padding: 2px 8px 2px 2px;
+  margin-left: -2px;
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+.bot-crew:hover,
+.bot-crew.on {
+  background: rgba(255, 255, 255, 0.06);
+}
+.bot-crew[aria-disabled="true"] {
+  cursor: default;
+  opacity: 0.55;
+}
+.bot-crew-bots {
+  display: inline-flex;
+  align-items: center;
+}
+.bot-crew-bots canvas {
+  display: block;
+}
+/* A little huddle: each bot tucks behind the one before it. */
+.bot-crew-bots canvas + canvas {
+  margin-left: -5px;
+}
+.bot-crew-line {
+  font-size: var(--fs-body-sm);
+  color: var(--text);
+  opacity: 0.8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  animation: count-roll var(--dur-settle) var(--spring-settle) both;
+}
+
+
+/* ---- Compact sessions: robot bubbles ----
+   Each session is its avatar with the project name under it; the details
+   live in the hover title. */
+.bubbles {
+  list-style: none;
+  margin: 0;
+  padding: 6px 8px 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.island.expanded .bubbles > li {
+  animation: row-in 220ms ease-out both;
+  animation-delay: calc(60ms + var(--i, 0) * 18ms);
+}
+.bubble {
+  font: inherit;
+  color: var(--idle);
+  background: none;
+  border: 0;
+  width: 58px;
+  padding: 4px 2px 3px;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  cursor: pointer;
+  transition: background 0.1s ease;
+}
+.bubble:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+.bubble.state-working,
+.bubble.state-starting {
+  color: var(--working);
+}
+.bubble.state-waiting-for-approval {
+  color: var(--waiting);
+}
+.bubble.state-done {
+  color: var(--done);
+}
+.bubble.state-failed {
+  color: var(--failed);
+}
+.bubble .agent-avatar {
+  margin-top: 1px;
+}
+.bubble-name {
+  max-width: 100%;
+  font-size: var(--fs-micro);
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bubble:hover .bubble-name {
+  color: var(--text);
+}
+
+/* ---- Usage limits: a ring per window ---- */
+.usage-item.quota {
+  align-items: center;
+  gap: 6px;
+}
+.quota-window {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.quota-label {
+  color: var(--text-dim);
+}
+.quota-value {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.ctl.icon.assistant-toggle.on {
+  color: #c9b3ff;
+}
+.ctl.icon.assistant-toggle:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* ---- Idle: a sleeping bot in each wing (replaces the old breathing glow) ---- */
+.wing-sleeper {
+  display: inline-flex;
+  align-items: center;
+  margin: -3px 0 -2px;
+}
+.wing-sleeper canvas {
+  display: block;
+}
+.spacer-info > .wing-sleeper {
+  animation: none;
+}
+
+/* ---- Footer controls: small raised keycaps ----
+   Round, a touch smaller, lit from above: a soft top sheen, a dark lower lip
+   and a contact shadow, so each reads as a physical button on the black body.
+   Pressing sinks it. */
+.panel-controls .ctl.icon {
+  width: calc(24px * var(--ui-scale));
+  height: calc(24px * var(--ui-scale));
+  padding: 0;
+  border-radius: 50%;
+  color: rgba(255, 255, 255, 0.62);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.03) 55%, rgba(0, 0, 0, 0.2));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -1px 1px rgba(0, 0, 0, 0.55),
+    0 1px 2px rgba(0, 0, 0, 0.7),
+    0 0 0 0.5px rgba(255, 255, 255, 0.06);
+  transition:
+    transform 90ms ease-out,
+    box-shadow 90ms ease-out,
+    color 0.12s ease;
+}
+.panel-controls .ctl.icon svg {
+  width: calc(12px * var(--ui-scale));
+  height: calc(12px * var(--ui-scale));
+  /* The glyph is embossed too: a dark cast below, a faint catch-light above. */
+  filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.85)) drop-shadow(0 -0.5px 0 rgba(255, 255, 255, 0.18));
+}
+.panel-controls .ctl.icon:hover {
+  color: var(--text);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.05) 55%, rgba(0, 0, 0, 0.15));
+}
+.panel-controls .ctl.icon:active {
+  transform: translateY(1px);
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.6),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.06);
+}
+.panel-controls .ctl.icon.off {
+  color: rgba(255, 255, 255, 0.3);
+}
+.panel-controls .ctl.icon.assistant-toggle.on,
+.panel-controls .ctl.icon.prompt-toggle.on {
+  color: #c9b3ff;
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.6),
+    0 0 6px rgba(177, 140, 255, 0.35);
+}
+.panel-controls .ctl-cluster {
+  gap: 6px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .panel-controls .ctl.icon {
+    transition: none;
+  }
+}
+.wing-idle-battery {
+  gap: 4px;
+  color: var(--text);
+  font-size: var(--fs-small);
+  font-variant-numeric: tabular-nums;
+}
+.wing-idle-battery b {
+  font-weight: 600;
+}
+.island:has(.wing-idle-battery):not(.expanded):not(.bare) {
+  width: calc(var(--notch-width, 196px) + 104px);
+}
+/* What the agent did, step by step, under the question. */
+.assistant-steps {
+  list-style: none;
+  margin: 0 0 4px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--fs-micro);
+  color: var(--text-dim);
+}
+.assistant-steps li::before {
+  content: "✓ ";
+  color: var(--done);
+}
+.assistant-steps li.running::before {
+  content: "› ";
+  color: #c9b3ff;
+}
+.assistant-steps li.running {
+  color: var(--text);
+  animation: count-pulse 1.2s ease-in-out infinite alternate;
+}
+
+/* The assistant's glow (IslandGlow): a Pulse Inner in Mono traced on the
+   island's true outline — ears, sides, rounded bottom — clipped to the inside
+   of that shape, so it never boxes the island in. Laid over the island from
+   the wrap, where the island's own overflow clip can't reach it. */
+.island-glow {
+  position: absolute;
+  top: 0;
+  left: -10px;
+  pointer-events: none;
+  z-index: 5;
+  animation: glow-pulse 2.3s ease-in-out infinite;
+}
+/* The wash: a wide, heavily blurred stroke clipped to the inside, so colour
+   fades in from the edge over ~28px and the middle stays black. Kept low —
+   it should tint the island, not light it up. */
+.island-glow .glow-bloom {
+  filter: blur(14px);
+  opacity: 0.13;
+}
+.island-glow .glow-line {
+  opacity: 0.18;
+}
+.island-glow.bright .glow-bloom {
+  opacity: 0.2;
+}
+.island-glow.bright .glow-line {
+  opacity: 0.26;
+}
+@keyframes glow-pulse {
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .island-glow {
+    animation: none;
+    opacity: 0.8;
+  }
+}
+
+/* ---- Voice mode ---- */
+.ctl.icon.voice-toggle {
+  width: calc(22px * var(--ui-scale));
+  height: calc(22px * var(--ui-scale));
+  padding: 0;
+  border-radius: 50%;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.08);
+}
+.ctl.icon.voice-toggle svg {
+  width: calc(12px * var(--ui-scale));
+  height: calc(12px * var(--ui-scale));
+}
+/* Listening: a green key that breathes, matching the forest beam. */
+.ctl.icon.voice-toggle.on {
+  color: #fff;
+  background: linear-gradient(180deg, #3fcf8e, #1f9e6a);
+  box-shadow: 0 0 0 0 rgba(63, 207, 142, 0.5);
+  animation: voice-breathe 1.4s ease-in-out infinite;
+}
+.ctl.icon.voice-toggle.speaking {
+  color: #3fcf8e;
+}
+@keyframes voice-breathe {
+  50% {
+    box-shadow: 0 0 0 4px rgba(63, 207, 142, 0.18);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ctl.icon.voice-toggle.on {
+    animation: none;
+  }
+}
+.assistant-voice-note {
+  margin: 0 8px;
+  font-size: var(--fs-micro);
+  color: var(--waiting);
 }

@@ -6,6 +6,7 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
@@ -32,7 +33,12 @@ const HOOK_EVENTS: Array<{ event: string; slug: string; matcher: boolean; timeou
   { event: "PermissionRequest", slug: "permission-request", matcher: true, timeout: 120 },
   { event: "Notification", slug: "notification", matcher: false, timeout: 5 },
   { event: "Stop", slug: "stop", matcher: false, timeout: 5 },
+  // The session closed: it leaves the island instead of lingering as "done".
+  { event: "SessionEnd", slug: "session-end", matcher: false, timeout: 5 },
 ];
+
+/** Events Claude only runs as commands, not HTTP — they go through the bridge. */
+const COMMAND_ONLY = new Set(["SessionStart", "SessionEnd"]);
 
 type Json = Record<string, unknown>;
 
@@ -102,6 +108,103 @@ exit 0
 `;
 }
 
+/* ---- Status line: Claude's 5-hour and weekly limits ----
+   Claude Code pipes a JSON blob to its status line command on every refresh,
+   and that blob carries the subscription's rate limits. Our script forwards it
+   to the daemon in the background (never making Claude wait) and prints
+   nothing — or, if the user already had a status line, hands the same input
+   to theirs, so their terminal looks exactly as before. Their original setting
+   is saved on install and put back on removal. */
+
+const STATUS_SCRIPT = "claude-statusline.sh";
+
+function statusScriptPath(): string {
+  return join(agentIslandHome(), "bin", STATUS_SCRIPT);
+}
+
+function savedStatusLinePath(): string {
+  return join(agentIslandHome(), "statusline-original.json");
+}
+
+function statusLineScript(): string {
+  return `#!/bin/zsh
+# Agent Island status line (auto-generated; safe to delete). Forwards Claude
+# Code's status JSON (for its usage limits) and runs your own status line.
+INPUT="$(cat)"
+TOKEN="$(cat "$HOME/.agent-island/token" 2>/dev/null)"
+print -r -- "$INPUT" | /usr/bin/curl -s -m 2 -X POST "http://127.0.0.1:7433/usage/claude" \\
+  -H "content-type: application/json" \\
+  -H "x-agent-island-token: \${TOKEN}" \\
+  --data-binary @- >/dev/null 2>&1 &!
+ORIGINAL="$HOME/.agent-island/statusline-original.cmd"
+if [[ -s "$ORIGINAL" ]]; then
+  print -r -- "$INPUT" | /bin/sh -c "$(cat "$ORIGINAL")"
+fi
+exit 0
+`;
+}
+
+/** Seconds between status line re-runs while a session is idle. */
+const STATUS_REFRESH_S = 10;
+
+function isOurStatusLine(value: unknown): boolean {
+  const v = value as Json | null;
+  return !!v && v.type === "command" && v.command === statusScriptPath();
+}
+
+/** Point Claude's status line at our script, remembering the user's own. */
+function installStatusLine(settings: Json): void {
+  const scriptPath = statusScriptPath();
+  mkdirSync(dirname(scriptPath), { recursive: true });
+  writeFileSync(scriptPath, statusLineScript(), { mode: 0o755 });
+  chmodSync(scriptPath, 0o755);
+  if (isOurStatusLine(settings.statusLine)) {
+    const ours = settings.statusLine as Json;
+    if (typeof ours.refreshInterval !== "number") ours.refreshInterval = STATUS_REFRESH_S;
+    return;
+  }
+
+  const original = settings.statusLine as Json | undefined;
+  const commandFile = join(agentIslandHome(), "statusline-original.cmd");
+  if (original && typeof original === "object") {
+    writeFileSync(savedStatusLinePath(), `${JSON.stringify(original, null, 2)}\n`);
+    writeFileSync(commandFile, typeof original.command === "string" ? original.command : "");
+  } else {
+    rmSync(savedStatusLinePath(), { force: true });
+    rmSync(commandFile, { force: true });
+  }
+  settings.statusLine = {
+    type: "command",
+    command: scriptPath,
+    ...(original && typeof original.padding === "number" ? { padding: original.padding } : {}),
+    // Claude Code only re-runs the status line on activity; this keeps the
+    // island's limits fresh while a session sits idle too (a user's own,
+    // faster interval wins).
+    refreshInterval:
+      original && typeof original.refreshInterval === "number"
+        ? Math.min(original.refreshInterval, STATUS_REFRESH_S)
+        : STATUS_REFRESH_S,
+  };
+}
+
+/** Undo installStatusLine: the user's own status line back, or none. */
+function removeStatusLine(settings: Json): void {
+  if (!isOurStatusLine(settings.statusLine)) return;
+  const saved = savedStatusLinePath();
+  let original: Json | null = null;
+  if (existsSync(saved)) {
+    try {
+      original = JSON.parse(readFileSync(saved, "utf8")) as Json;
+    } catch {
+      original = null;
+    }
+  }
+  if (original) settings.statusLine = original;
+  else delete settings.statusLine;
+  rmSync(saved, { force: true });
+  rmSync(join(agentIslandHome(), "statusline-original.cmd"), { force: true });
+}
+
 function isOurHandler(handler: unknown): boolean {
   const h = handler as Json | null;
   return (
@@ -161,7 +264,7 @@ export function setupZeroConfig(): ZeroConfigResult {
     for (const { event, slug, matcher, timeout } of HOOK_EVENTS) {
       const preserved = stripOurHandlers(hooks[event]);
       let handler: Json;
-      if (event === "SessionStart") {
+      if (COMMAND_ONLY.has(event)) {
         const bridgePath = claudeBridgePath();
         mkdirSync(dirname(bridgePath), { recursive: true });
         writeFileSync(bridgePath, claudeBridgeScript(), { mode: 0o755 });
@@ -175,6 +278,7 @@ export function setupZeroConfig(): ZeroConfigResult {
       hooks[event] = [...preserved, group];
     }
     settings.hooks = hooks;
+    installStatusLine(settings);
 
     if (canonical(settings) === before) {
       console.log("[zero-config] Claude hooks already up to date");
@@ -227,6 +331,7 @@ export function removeClaudeHooks(): ZeroConfigResult {
     }
     if (Object.keys(hooks).length > 0) settings.hooks = hooks;
     else delete settings.hooks;
+    removeStatusLine(settings);
 
     if (canonical(settings) === before) return "unchanged";
     const stamp = new Date().toISOString().replace(/[:.]/g, "-");

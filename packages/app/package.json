@@ -1,6 +1,6 @@
 {
   "name": "@agent-island/app",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "private": true,
   "description": "Agent Island — menu bar / Dynamic Island for Claude Code and Codex sessions",
   "author": "Agent Island",
@@ -17,7 +17,10 @@
   },
   "dependencies": {
     "@agent-island/shared": "workspace:*",
+    "border-beam": "^1.4.1",
+    "bot-avatars": "^0.1.1",
     "lucide-react": "^1.41.0",
+    "thinking-orbs": "^0.3.2",
     "ws": "^8.18.0"
   },
   "devDependencies": {

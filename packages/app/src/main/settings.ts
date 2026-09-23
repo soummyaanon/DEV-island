@@ -26,6 +26,11 @@ export type TemperatureUnit = (typeof TEMPERATURE_UNITS)[number];
 export const OPEN_WITH = ["hover", "swipe"] as const;
 export type OpenWith = (typeof OPEN_WITH)[number];
 
+/** How sessions show in the open island: small avatar bubbles (default) or
+ *  the full rows with activity, model and meter. */
+export const SESSION_VIEWS = ["compact", "detailed"] as const;
+export type SessionView = (typeof SESSION_VIEWS)[number];
+
 /**
  * Bumped when a stored field's meaning changes.
  * - v1 → v2: v1 files (no version) were written before "Open with" existed in
@@ -70,6 +75,7 @@ export interface AppSettings {
   weatherUnits: TemperatureUnit;
   /** Hover-to-open (default) or gesture-to-open. */
   openWith: OpenWith;
+  sessionView: SessionView;
   /** Opt-in: a translucent Liquid Glass panel (native sheet, falls back to
    *  CSS) instead of the solid deep-black body. Off by default. */
   glass: boolean;
@@ -79,6 +85,16 @@ export interface AppSettings {
   procStats: boolean;
   /** Mute sounds and notification haptics while a Focus is on. */
   respectFocus: boolean;
+  /** The Ask bar (✦ and the bot crew) at all. */
+  assistant: boolean;
+  /** Use Apple Intelligence's on-device model. Off = commands only. */
+  assistantModel: boolean;
+  /** The mic button in the Ask bar. */
+  voice: boolean;
+  /** Read spoken questions' answers aloud. */
+  speakReplies: boolean;
+  /** The colourful edge glow while the assistant is open. */
+  edgeGlow: boolean;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -97,10 +113,16 @@ export const DEFAULT_SETTINGS: AppSettings = {
   weatherLocation: "",
   weatherUnits: "auto",
   openWith: "swipe",
+  sessionView: "compact",
   glass: false,
   battery: true,
   procStats: true,
   respectFocus: true,
+  assistant: true,
+  assistantModel: true,
+  voice: true,
+  speakReplies: true,
+  edgeGlow: true,
 };
 
 export function isSoundTheme(value: unknown): value is SoundTheme {
@@ -117,6 +139,10 @@ export function isTextSize(value: unknown): value is TextSize {
 
 export function isTemperatureUnit(value: unknown): value is TemperatureUnit {
   return typeof value === "string" && (TEMPERATURE_UNITS as readonly string[]).includes(value);
+}
+
+export function isSessionView(value: unknown): value is SessionView {
+  return typeof value === "string" && (SESSION_VIEWS as readonly string[]).includes(value);
 }
 
 export function isOpenWith(value: unknown): value is OpenWith {
@@ -165,6 +191,7 @@ export function normalizeSettings(stored: Partial<AppSettings>): AppSettings {
       : DEFAULT_SETTINGS.weatherUnits,
     // Migration: a v1 file's openWith was never a choice, only the old default.
     openWith: version >= 2 && isOpenWith(stored.openWith) ? stored.openWith : DEFAULT_SETTINGS.openWith,
+    sessionView: isSessionView(stored.sessionView) ? stored.sessionView : DEFAULT_SETTINGS.sessionView,
     // Migration: before v3, glass was on by default — a stored `true` was the
     // default, not a choice. The solid black body is the look now; glass is opt-in.
     glass: version >= 3 && typeof stored.glass === "boolean" ? stored.glass : DEFAULT_SETTINGS.glass,

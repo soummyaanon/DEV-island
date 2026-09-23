@@ -4,9 +4,11 @@ import {
   Blocks,
   CircleArrowUp,
   CloudSun,
+  Copy,
   Cpu,
   Download,
   type LucideIcon,
+  Mic,
   Moon,
   Music,
   Palette,
@@ -14,6 +16,7 @@ import {
   Power,
   Settings,
   SlidersHorizontal,
+  Sparkles,
   SquarePen,
   Volume2,
   VolumeX,
@@ -40,6 +43,9 @@ export type IconName =
   | "cpu"
   | "play"
   | "close"
+  | "copy"
+  | "sparkles"
+  | "mic"
   // Settings sidebar
   | "integrations"
   | "appearance"
@@ -62,6 +68,9 @@ const ICONS: Record<IconName, LucideIcon> = {
   cpu: Cpu,
   play: Play,
   close: X,
+  copy: Copy,
+  sparkles: Sparkles,
+  mic: Mic,
   integrations: Blocks,
   appearance: Palette,
   sounds: Music,

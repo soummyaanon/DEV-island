@@ -31,6 +31,8 @@ export interface SettingsState {
   weatherUnits: string;
   /** "hover" | "swipe" — how the collapsed island opens. */
   openWith: string;
+  /** "compact" | "detailed" — session bubbles or full rows. */
+  sessionView: string;
   /** Liquid Glass under the expanded panel. */
   glass: boolean;
   /** "native" | "vibrancy" | "none" — what the sidecar can draw. */
@@ -49,6 +51,16 @@ export interface SettingsState {
   version: string;
   /** Newest available version, or null when up to date / not yet checked. */
   update: { version: string } | null;
+  /* Intelligence */
+  assistant: boolean;
+  assistantModel: boolean;
+  voice: boolean;
+  speakReplies: boolean;
+  edgeGlow: boolean;
+  /** "available" | "basic" | "no-helper" — what the assistant can do here. */
+  assistantSupport: string;
+  /** Why the model can't answer in basic mode (not-enabled, os, off, …). */
+  assistantReason: string;
 }
 
 export interface PowerPayload {
@@ -73,6 +85,30 @@ export interface FocusPayload {
 /** Session key → CPU (% of a core, summed) and memory, or null when the PID is gone. */
 export type ProcStatsPayload = Record<string, { cpu: number; rssMb: number; procs: number } | null>;
 
+export type AssistantEventPayload =
+  | { id: string; type: "delta"; text: string }
+  | { id: string; type: "done" }
+  | { id: string; type: "error"; reason: string }
+  | { id: string; type: "tool"; name: string; step: string }
+  | {
+      id: string;
+      type: "action";
+      action:
+        | { kind: "open"; project: string }
+        | { kind: "draft"; project: string; message: string }
+        | { kind: "timer"; minutes: number; label: string }
+        | { kind: "shortcut"; name: string };
+    };
+
+export type VoiceEventPayload =
+  | { id: string; type: "listening" }
+  | { id: string; type: "status"; status: string }
+  | { id: string; type: "level"; level: number }
+  | { id: string; type: "partial"; text: string }
+  | { id: string; type: "final"; text: string }
+  | { id: string; type: "error"; reason: string }
+  | { id: ""; type: "spoken" };
+
 export interface SessionsPayload {
   sessions: SessionSnapshot[];
   connected: boolean;
@@ -92,6 +128,12 @@ export interface UiPrefs {
   textSize: string;
   /** "hover" | "swipe" — how the collapsed island opens. */
   openWith: string;
+  /** "compact" | "detailed" — session bubbles or full rows. */
+  sessionView: string;
+  assistant?: boolean;
+  voice?: boolean;
+  speakReplies?: boolean;
+  edgeGlow?: boolean;
   /** macOS natural scrolling; inverts wheel sign relative to finger motion. */
   naturalScroll: boolean;
   /** "native" | "vibrancy" | "css" — the material the panel should style for. */
@@ -286,6 +328,56 @@ const api = {
     const listener = (_e: unknown, status: string) => cb(status);
     ipcRenderer.on("agent-island:prompt-status", listener);
     return () => ipcRenderer.removeListener("agent-island:prompt-status", listener);
+  },
+
+  /* ---- Apple Intelligence (on-device, via the native sidecar) ---- */
+
+  /** "available", or why not: "not-enabled", "device-not-eligible", "os", … */
+  getAssistant: (): Promise<string> => ipcRenderer.invoke("agent-island:get-assistant"),
+
+  onAssistantSupport: (cb: (support: string) => void): (() => void) => {
+    const listener = (_e: unknown, support: string) => cb(support);
+    ipcRenderer.on("agent-island:assistant-support", listener);
+    return () => ipcRenderer.removeListener("agent-island:assistant-support", listener);
+  },
+
+  /** Ask a question; `context` is a plain-text snapshot of the sessions. */
+  askAssistant: (id: string, prompt: string, context: string): void =>
+    ipcRenderer.send("agent-island:assistant-ask", { id, prompt, context }),
+
+  cancelAssistant: (id: string): void => ipcRenderer.send("agent-island:assistant-cancel", id),
+
+  /** Run a Shortcut the model proposed — only after the user clicked Run. */
+  runShortcut: (name: string): Promise<boolean> =>
+    ipcRenderer.invoke("agent-island:assistant-run-shortcut", name),
+
+  /** A timer the assistant started has ended (its label, possibly empty). */
+  onAssistantTimer: (cb: (label: string) => void): (() => void) => {
+    const listener = (_e: unknown, label: string) => cb(label);
+    ipcRenderer.on("agent-island:assistant-timer", listener);
+    return () => ipcRenderer.removeListener("agent-island:assistant-timer", listener);
+  },
+
+  /* ---- Voice mode (Swift sidecar: on-device listening and speech) ---- */
+
+  startVoice: (id: string): void => ipcRenderer.send("agent-island:voice-start", id),
+  stopVoice: (id: string): void => ipcRenderer.send("agent-island:voice-stop", id),
+  speak: (text: string): void => ipcRenderer.send("agent-island:speak", text),
+  stopSpeaking: (): void => ipcRenderer.send("agent-island:speak-stop"),
+  onVoiceEvent: (cb: (event: VoiceEventPayload) => void): (() => void) => {
+    const listener = (_e: unknown, event: VoiceEventPayload) => cb(event);
+    ipcRenderer.on("agent-island:voice-event", listener);
+    return () => ipcRenderer.removeListener("agent-island:voice-event", listener);
+  },
+
+  /** Start a fresh conversation. */
+  resetAssistant: (): void => ipcRenderer.send("agent-island:assistant-reset"),
+
+  /** Streamed reply text (cumulative), done, error, or a tool action. */
+  onAssistantEvent: (cb: (event: AssistantEventPayload) => void): (() => void) => {
+    const listener = (_e: unknown, event: AssistantEventPayload) => cb(event);
+    ipcRenderer.on("agent-island:assistant-event", listener);
+    return () => ipcRenderer.removeListener("agent-island:assistant-event", listener);
   },
 
   /** Prompt macOS for Accessibility and open the pane (shared with onboarding). */

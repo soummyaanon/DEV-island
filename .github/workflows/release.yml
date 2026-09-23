@@ -22,7 +22,10 @@ env:
 
 jobs:
   build-and-release:
-    runs-on: macos-14 # arm64 — the app currently ships Apple Silicon only
+    # macOS 26 image (arm64, Xcode 26): the native helper needs the macOS 26
+    # SDK for Apple Intelligence (FoundationModels) and on-device voice
+    # (SpeechAnalyzer). An older runner still builds, but ships "basic" mode.
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
 
@@ -38,6 +41,10 @@ jobs:
       # Without Apple credentials this produces an ad-hoc signed build. Users
       # must approve it once through Privacy & Security → Open Anyway.
       - name: Build release DMG
+        env:
+          # A release must never quietly ship without the helper (haptics,
+          # glass, the assistant, voice): fail instead of degrading.
+          AGENT_ISLAND_REQUIRE_NATIVE: "1"
         run: pnpm package
 
       # Notes: the annotated tag's message, written for users (git tag -a).

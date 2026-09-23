@@ -9,6 +9,10 @@ describe("wingContent", () => {
       "attention",
     );
   });
+  it("an agent's done/failed moment beats other agents working, but not attention", () => {
+    expect(wingContent({ ...base, moment: true, active: 2, activity: true })).toBe("moment");
+    expect(wingContent({ ...base, moment: true, needsYou: 1 })).toBe("attention");
+  });
   it("working agents beat ambience and live activities", () => {
     expect(wingContent({ ...base, active: 1, activity: true, lowBattery: true, weather: true })).toBe("working");
   });

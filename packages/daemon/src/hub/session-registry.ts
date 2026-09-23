@@ -119,6 +119,34 @@ export class SessionRegistry {
     return updated;
   }
 
+  /** Forget a session outright (it ended). True if it was known. */
+  remove(key: string): boolean {
+    return this.sessions.delete(key);
+  }
+
+  /**
+   * Drop sessions that are gone: a Claude session whose process has exited
+   * (closed terminal, Ctrl-C, crash — none of which fire a hook), or any
+   * session that finished and has been quiet for `staleMs` with no process to
+   * vouch for it. Anything holding an approval or question is kept. Returns
+   * the removed keys.
+   */
+  prune(isAlive: (pid: number) => boolean, now: number, staleMs: number): string[] {
+    const removed: string[] = [];
+    for (const [key, s] of this.sessions) {
+      if (s.pending_approval || s.pending_question) continue;
+      const pid = s.agent === "claude-code" && typeof s.meta.pid === "string" ? Number(s.meta.pid) : NaN;
+      if (Number.isInteger(pid) && pid > 1) {
+        if (!isAlive(pid)) removed.push(key);
+        continue;
+      }
+      const resting = s.state === "done" || s.state === "idle" || s.state === "failed";
+      if (resting && now - Date.parse(s.updated_at) > staleMs) removed.push(key);
+    }
+    for (const key of removed) this.sessions.delete(key);
+    return removed;
+  }
+
   list(): SessionSnapshot[] {
     return [...this.sessions.values()];
   }

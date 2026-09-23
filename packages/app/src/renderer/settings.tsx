@@ -34,6 +34,7 @@ interface SettingsState {
   weatherLocation: string;
   weatherUnits: string;
   openWith: string;
+  sessionView: string;
   glass: boolean;
   glassSupport: string;
   battery: boolean;
@@ -47,6 +48,15 @@ interface SettingsState {
   loginNeedsApproval?: boolean;
   version: string;
   update: { version: string } | null;
+  assistant: boolean;
+  assistantModel: boolean;
+  voice: boolean;
+  speakReplies: boolean;
+  edgeGlow: boolean;
+  /** "available" | "basic" | "no-helper" */
+  assistantSupport: string;
+  /** Why the model can't answer in basic mode. */
+  assistantReason: string;
 }
 
 const DEFAULTS: SettingsState = {
@@ -66,6 +76,7 @@ const DEFAULTS: SettingsState = {
   weatherLocation: "",
   weatherUnits: "auto",
   openWith: "swipe",
+  sessionView: "compact",
   glass: false,
   glassSupport: "none",
   battery: true,
@@ -77,10 +88,18 @@ const DEFAULTS: SettingsState = {
   openAtLogin: false,
   version: "",
   update: null,
+  assistant: true,
+  assistantModel: true,
+  voice: true,
+  speakReplies: true,
+  edgeGlow: true,
+  assistantSupport: "no-helper",
+  assistantReason: "",
 };
 
 const NAV = [
   { id: "integrations", label: "Integrations", icon: "integrations" },
+  { id: "intelligence", label: "Intelligence", icon: "sparkles" },
   { id: "appearance", label: "Appearance", icon: "appearance" },
   { id: "sounds", label: "Sounds", icon: "sounds" },
   { id: "weather", label: "Weather", icon: "weather" },
@@ -90,6 +109,35 @@ const NAV = [
   { id: "updates", label: "Updates", icon: "updates" },
 ] as const;
 type SectionId = (typeof NAV)[number]["id"];
+
+/** One line under each section title: what lives here, in plain words. */
+const SECTION_BLURB: Record<SectionId, string> = {
+  integrations: "Which agents the island watches.",
+  intelligence: "The on-device assistant, its voice, and its glow.",
+  appearance: "How the island looks and opens.",
+  sounds: "What you hear when agents finish, ask, or need you.",
+  weather: "A small live scene when nothing is running.",
+  live: "Battery, Focus and resource moments in the wings.",
+  accessibility: "Text size, keyboard focus and VoiceOver.",
+  general: "Login, menu bar and the app itself.",
+  updates: "Stay on the latest release.",
+};
+
+/** Where the assistant stands on this Mac, said plainly. */
+function assistantStatus(support: string, reason: string, modelOn: boolean): { tone: "ok" | "warn" | "off"; text: string } {
+  if (support === "no-helper") return { tone: "off", text: "Unavailable: the native helper isn't installed." };
+  if (support === "available")
+    return { tone: "ok", text: "Apple Intelligence is ready. Answers and actions run on this Mac." };
+  const why: Record<string, string> = {
+    off: modelOn ? "Starting Apple Intelligence…" : "Answers are off. Commands still work.",
+    "not-enabled": "Turn on Apple Intelligence in System Settings for answers. Commands work now.",
+    "model-not-ready": "Apple Intelligence is still downloading its model. Commands work now.",
+    "device-not-eligible": "This Mac can't run Apple Intelligence. Commands (open, search, timers, volume, Shortcuts) work.",
+    os: "Answers need macOS 26. Commands (open, search, timers, volume, Shortcuts) work now.",
+    sdk: "This build has no Apple Intelligence. Commands work.",
+  };
+  return { tone: "warn", text: why[reason] ?? "Commands work; answers need Apple Intelligence." };
+}
 
 const TEMPERATURE_UNITS = [
   { value: "auto", label: "Automatic" },
@@ -163,6 +211,11 @@ function Row({
     </div>
   );
 }
+
+const SESSION_VIEWS: { value: string; label: string }[] = [
+  { value: "compact", label: "Compact" },
+  { value: "detailed", label: "Detailed" },
+];
 
 const OPEN_WITH: { value: string; label: string }[] = [
   { value: "hover", label: "Hover" },
@@ -312,7 +365,57 @@ function Settings() {
       </aside>
 
       <main className="s-detail">
-        <h1>{activeLabel}</h1>
+        <header className="s-head">
+          <h1>{activeLabel}</h1>
+          <p>{SECTION_BLURB[section]}</p>
+        </header>
+
+        {section === "intelligence" && (() => {
+          const status = assistantStatus(state.assistantSupport, state.assistantReason, state.assistantModel);
+          return (
+            <>
+              <div className={`s-status ${status.tone}`}>
+                <i aria-hidden />
+                <span>{status.text}</span>
+              </div>
+              <div className="s-group">
+                <Row
+                  title="Assistant"
+                  detail="The Ask bar: the bots when the island is empty, ✦ while agents work."
+                  on={state.assistant}
+                  onChange={(v) => set("assistant", v)}
+                />
+                <Row
+                  title="Apple Intelligence"
+                  detail="Use the on-device model for answers and multi-step actions. Off keeps simple commands only."
+                  on={state.assistantModel}
+                  onChange={(v) => set("assistantModel", v)}
+                />
+                <Row
+                  title="Edge glow"
+                  detail="A soft silver pulse inside the island's edge while the assistant is open."
+                  on={state.edgeGlow}
+                  onChange={(v) => set("edgeGlow", v)}
+                />
+              </div>
+              <h2 className="s-sub-h">Voice</h2>
+              <div className="s-group">
+                <Row
+                  title="Voice mode"
+                  detail="A mic in the Ask bar. Speech is transcribed on this Mac; nothing is recorded."
+                  on={state.voice}
+                  onChange={(v) => set("voice", v)}
+                />
+                <Row
+                  title="Speak answers"
+                  detail="Read the answer aloud in Siri's voice when you asked by voice."
+                  on={state.speakReplies}
+                  onChange={(v) => set("speakReplies", v)}
+                />
+              </div>
+            </>
+          );
+        })()}
 
         {section === "integrations" && (
           <div className="s-group">
@@ -368,6 +471,22 @@ function Settings() {
                 value={state.openWith}
                 options={OPEN_WITH}
                 onChange={(v) => set("openWith", v)}
+              />
+            </div>
+            <div className="s-row">
+              <div className="s-text">
+                <b>Sessions</b>
+                <span>
+                  {state.sessionView === "compact"
+                    ? "Each session is a small avatar bubble; hover one for what it's doing, click to jump."
+                    : "Full rows: project, activity, model, host app and CPU/memory for every session."}
+                </span>
+              </div>
+              <Segmented
+                label="Show sessions as"
+                value={state.sessionView}
+                options={SESSION_VIEWS}
+                onChange={(v) => set("sessionView", v)}
               />
             </div>
           </div>

@@ -11,6 +11,7 @@ const SLUG_TO_EVENT: Record<string, string> = {
   "permission-request": "PermissionRequest",
   notification: "Notification",
   stop: "Stop",
+  "session-end": "SessionEnd",
 };
 
 /**

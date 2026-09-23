@@ -1,5 +1,6 @@
 import { app, BrowserWindow } from "electron";
 import { join } from "node:path";
+import { attachEditShortcuts } from "../edit-shortcuts";
 
 let win: BrowserWindow | null = null;
 /** The size the user last left it at this run; a fresh launch starts at the default. */
@@ -62,6 +63,7 @@ export function showSettingsWindow(): void {
       spellcheck: false,
     },
   });
+  attachEditShortcuts(win.webContents);
   win.center();
 
   if (process.env.ELECTRON_RENDERER_URL) {

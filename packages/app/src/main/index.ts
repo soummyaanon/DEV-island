@@ -4,6 +4,7 @@ import {
   dialog,
   globalShortcut,
   ipcMain,
+  Menu,
   powerMonitor,
   screen,
   shell,
@@ -27,6 +28,7 @@ import {
   isSoundEvent,
   isSoundTheme,
   isOpenWith,
+  isSessionView,
   isTemperatureUnit,
   isTextSize,
   loadSettings,
@@ -58,6 +60,21 @@ import {
 import { getWeather, onWeather, startWeather, updateWeatherSettings } from "./weather";
 import { createTray, updateTrayTitle } from "./tray";
 import { answerInTerminal, jumpToTerminal, sendPromptToTerminal } from "./jump-back";
+import {
+  askAssistant,
+  assistantReason,
+  assistantSupport,
+  cancelAssistant,
+  clearAssistantTimers,
+  runShortcut,
+  startAssistantTimer,
+  initAssistant,
+  onAssistantEvent,
+  onAssistantSupport,
+  resetAssistant,
+  setAssistantModel,
+} from "./assistant";
+import { initVoice, speak, startListening, stopListening, stopSpeaking } from "./voice";
 import {
   checkNow,
   downloadAndInstall,
@@ -203,8 +220,15 @@ if (!app.requestSingleInstanceLock()) {
 
   app.whenReady().then(async () => {
     app.dock?.hide(); // menu-bar app, no Dock icon
+    // macOS routes ⌘V/⌘C/⌘X/⌘A/⌘Z through the application menu, not the text
+    // field. With no menu, every text input (prompt bar, Settings) ignores them
+    // and only Ctrl+V gets through. The menu is never shown — we're an
+    // accessory app — it only has to exist for its key equivalents.
+    Menu.setApplicationMenu(Menu.buildFromTemplate([{ role: "appMenu" }, { role: "editMenu" }]));
     notch = createNotchWindow();
     initGlass(notch);
+    initAssistant();
+    if (!loadSettings().assistantModel) setAssistantModel(false);
 
     // Battery saver: freeze the overlay's animations while the Mac is locked or
     // asleep — a long agent run shouldn't keep compositing the notch when nobody
@@ -329,6 +353,9 @@ if (!app.requestSingleInstanceLock()) {
         // So Settings can say whether the glass toggle can bite, and how.
         glassSupport: glassSupport(),
         focus: getFocus(),
+        // So Settings can say what the assistant can do on this Mac.
+        assistantSupport: assistantSupport(),
+        assistantReason: assistantReason(),
         focusLinks: focusLinks(),
         deepLinksRegistered,
         a11yShortcut: a11yShortcutRegistered ? A11Y_FOCUS_SHORTCUT : null,
@@ -339,6 +366,11 @@ if (!app.requestSingleInstanceLock()) {
     const uiPrefs = () => ({
       textSize: settings.textSize,
       openWith: settings.openWith,
+      sessionView: settings.sessionView,
+      assistant: settings.assistant,
+      voice: settings.voice,
+      speakReplies: settings.speakReplies,
+      edgeGlow: settings.edgeGlow,
       naturalScroll,
       // Which material the renderer should style for: native/vibrancy = a
       // real glass panel sits beneath; css = draw the panel itself.
@@ -417,6 +449,11 @@ if (!app.requestSingleInstanceLock()) {
           settings.openWith = value;
           sendToNotch("agent-island:ui-prefs", uiPrefs());
           break;
+        case "sessionView":
+          if (!isSessionView(value)) return;
+          settings.sessionView = value;
+          sendToNotch("agent-island:ui-prefs", uiPrefs());
+          break;
         case "glass":
           settings.glass = value === true;
           setGlassEnabled(settings.glass);
@@ -456,6 +493,18 @@ if (!app.requestSingleInstanceLock()) {
           settings.updateCheck = value === true;
           if (value) startUpdateCheck(onUpdateInfo);
           else stopUpdateCheck();
+          break;
+        case "assistant":
+        case "voice":
+        case "speakReplies":
+        case "edgeGlow":
+          settings[key] = value === true;
+          if (key === "voice" && !settings.voice) stopSpeaking();
+          sendToNotch("agent-island:ui-prefs", uiPrefs());
+          break;
+        case "assistantModel":
+          settings.assistantModel = value === true;
+          setAssistantModel(settings.assistantModel);
           break;
         case "openAtLogin":
           app.setLoginItemSettings({ openAtLogin: value === true, openAsHidden: true });
@@ -710,6 +759,64 @@ if (!app.requestSingleInstanceLock()) {
       }
     });
 
+    // Apple Intelligence "Ask" bar. An `open` tool call is carried out here —
+    // jumping is harmless and instant. Everything, including drafts the user
+    // must confirm, is forwarded so the renderer can show what happened.
+    ipcMain.handle("agent-island:get-assistant", () => assistantSupport());
+    ipcMain.handle("agent-island:get-assistant-reason", () => assistantReason());
+    onAssistantSupport((s) => {
+      sendToNotch("agent-island:assistant-support", s);
+      pushSettingsState(settingsState());
+    });
+
+    onAssistantEvent((event) => {
+      if (event.type === "action" && event.action.kind === "open") {
+        const wanted = event.action.project.toLowerCase();
+        const sessions = filterSessions(daemon.list());
+        const project = (s: SessionSnapshot) => (s.cwd.split("/").filter(Boolean).pop() ?? "").toLowerCase();
+        // Exact folder name first, then a prefix ("web" → "website").
+        const target =
+          sessions.find((s) => project(s) === wanted) ??
+          (wanted ? sessions.find((s) => project(s).startsWith(wanted)) : undefined);
+        if (target) jumpToTerminal(target);
+      }
+      if (event.type === "action" && event.action.kind === "timer") {
+        startAssistantTimer(event.action.minutes, event.action.label, (label) => {
+          sendToNotch("agent-island:assistant-timer", label);
+          haptic("success");
+        });
+      }
+      sendToNotch("agent-island:assistant-event", event);
+    });
+    ipcMain.on(
+      "agent-island:assistant-ask",
+      (_e, { id, prompt, context }: { id: string; prompt: string; context: string }) => {
+        if (!askAssistant(id, prompt, context)) {
+          sendToNotch("agent-island:assistant-event", { id, type: "error", reason: assistantSupport() });
+        }
+      },
+    );
+    ipcMain.on("agent-island:assistant-cancel", (_e, id: string) => cancelAssistant(id));
+
+    // Voice mode (Swift sidecar): listen → transcript → the renderer asks the
+    // assistant → the reply is spoken back.
+    initVoice((event) => sendToNotch("agent-island:voice-event", event));
+    ipcMain.on("agent-island:voice-start", (_e, id: string) => {
+      if (!startListening(String(id))) {
+        sendToNotch("agent-island:voice-event", { id, type: "error", reason: "no-helper" });
+      }
+    });
+    ipcMain.on("agent-island:voice-stop", (_e, id: string) => stopListening(String(id)));
+    ipcMain.on("agent-island:speak", (_e, text: unknown) => {
+      if (typeof text === "string") speak(text);
+    });
+    ipcMain.on("agent-island:speak-stop", () => stopSpeaking());
+    ipcMain.on("agent-island:assistant-reset", () => resetAssistant());
+    // Only ever reached from the user's click on a shortcut the model proposed.
+    ipcMain.handle("agent-island:assistant-run-shortcut", (_e, name: unknown) =>
+      typeof name === "string" && name.trim() ? runShortcut(name) : false,
+    );
+
     ipcMain.on("agent-island:jump", (_e, session: SessionSnapshot) => {
       console.log(`[jump] requested for ${session.key}`);
       jumpToTerminal(session);
@@ -764,6 +871,7 @@ if (!app.requestSingleInstanceLock()) {
 
   app.on("before-quit", () => {
     globalShortcut.unregisterAll();
+    clearAssistantTimers();
     stopUpdateCheck();
     stopHelper();
     // Remove our hooks before we go: the HTTP hooks point at the daemon we're

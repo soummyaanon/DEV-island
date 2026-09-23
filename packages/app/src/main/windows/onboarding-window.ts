@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, systemPreferences } from "electron";
 import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { requestAccessibility } from "../accessibility";
+import { attachEditShortcuts } from "../edit-shortcuts";
 
 /** First-run marker: onboarding shows once, then never again. */
 function flagPath(): string {
@@ -74,6 +75,7 @@ export function maybeShowOnboarding(): void {
       spellcheck: false,
     },
   });
+  attachEditShortcuts(win.webContents);
   win.center();
 
   if (process.env.ELECTRON_RENDERER_URL) {

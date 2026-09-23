@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { AgentAvatar } from "./agent-avatar";
 import type { SessionSnapshot } from "@agent-island/shared";
 
 const AGENT_ASKS: Record<string, string> = {
@@ -57,7 +58,7 @@ export function QuestionCard({
     >
       <div className="approval-top">
         <span className="approval-kicker">
-          <span className="approval-mark ask" />
+          <AgentAvatar session={session} now={Date.now()} size={26} />
           {AGENT_ASKS[session.agent] ?? "Agent asks"}
         </span>
         <span className="approval-project">{projectName(session.cwd)}</span>

@@ -1,6 +1,7 @@
 import { BrowserWindow, ipcMain, screen } from "electron";
 import { execFile } from "node:child_process";
 import { join } from "node:path";
+import { attachEditShortcuts } from "../edit-shortcuts";
 
 /**
  * Overlay window size (logical px) — deliberately far larger than the visible
@@ -105,6 +106,7 @@ export function createNotchWindow(): BrowserWindow {
       backgroundThrottling: true,
     },
   });
+  attachEditShortcuts(win.webContents);
 
   // Float above full-screen apps and on every Space; keep it out of Mission
   // Control (mirrors NSPanel collectionBehavior in the reference).
@@ -171,7 +173,27 @@ export function createNotchWindow(): BrowserWindow {
   screen.on("display-metrics-changed", onDisplayChange);
   screen.on("display-added", onDisplayChange);
   screen.on("display-removed", onDisplayChange);
+  // Pin the island over the notch. macOS's "click wallpaper to reveal desktop"
+  // (and Stage Manager, and a stray Mission Control shuffle) slides EVERY
+  // window aside — this overlay included, which sent the island to the bottom
+  // of the screen. Electron can't mark a window stationary, so it snaps back:
+  // on every move event, plus a cheap check in case a move reports nothing.
+  const pin = (): void => {
+    if (win.isDestroyed()) return;
+    const { x, y } = targetOrigin();
+    const b = win.getBounds();
+    // A real displacement only. macOS may hold the window a menu bar's height
+    // lower than asked on some displays (that's what `inset` measures), and
+    // re-asking every half second would fight it forever.
+    if (Math.abs(b.x - x) > 2 || Math.abs(b.y - y) > 60) {
+      win.setBounds({ x, y, width: WIN_WIDTH, height: WIN_HEIGHT });
+    }
+  };
+  win.on("move", pin);
+  win.on("moved", pin);
+  const pinTimer = setInterval(pin, 500);
   win.on("closed", () => {
+    clearInterval(pinTimer);
     screen.removeListener("display-metrics-changed", onDisplayChange);
     screen.removeListener("display-added", onDisplayChange);
     screen.removeListener("display-removed", onDisplayChange);
