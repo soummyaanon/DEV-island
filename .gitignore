@@ -18,3 +18,4 @@ packages/shared/dist/
 
 # Compiled native sidecar (rebuilt by scripts/build-native.sh).
 packages/app/native/AgentIslandNative
+packages/app/native/window-pin.node

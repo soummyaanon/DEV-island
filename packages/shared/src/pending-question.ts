@@ -12,6 +12,8 @@ export const PendingSubQuestionSchema = z.object({
   question: z.string(),
   /** Display labels for its options, in order (answers are sent as indices). */
   options: z.array(z.string()),
+  /** Several options may be picked (Claude's `multiSelect`). */
+  multiSelect: z.boolean().optional(),
 });
 
 export const PendingQuestionSchema = z.object({

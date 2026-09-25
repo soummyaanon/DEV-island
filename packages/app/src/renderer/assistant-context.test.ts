@@ -52,9 +52,9 @@ describe("assistantOrbState", () => {
     expect(assistantOrbState({ ...rest, sent: true, tool: "openApp" })).toBe("working");
     expect(assistantOrbState({ ...rest, streaming: true })).toBe("composing");
   });
-  it("at rest: shaping for a pending proposal, listening while typing, else breathing", () => {
+  it("at rest: shaping for a pending proposal, else listening (never breathing)", () => {
     expect(assistantOrbState({ ...rest, proposing: true, typing: true })).toBe("shaping");
     expect(assistantOrbState({ ...rest, typing: true })).toBe("listening");
-    expect(assistantOrbState(rest)).toBe("breathing");
+    expect(assistantOrbState(rest)).toBe("listening");
   });
 });

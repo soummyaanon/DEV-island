@@ -27,6 +27,31 @@ OUT="$OUT_DIR/AgentIslandNative"
 # extraResource, and a missing path would fail the pack step.
 mkdir -p "$OUT_DIR"
 
+# window-pin.node: marks the overlay stationary so "click wallpaper to reveal
+# desktop" can't slide it away (see native/window-pin.m). Node-API, so it
+# loads in Electron without a rebuild. Optional like the helper: without it,
+# main falls back to snapping the window back.
+build_window_pin() {
+  local src="$ROOT/native/window-pin.m" out="$OUT_DIR/window-pin.node"
+  if [[ -f "$out" && "$out" -nt "$src" ]]; then return 0; fi
+  local inc=""
+  for dir in "$ROOT/node_modules/node-api-headers/include" \
+    "$(dirname "$(command -v node 2>/dev/null || echo /nonexistent)")/../include/node"; do
+    if [[ -f "$dir/node_api.h" ]]; then inc="$dir"; break; fi
+  done
+  if [[ -z "$inc" ]]; then
+    echo "==> Skipping window-pin (no node_api.h found)"
+    return 0
+  fi
+  echo "==> Building window-pin.node (arm64)"
+  if ! clang -O2 -fobjc-arc -target arm64-apple-macos12 -bundle -undefined dynamic_lookup \
+    -DNAPI_VERSION=8 -DNODE_GYP_MODULE_NAME=window_pin -I "$inc" \
+    -framework AppKit -o "$out" "$src"; then
+    echo "==> window-pin failed to build — the island falls back to snapping back" >&2
+    rm -f "$out"
+  fi
+}
+
 if [[ "$(uname -s)" != "Darwin" ]]; then
   echo "==> Skipping native helper (not macOS)"
   exit 0
@@ -41,6 +66,7 @@ fi
 # Skip the ~2s compile when neither input has changed since the last build.
 if [[ -f "$OUT" && "$OUT" -nt "$SRC" && "$OUT" -nt "$PLIST" ]]; then
   echo "==> Native helper up to date"
+  build_window_pin
   exit 0
 fi
 
@@ -76,3 +102,4 @@ if [[ "$(echo ping | "$OUT" 2>/dev/null)" != "pong" ]]; then
 fi
 
 echo "    $OUT"
+build_window_pin

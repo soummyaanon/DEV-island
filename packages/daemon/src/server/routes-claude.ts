@@ -37,36 +37,53 @@ function extractQuestion(input: Record<string, unknown> | undefined): PendingQue
             })
             .filter((label): label is string => label !== null)
         : [],
+      ...(q.multiSelect === true ? { multiSelect: true } : {}),
     }));
   if (questions.length === 0) return null;
   return { id: randomUUID(), questions, created_at: new Date().toISOString() };
 }
 
 /**
- * The questions the notch can answer remotely: every entry single-select with
- * at least one labelled option. Returns question texts + raw option labels
+ * The questions the notch can answer remotely: every entry with at least one
+ * labelled option (single- or multi-select). Returns question texts + raw option labels
  * (the hook answer needs the label verbatim, not the display string), or null
  * when the tool call is not remotely answerable.
  */
 function answerableQuestions(
   input: Record<string, unknown> | undefined,
-): Array<{ question: string; labels: string[] }> | null {
+): Array<{ question: string; labels: string[]; multi: boolean }> | null {
   const raw = Array.isArray(input?.questions)
     ? (input.questions as Array<Record<string, unknown>>)
     : [];
   if (raw.length === 0) return null;
-  const out: Array<{ question: string; labels: string[] }> = [];
+  const out: Array<{ question: string; labels: string[]; multi: boolean }> = [];
   for (const q of raw) {
-    if (typeof q?.question !== "string" || q.multiSelect === true) return null;
+    if (typeof q?.question !== "string") return null;
     const labels = Array.isArray(q.options)
       ? (q.options as Array<Record<string, unknown>>)
           .map((o) => (typeof o?.label === "string" ? o.label : null))
           .filter((label): label is string => label !== null)
       : [];
     if (labels.length === 0) return null;
-    out.push({ question: q.question, labels });
+    out.push({ question: q.question, labels, multi: q.multiSelect === true });
   }
   return out;
+}
+
+/**
+ * One question's answer as Claude's picker writes it: the label, or for a
+ * multi-select the chosen labels joined with ", ". Null when the picks don't
+ * fit the question (none, several on a single-select, or out of range).
+ */
+export function answerLabel(
+  q: { labels: string[]; multi: boolean },
+  picks: number[],
+): string | null {
+  const unique = [...new Set(picks)].sort((a, b) => a - b);
+  if (unique.length === 0 || (!q.multi && unique.length !== 1)) return null;
+  const labels = unique.map((i) => q.labels[i]);
+  if (labels.some((l) => l === undefined)) return null;
+  return labels.join(", ");
 }
 
 /** ExitPlanMode carries the plan text in tool_input.plan; surface it for review. */
@@ -190,8 +207,8 @@ export function registerClaudeRoutes(
           const labels =
             outcome === "timeout" || outcome.length !== answerable.length
               ? null
-              : answerable.map((q, i) => q.labels[outcome[i]]);
-          if (labels && labels.every((label) => label !== undefined)) {
+              : answerable.map((q, i) => answerLabel(q, outcome[i]));
+          if (labels && labels.every((label) => label !== null)) {
             const answers = Object.fromEntries(
               answerable.map((q, i) => [q.question, labels[i] as string]),
             );

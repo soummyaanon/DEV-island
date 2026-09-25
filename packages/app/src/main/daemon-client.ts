@@ -54,16 +54,16 @@ export class DaemonClient {
   }
 
   /**
-   * Answer a held AskUserQuestion with one 0-based option index per question.
+   * Answer a held AskUserQuestion with the chosen 0-based indices per question.
    * Returns false when the hold is gone (expired or unknown) — the caller
    * falls back to jump-to-terminal.
    */
-  async answerQuestion(id: string, options: number[]): Promise<boolean> {
+  async answerQuestion(id: string, selections: number[][]): Promise<boolean> {
     try {
       const res = await fetch(`${this.httpBase}/questions/${id}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ options }),
+        body: JSON.stringify({ selections }),
       });
       return res.ok;
     } catch (err) {

@@ -313,3 +313,26 @@ describe("Claude hook routes", () => {
     expect(hub.sessions()[0]?.meta.pid).toBe("48213");
   });
 });
+
+describe("answerLabel", () => {
+  it("joins multi-select picks like Claude's picker and rejects bad picks", async () => {
+    const { answerLabel } = await import("./routes-claude");
+    const multi = { labels: ["Lint", "Types", "Tests"], multi: true };
+    expect(answerLabel(multi, [2, 0])).toBe("Lint, Tests");
+    expect(answerLabel(multi, [])).toBeNull();
+    expect(answerLabel(multi, [5])).toBeNull();
+    const single = { labels: ["Yes", "No"], multi: false };
+    expect(answerLabel(single, [1])).toBe("No");
+    expect(answerLabel(single, [0, 1])).toBeNull();
+  });
+});
+
+describe("parseSelections", () => {
+  it("accepts per-question selections and the legacy one-index form", async () => {
+    const { parseSelections } = await import("./routes-questions");
+    expect(parseSelections({ selections: [[0, 2], [1]] })).toEqual([[0, 2], [1]]);
+    expect(parseSelections({ options: [1, 0] })).toEqual([[1], [0]]);
+    expect(parseSelections({ selections: [[]] })).toBeNull();
+    expect(parseSelections({ options: [-1] })).toBeNull();
+  });
+});

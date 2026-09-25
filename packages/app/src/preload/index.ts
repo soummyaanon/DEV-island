@@ -57,6 +57,7 @@ export interface SettingsState {
   voice: boolean;
   speakReplies: boolean;
   edgeGlow: boolean;
+  greeting: boolean;
   /** "available" | "basic" | "no-helper" — what the assistant can do here. */
   assistantSupport: string;
   /** Why the model can't answer in basic mode (not-enabled, os, off, …). */
@@ -85,6 +86,13 @@ export interface FocusPayload {
 /** Session key → CPU (% of a core, summed) and memory, or null when the PID is gone. */
 export type ProcStatsPayload = Record<string, { cpu: number; rssMb: number; procs: number } | null>;
 
+export interface GreetingPayload {
+  title: string;
+  line: string;
+  /** Written by the on-device model (vs. the built-in fallback). */
+  ai: boolean;
+}
+
 export type AssistantEventPayload =
   | { id: string; type: "delta"; text: string }
   | { id: string; type: "done" }
@@ -97,7 +105,8 @@ export type AssistantEventPayload =
         | { kind: "open"; project: string }
         | { kind: "draft"; project: string; message: string }
         | { kind: "timer"; minutes: number; label: string }
-        | { kind: "shortcut"; name: string };
+        | { kind: "shortcut"; name: string }
+        | { kind: "sources"; sources: Array<{ title: string; url: string }> };
     };
 
 export type VoiceEventPayload =
@@ -134,6 +143,7 @@ export interface UiPrefs {
   voice?: boolean;
   speakReplies?: boolean;
   edgeGlow?: boolean;
+  greeting?: boolean;
   /** macOS natural scrolling; inverts wheel sign relative to finger motion. */
   naturalScroll: boolean;
   /** "native" | "vibrancy" | "css" — the material the panel should style for. */
@@ -308,8 +318,9 @@ const api = {
   jump: (session: SessionSnapshot): void => ipcRenderer.send("agent-island:jump", session),
 
   /** Answer a pending question: one 0-based option index per sub-question. */
-  answer: (session: SessionSnapshot, options: number[]): void =>
-    ipcRenderer.send("agent-island:answer", { session, options }),
+  /** The chosen option indices per question (several for a multi-select). */
+  answer: (session: SessionSnapshot, selections: number[][]): void =>
+    ipcRenderer.send("agent-island:answer", { session, selections }),
 
   /** Type a free-form prompt into the session's terminal and submit it. */
   sendPrompt: (session: SessionSnapshot, text: string): void =>
@@ -344,6 +355,19 @@ const api = {
   /** Ask a question; `context` is a plain-text snapshot of the sessions. */
   askAssistant: (id: string, prompt: string, context: string): void =>
     ipcRenderer.send("agent-island:assistant-ask", { id, prompt, context }),
+
+  /** The launch hello, once per launch; null when off or already said. */
+  getGreeting: (): Promise<GreetingPayload | null> => ipcRenderer.invoke("agent-island:get-greeting"),
+
+  /** A welcome-back hello after time away from the Mac. */
+  onGreeting: (cb: (g: GreetingPayload) => void): (() => void) => {
+    const listener = (_e: unknown, g: GreetingPayload) => cb(g);
+    ipcRenderer.on("agent-island:greeting", listener);
+    return () => ipcRenderer.removeListener("agent-island:greeting", listener);
+  },
+
+  /** Open a web result the assistant cited (http/https only; main checks). */
+  openSource: (url: string): void => ipcRenderer.send("agent-island:open-source", url),
 
   cancelAssistant: (id: string): void => ipcRenderer.send("agent-island:assistant-cancel", id),
 

@@ -28,7 +28,8 @@ export type AssistantAction =
   | { kind: "open"; project: string }
   | { kind: "draft"; project: string; message: string }
   | { kind: "timer"; minutes: number; label: string }
-  | { kind: "shortcut"; name: string };
+  | { kind: "shortcut"; name: string }
+  | { kind: "sources"; sources: Array<{ title: string; url: string }> };
 
 export type AssistantEvent =
   | { id: string; type: "delta"; text: string }
@@ -36,6 +37,16 @@ export type AssistantEvent =
   | { id: string; type: "error"; reason: string }
   | { id: string; type: "tool"; name: string; step: string }
   | { id: string; type: "action"; action: AssistantAction };
+
+/** Only http(s) links are ever opened from a web result. */
+export function isWebUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    return u.protocol === "https:" || u.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
 
 const decode = (b64: string): string => Buffer.from(b64, "base64").toString("utf8");
 const encode = (text: string): string => Buffer.from(text, "utf8").toString("base64");
@@ -75,6 +86,15 @@ export function parseAssistantLine(line: string): AssistantEvent | null {
         if (raw.kind === "shortcut") {
           const name = typeof raw.name === "string" ? raw.name.trim() : "";
           return name ? { id, type: "action", action: { kind: "shortcut", name } } : null;
+        }
+        if (raw.kind === "sources") {
+          const urls = typeof raw.urls === "string" ? raw.urls.split("\n") : [];
+          const titles = typeof raw.titles === "string" ? raw.titles.split("\n") : [];
+          const sources = urls
+            .map((url, i) => ({ url: url.trim(), title: (titles[i] ?? "").trim() }))
+            .filter((s) => isWebUrl(s.url))
+            .slice(0, 5);
+          return sources.length > 0 ? { id, type: "action", action: { kind: "sources", sources } } : null;
         }
         if (raw.kind === "draft") {
           const message = typeof raw.message === "string" ? raw.message : "";

@@ -26,6 +26,8 @@ interface Turn {
   steps: string[];
   /** The tool running right now; cleared when words arrive. */
   tool: string | null;
+  /** Web results the answer was written from. */
+  sources?: Array<{ title: string; url: string }>;
 }
 
 /** Waiting for the user's click before anything happens. */
@@ -135,6 +137,10 @@ export function AssistantBar({
       window.agentIsland.onAssistantEvent((event) => {
         if (event.type === "action") {
           const a = event.action;
+          if (a.kind === "sources") {
+            setTurns((all) => all.map((t) => (t.id === event.id ? { ...t, sources: a.sources } : t)));
+            return;
+          }
           const proposal: Proposal | null =
             a.kind === "draft" && a.message.trim()
               ? { id: `${event.id}-d`, kind: "draft", project: a.project, message: a.message }
@@ -267,8 +273,10 @@ export function AssistantBar({
     typing: voice !== null || (focused && text !== ""),
   });
 
+  const orbResting = !live && drafts.length === 0 && voice === null && !(focused && text !== "");
+
   const field = (
-    <FieldBeam focused={focused} paused={paused}>
+    <FieldBeam focused={focused} loading={live?.status === "thinking"} paused={paused}>
       <form
         className="prompt-bar assistant-bar"
         onSubmit={(e) => {
@@ -276,7 +284,8 @@ export function AssistantBar({
           ask();
         }}
       >
-        <AgentOrb state={orb} tint={live ? "#b18cff" : undefined} paused={paused} />
+        {/* Frozen at rest: an orb only moves while something is actually happening. */}
+        <AgentOrb state={orb} tint={live ? "#b18cff" : undefined} paused={paused || orbResting} />
         <input
           ref={inputRef}
           className="prompt-input"
@@ -408,6 +417,25 @@ export function AssistantBar({
                   <span className="assistant-wait">Thinking…</span>
                 )}
               </div>
+              {t.sources && t.sources.length > 0 && (
+                <ul className="assistant-sources" aria-label="Sources">
+                  {t.sources.map((src) => {
+                    const host = new URL(src.url).hostname.replace(/^www\./, "");
+                    return (
+                      <li key={src.url}>
+                        <button
+                          type="button"
+                          className="assistant-source"
+                          title={src.title || src.url}
+                          onClick={() => window.agentIsland.openSource(src.url)}
+                        >
+                          {host}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
             </li>
           ))}
         </ol>

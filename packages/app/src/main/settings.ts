@@ -95,6 +95,8 @@ export interface AppSettings {
   speakReplies: boolean;
   /** The colourful edge glow while the assistant is open. */
   edgeGlow: boolean;
+  /** Say hello at launch and when you come back to the Mac. */
+  greeting: boolean;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -123,6 +125,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   voice: true,
   speakReplies: true,
   edgeGlow: true,
+  greeting: true,
 };
 
 export function isSoundTheme(value: unknown): value is SoundTheme {

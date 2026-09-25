@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { askCommand, parseAssistantCaps, parseAssistantLine } from "./assistant";
+import { askCommand, isWebUrl, parseAssistantCaps, parseAssistantLine } from "./assistant";
 
 const b64 = (s: string) => Buffer.from(s, "utf8").toString("base64");
 
@@ -81,5 +81,22 @@ describe("askCommand", () => {
       prompt: "hi there\nfriend",
       context: "- web: working",
     });
+  });
+});
+
+describe("web search sources", () => {
+  const enc = (o: unknown) => Buffer.from(JSON.stringify(o), "utf8").toString("base64");
+  it("parses cited sources and drops non-web links", () => {
+    const line = `ai action q1 ${enc({ kind: "sources", urls: "https://a.com/x\njavascript:alert(1)\nhttp://b.org", titles: "A\nBad\nB" })}`;
+    expect(parseAssistantLine(line)).toEqual({
+      id: "q1",
+      type: "action",
+      action: { kind: "sources", sources: [{ url: "https://a.com/x", title: "A" }, { url: "http://b.org", title: "B" }] },
+    });
+  });
+  it("only treats http(s) as web URLs", () => {
+    expect(isWebUrl("https://x.dev")).toBe(true);
+    expect(isWebUrl("file:///etc/passwd")).toBe(false);
+    expect(isWebUrl("not a url")).toBe(false);
   });
 });

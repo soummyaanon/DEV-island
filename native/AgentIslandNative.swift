@@ -25,6 +25,7 @@ import Speech
 //   → ai cancel <id>                      ← (the stream ends with ai error <id> cancelled)
 //   → ai mode basic|auto                  ← ai available | ai basic <reason>
 //   → ai reset                            ← ok
+//   → ai greet <id> <b64 facts>           ← ai greet <id> <b64 line> | ai greet-error <id> <reason>
 //   → voice start <id>                    ← voice level <id> <0-1>… voice partial <id> <b64>…
 //                                           voice final <id> <b64> | voice error <id> <reason>
 //   → voice stop <id>                     ← (finishes early; the final follows)
@@ -557,23 +558,92 @@ private struct OpenWebsiteTool: Tool {
   }
 }
 
+/// One web result, trimmed to what fits the on-device model's small context.
+private struct WebResult {
+  let title: String
+  let snippet: String
+  let url: String
+}
+
+private func decodeEntities(_ html: String) -> String {
+  var t = html.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+  for (k, v) in [("&amp;", "&"), ("&quot;", "\""), ("&#x27;", "'"), ("&#39;", "'"), ("&lt;", "<"), ("&gt;", ">"), ("&nbsp;", " ")] {
+    t = t.replacingOccurrences(of: k, with: v)
+  }
+  return t.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+    .trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+/// DuckDuckGo's plain HTML results page: no key, no JavaScript. Titles,
+/// snippets and the real target URLs (unwrapped from DDG's redirect).
+private func fetchWebResults(_ query: String, limit: Int = 5) async -> [WebResult] {
+  var parts = URLComponents(string: "https://html.duckduckgo.com/html/")!
+  parts.queryItems = [URLQueryItem(name: "q", value: query)]
+  guard let url = parts.url else { return [] }
+  var request = URLRequest(url: url, timeoutInterval: 8)
+  request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 15_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15", forHTTPHeaderField: "User-Agent")
+  guard let (data, _) = try? await URLSession.shared.data(for: request),
+    let html = String(data: data, encoding: .utf8)
+  else { return [] }
+  let pattern = #"class="result__a"[^>]*href="([^"]+)"[^>]*>(.*?)</a>.*?class="result__snippet"[^>]*>(.*?)</a>"#
+  guard let re = try? NSRegularExpression(pattern: pattern, options: [.dotMatchesLineSeparators]) else { return [] }
+  var out: [WebResult] = []
+  for m in re.matches(in: html, range: NSRange(html.startIndex..., in: html)) {
+    guard let hr = Range(m.range(at: 1), in: html), let tr = Range(m.range(at: 2), in: html),
+      let sr = Range(m.range(at: 3), in: html)
+    else { continue }
+    var link = decodeEntities(String(html[hr]))
+    if let comps = URLComponents(string: link.hasPrefix("//") ? "https:\(link)" : link),
+      let target = comps.queryItems?.first(where: { $0.name == "uddg" })?.value
+    {
+      link = target
+    }
+    // Ads come through a y.js redirect; skip them.
+    if link.contains("duckduckgo.com/y.js") { continue }
+    let snippet = decodeEntities(String(html[sr]))
+    out.append(WebResult(title: decodeEntities(String(html[tr])), snippet: String(snippet.prefix(280)), url: link))
+    if out.count == limit { break }
+  }
+  return out
+}
+
 @available(macOS 26.0, *)
 private struct SearchWebTool: Tool {
   let box: RequestBox
   let name = "searchWeb"
-  let description = "Search the web in the default browser. Use for current events, facts you don't know, or when the user asks to look something up."
+  let description =
+    "Search the web and read the top results. Use for current events, prices, scores, recent facts, or when the user asks to look something up. Returns result titles, snippets and sites to answer from."
   var parameters: GenerationSchema { schema([("query", "What to search for", String.self)]) }
   func call(arguments: GeneratedContent) async throws -> String {
     let query = stringArg(arguments, "query")
-    guard box.mentions(["search", "look up", "lookup", "google", "online", "on the web", "browse", "latest", "news", "find out"]) else {
+    guard box.mentions([
+      "search", "look up", "lookup", "google", "online", "on the web", "web", "browse", "latest",
+      "news", "find out", "current", "today", "right now", "price", "score", "who won", "release",
+    ]) else {
       return "Not searched: the user didn't ask for a web search. Answer from your own knowledge instead."
     }
     emitTool(box.id, "searchWeb", "Searching “\(query)”")
-    var parts = URLComponents(string: "https://www.google.com/search")!
-    parts.queryItems = [URLQueryItem(name: "q", value: query)]
-    guard let url = parts.url else { return "Couldn't search for that." }
-    _ = await MainActor.run { NSWorkspace.shared.open(url) }
-    return "Opened a web search for \(query) in the browser."
+    let results = await fetchWebResults(query)
+    if results.isEmpty {
+      // Offline or blocked: at least put the search in front of the user.
+      var parts = URLComponents(string: "https://duckduckgo.com/")!
+      parts.queryItems = [URLQueryItem(name: "q", value: query)]
+      if let url = parts.url { _ = await MainActor.run { NSWorkspace.shared.open(url) } }
+      return "Couldn't read results directly, so a web search for \(query) was opened in the browser. Say so."
+    }
+    let sites = results.compactMap { URL(string: $0.url)?.host?.replacingOccurrences(of: "www.", with: "") }
+    emitTool(box.id, "readWeb", "Reading \(Set(sites).count) sources")
+    emitAction(box.id, ["kind": "sources", "urls": results.map(\.url).joined(separator: "\n"), "titles": results.map(\.title).joined(separator: "\n")])
+    let body = results.enumerated().map { i, r in
+      "[\(i + 1)] \(r.title) (\(URL(string: r.url)?.host ?? "web"))\n\(r.snippet)"
+    }.joined(separator: "\n\n")
+    return """
+      Web results for "\(query)":
+
+      \(body)
+
+      Answer the user's question from these results in two or three sentences, and name the site(s) you used. If the results don't answer it, say so.
+      """
   }
 }
 
@@ -775,7 +845,7 @@ private final class Assistant {
     // Plain commands ("open Safari", "timer 5 minutes", "volume 30") don't
     // need the model: the command reader does them instantly and exactly,
     // and the model is kept for everything that needs understanding.
-    if basicCommand(id: id, prompt: prompt, context: context) { return }
+    if basicCommand(id: id, prompt: prompt, context: context, modelSearches: true) { return }
     if session == nil || session?.isResponding == true { session = freshSession() }
     // The date and the sessions are tools (getDateTime, getAgentSessions), not
     // text in the question: the small on-device model parroted any background
@@ -849,6 +919,34 @@ private final class Assistant {
   }
 }
 
+private let greetInstructions = """
+  You are the little robot living in the user's Mac notch (Agent Island). Write ONE short, \
+  warm, playful line to say hello, like a friendly companion who just woke up. You may mention \
+  at most two of the facts listed under Facts. Mention ONLY facts that are listed: if weather \
+  or battery is not listed, do not mention weather or battery at all. The user's name is \
+  already shown above your line, so don't repeat it. At most 16 words. No emoji, no \
+  hashtags, no quotes, no markdown. Don't say you are an AI. At most one question.
+  """
+
+/// The launch greeting: a one-shot, tool-less session so it never touches
+/// (or fills) the Ask bar's conversation.
+@available(macOS 26.0, *)
+private func greet(id: String, facts: String) {
+  Task { @MainActor in
+    do {
+      let session = LanguageModelSession(instructions: greetInstructions)
+      let options = GenerationOptions(temperature: 0.9)
+      let reply = try await session.respond(to: "Facts:\n\(facts)\n\nSay hello.", options: options)
+      let line = reply.content
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+        .trimmingCharacters(in: CharacterSet(charactersIn: "\"“”"))
+      respond(line.isEmpty ? "ai greet-error \(id) empty" : "ai greet \(id) \(b64(line))")
+    } catch {
+      respond("ai greet-error \(id) model-failed")
+    }
+  }
+}
+
 /// `Any?` because a global can't carry `@available` in a script-mode file.
 private var assistantBox: Any?
 @available(macOS 26.0, *)
@@ -897,7 +995,10 @@ private func setSystemVolume(_ percent: Int) -> Bool {
 }
 
 /// Read one plain command. Returns false when it isn't one we know.
-private func basicCommand(id: String, prompt: String, context: String) -> Bool {
+/// `modelSearches`: the on-device model is answering, so "search …" goes to
+/// its searchWeb tool (which reads the results and answers) instead of just
+/// opening a browser tab.
+private func basicCommand(id: String, prompt: String, context: String, modelSearches: Bool = false) -> Bool {
   var q = prompt.lowercased().trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters))
   for lead in ["hey siri ", "please ", "can you ", "could you ", "would you ", "i want to ", "go ahead and "] {
     if q.hasPrefix(lead) { q = String(q.dropFirst(lead.count)) }
@@ -933,7 +1034,7 @@ private func basicCommand(id: String, prompt: String, context: String) -> Bool {
     basicReply(id, setSystemVolume(0) ? "Muted." : "Couldn't change the volume.")
     return true
   }
-  if let m = match(#"^(?:search(?: the web)?(?: for)?|google|look up) (.+)$"#) {
+  if !modelSearches, let m = match(#"^(?:search(?: the web)?(?: for)?|google|look up) (.+)$"#) {
     emitTool(id, "searchWeb", "Searching “\(m[1])”")
     var parts = URLComponents(string: "https://www.google.com/search")!
     parts.queryItems = [URLQueryItem(name: "q", value: m[1])]
@@ -1039,6 +1140,16 @@ private func handleAI(_ argument: String) {
     #if canImport(FoundationModels)
       if #available(macOS 26.0, *), parts.count > 1 { assistant?.cancel(parts[1]) }
     #endif
+  case "greet":
+    guard parts.count == 3, let facts = unb64(parts[2]) else {
+      return respond("ai greet-error \(parts.count > 1 ? parts[1] : "-") bad-args")
+    }
+    #if canImport(FoundationModels)
+      if !forceBasic, #available(macOS 26.0, *), modelCaps() == "ai available" {
+        return greet(id: parts[1], facts: facts)
+      }
+    #endif
+    respond("ai greet-error \(parts[1]) unavailable")
   case "ask":
     guard parts.count == 3, let json = unb64(parts[2]),
       let object = try? JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any],

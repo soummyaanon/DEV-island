@@ -53,6 +53,7 @@ interface SettingsState {
   voice: boolean;
   speakReplies: boolean;
   edgeGlow: boolean;
+  greeting: boolean;
   /** "available" | "basic" | "no-helper" */
   assistantSupport: string;
   /** Why the model can't answer in basic mode. */
@@ -93,6 +94,7 @@ const DEFAULTS: SettingsState = {
   voice: true,
   speakReplies: true,
   edgeGlow: true,
+  greeting: true,
   assistantSupport: "no-helper",
   assistantReason: "",
 };
@@ -396,6 +398,12 @@ function Settings() {
                   detail="A soft silver pulse inside the island's edge while the assistant is open."
                   on={state.edgeGlow}
                   onChange={(v) => set("edgeGlow", v)}
+                />
+                <Row
+                  title="Say hello"
+                  detail="A greeting from the bots when the island starts and when you come back to your Mac, written on-device."
+                  on={state.greeting}
+                  onChange={(v) => set("greeting", v)}
                 />
               </div>
               <h2 className="s-sub-h">Voice</h2>

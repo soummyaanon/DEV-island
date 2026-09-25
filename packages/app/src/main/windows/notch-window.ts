@@ -1,5 +1,6 @@
-import { BrowserWindow, ipcMain, screen } from "electron";
+import { BrowserWindow, app, ipcMain, screen } from "electron";
 import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { attachEditShortcuts } from "../edit-shortcuts";
 
@@ -40,6 +41,25 @@ function measureNotchWidth(): Promise<number> {
       resolve(Number.isFinite(width) && width >= 120 && width <= 260 ? width : 0);
     });
   });
+}
+
+/**
+ * `native/window-pin.m`: marks the window NSWindowCollectionBehaviorStationary,
+ * so "click wallpaper to reveal desktop" / Show Desktop / Stage Manager leave
+ * it where it is. Optional — null when it wasn't built.
+ */
+function loadWindowPin(): { setStationary: (handle: Buffer) => boolean } | null {
+  const path = app.isPackaged
+    ? join(process.resourcesPath, "native", "window-pin.node")
+    : join(__dirname, "../../native/window-pin.node");
+  if (!existsSync(path)) return null;
+  try {
+    // The main bundle is CommonJS; a runtime path stays a runtime require.
+    return require(path) as { setStationary: (handle: Buffer) => boolean };
+  } catch (err) {
+    console.warn(`[notch] window-pin failed to load: ${(err as Error).message}`);
+    return null;
+  }
 }
 
 /**
@@ -113,6 +133,17 @@ export function createNotchWindow(): BrowserWindow {
   win.setAlwaysOnTop(true, "screen-saver");
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   win.setHiddenInMissionControl?.(true);
+  // Stationary, after the calls above (they rewrite collectionBehavior): the
+  // desktop-reveal shove never touches the island. Re-applied on show in case
+  // Electron resets the behaviour.
+  const windowPin = loadWindowPin();
+  const makeStationary = (): void => {
+    if (!windowPin || win.isDestroyed()) return;
+    const ok = windowPin.setStationary(win.getNativeWindowHandle());
+    console.log(`[notch] stationary=${ok}`);
+  };
+  makeStationary();
+  win.on("show", makeStationary);
   // Start click-through; renderer toggles this when the pointer is over the pill.
   win.setIgnoreMouseEvents(true, { forward: true });
 

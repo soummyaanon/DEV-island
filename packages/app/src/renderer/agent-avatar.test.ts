@@ -49,6 +49,7 @@ describe("orbState", () => {
     expect(orbState(session({ title: "Reading package.json" }))).toBe("searching");
     expect(orbState(session({ title: "Running pnpm test" }))).toBe("working");
     expect(orbState(session({ title: "Thinking" }))).toBe("solving");
+    expect(orbState(session({ title: "Planning the migration" }))).toBe("weaving");
   });
 
   it("lets the lifecycle win over the text", () => {
@@ -56,8 +57,8 @@ describe("orbState", () => {
     expect(orbState(session({ state: "waiting-for-approval", title: "Run command" }))).toBe("listening");
   });
 
-  it("breathes when nothing matches", () => {
-    expect(orbState(session({ title: "…" }))).toBe("breathing");
+  it("works (never breathing) when nothing matches", () => {
+    expect(orbState(session({ title: "…" }))).toBe("working");
   });
 });
 

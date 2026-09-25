@@ -101,14 +101,14 @@ export interface AssistantPhase {
  * The orb IS the assistant's status. In order of a request: connecting the
  * moment you send, solving while it thinks, searching or working while a tool
  * runs, composing as the words arrive; shaping while a proposal waits for you,
- * listening while you type, breathing at rest. (Weaving is a Pro state on
- * Libraries.dev, so it's never used.)
+ * listening while you type and at rest (ready for you). Weaving is a Pro
+ * state on Libraries.dev and breathing ("Thinking…") reads as a stalled
+ * spinner, so neither is used.
  */
 export function assistantOrbState(p: AssistantPhase): OrbState {
   if (p.tool) return LOOKUP_TOOLS.has(p.tool) ? "searching" : "working";
   if (p.streaming) return "composing";
   if (p.sent) return p.settled ? "solving" : "connecting";
   if (p.proposing) return "shaping";
-  if (p.typing) return "listening";
-  return "breathing";
+  return "listening";
 }

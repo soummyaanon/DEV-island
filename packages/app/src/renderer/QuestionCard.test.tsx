@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { SessionSnapshot } from "@agent-island/shared";
 import { QuestionCard } from "./QuestionCard";
 
-function sessionWith(questions: Array<{ question: string; options: string[] }>): SessionSnapshot {
+function sessionWith(questions: Array<{ question: string; options: string[]; multiSelect?: boolean }>): SessionSnapshot {
   return {
     agent: "claude-code",
     cwd: "/Users/me/project",
@@ -50,5 +50,19 @@ describe("QuestionCard", () => {
     expect(html.match(/<button/g)).toHaveLength(4);
     expect(html).not.toContain("⌘1");
     expect(html).toContain("pick one per question");
+  });
+
+  it("renders a multi-select question as checkboxes with a Send button", () => {
+    const html = renderToStaticMarkup(
+      <QuestionCard
+        session={sessionWith([{ question: "Which checks?", options: ["Lint", "Types", "Tests"], multiSelect: true }])}
+        onJump={() => {}}
+        onAnswer={() => {}}
+      />,
+    );
+    expect(html).toContain("choose any");
+    expect(html.match(/role="checkbox"/g)).toHaveLength(3);
+    expect(html).toContain(">Send</button>");
+    expect(html).not.toContain("⌘1");
   });
 });

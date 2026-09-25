@@ -54,8 +54,9 @@ export function avatarState(session: SessionSnapshot, now: number): BotAvatarSta
 const ORB_RULES: Array<[RegExp, OrbState]> = [
   [/\b(search|grep|glob|find|looking|web|fetch|query)/i, "searching"],
   [/\b(edit|writ|patch|creat|updat|refactor|rename|apply)/i, "composing"],
-  [/\b(think|plan|reason|consider|analy[sz])/i, "solving"],
-  // Reads search too: "weaving" is a Pro state on Libraries.dev, so it's unused.
+  // Planning plaits (weaving, the page's "planning" chip); reasoning solves.
+  [/\b(plan|outlin|strateg)/i, "weaving"],
+  [/\b(think|reason|consider|analy[sz]|debug)/i, "solving"],
   [/\b(read|open|view|explor|scan|inspect|list)/i, "searching"],
   [/\b(connect|mcp|start|load|launch|install)/i, "connecting"],
   [/\b(run|bash|test|build|exec|compil|lint|deploy)/i, "working"],
@@ -66,7 +67,9 @@ export function orbState(session: Pick<SessionSnapshot, "state" | "title" | "pen
   if (session.state === "starting") return "connecting";
   if (session.state === "waiting-for-approval" || session.pending_question) return "listening";
   for (const [pattern, state] of ORB_RULES) if (pattern.test(session.title)) return state;
-  return "breathing";
+  // Busy with something unnamed. Never "breathing" (its "Thinking…" ring
+  // reads as a stalled spinner) — the orbiting particles say "at work".
+  return "working";
 }
 
 /** Busy enough to deserve a thinking orb instead of a static line. */

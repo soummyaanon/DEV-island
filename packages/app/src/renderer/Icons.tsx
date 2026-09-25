@@ -1,3 +1,4 @@
+import { useId, type CSSProperties } from "react";
 import {
   Accessibility,
   Activity,
@@ -86,56 +87,120 @@ export function Icon({ name, size = 16, className }: { name: IconName; size?: nu
   return <Glyph size={size} strokeWidth={1.75} absoluteStrokeWidth className={className} aria-hidden />;
 }
 
+/** The liquid's colour for a charge level: red → amber → green. */
+export function batteryHue(percent: number, low: boolean): number {
+  if (low) return 2;
+  return Math.round(Math.max(0, Math.min(100, percent)) * 1.3);
+}
+
+/** One wobbling liquid surface, as a vertical sine column two periods tall. */
+function wavePath(amp: number, period: number, top: number, bottom: number): string {
+  let d = `M-40 ${top} L0 ${top}`;
+  for (let y = top; y <= bottom; y += 0.5) {
+    d += ` L${(Math.sin(((y - top) / period) * Math.PI * 2) * amp).toFixed(2)} ${y}`;
+  }
+  return `${d} L-40 ${bottom} Z`;
+}
+const WAVE_PERIOD = 4.9;
+const WAVE = wavePath(1.1, WAVE_PERIOD, -WAVE_PERIOD * 2, 15 + WAVE_PERIOD * 2);
+
 /**
- * The battery as a small ring — the Watch idiom rather than a bar of text.
- * Static: the arc is set once per reading, nothing animates but the wrapper.
+ * A liquid battery. The charge is a glowing liquid whose colour runs from red
+ * through amber to green and whose surface never stops wobbling. On a
+ * charger, sparks of energy stream in, the bolt flickers like a live wire and
+ * the whole cell glows; low (on battery) it turns red, blinks and shivers.
+ * Plugging in plays a one-off surge (`surge`). All CSS on SVG — decorative;
+ * the number beside it carries the meaning. `size` is the glyph's height.
  */
-export function BatteryRing({
+export function Battery({
   percent,
   charging,
   low,
   size = 14,
+  surge = false,
+  label = false,
   className,
 }: {
   percent: number;
-  /** On a charger (charging, charged, or AC): shows the bolt. */
+  /** On a charger (charging, charged, or AC). */
   charging: boolean;
   low: boolean;
   size?: number;
+  /** The moment the charger goes in: a fill-up sweep and a flash. */
+  surge?: boolean;
+  /** Print the percentage inside the cell (on a charger it trades places with the bolt). */
+  label?: boolean;
   className?: string;
 }) {
-  const p = Math.max(0, Math.min(100, percent)) / 100;
-  const r = 6.2;
-  const c = 2 * Math.PI * r;
-  const tone = low ? "var(--failed)" : charging ? "var(--done)" : "currentColor";
+  const uid = useId().replace(/:/g, "");
+  const clipId = `bat-clip-${uid}`;
+  const gradId = `bat-grad-${uid}`;
+  const pct = Math.max(0, Math.min(100, percent));
+  const inner = { x: 2.7, y: 2.7, w: 21.2, h: 9.6 };
+  // A sliver always shows, so an empty battery still reads as a battery.
+  const level = Math.max(1.8, inner.w * (pct / 100));
+  const dead = low && !charging;
+  const hue = batteryHue(pct, dead);
+  const cls = `battery${charging ? " charging" : ""}${dead ? " low" : ""}${surge ? " surge" : ""}${
+    pct >= 100 ? " full" : ""
+  }${label ? " labelled" : ""}${className ? ` ${className}` : ""}`;
   return (
     <svg
-      width={size}
+      width={size * 2}
       height={size}
-      viewBox="0 0 16 16"
-      className={`ring${className ? ` ${className}` : ""}`}
+      viewBox="0 0 30 15"
+      className={cls}
+      style={{ "--bat-hue": hue, "--bat-run": `${level}px` } as CSSProperties}
       aria-hidden
     >
-      <circle cx="8" cy="8" r={r} fill="none" stroke="currentColor" strokeOpacity="0.18" strokeWidth="2" />
-      <circle
-        cx="8"
-        cy="8"
-        r={r}
-        fill="none"
-        stroke={tone}
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeDasharray={c.toFixed(2)}
-        strokeDashoffset={(c * (1 - p)).toFixed(2)}
-        transform="rotate(-90 8 8)"
-      />
+      <defs>
+        <clipPath id={clipId}>
+          <rect x={inner.x} y={inner.y} width={inner.w} height={inner.h} rx="2.4" />
+        </clipPath>
+        <linearGradient id={gradId} x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0" stopColor={`hsl(${hue} 95% 68%)`} />
+          <stop offset="1" stopColor={`hsl(${hue} 85% 45%)`} />
+        </linearGradient>
+      </defs>
+      <rect className="bat-shell" x="0.8" y="0.8" width="25" height="13.4" rx="4.2" fill="none" strokeWidth="1.3" />
+      <rect className="bat-nub" x="27" y="5" width="2.3" height="5" rx="1.1" />
+      <g clipPath={`url(#${clipId})`}>
+        {/* The liquid: a body up to the level, then the wobbling surface. */}
+        <g className="bat-liquid" style={{ transform: `translateX(${(inner.x + level).toFixed(2)}px)` }}>
+          <path className="bat-wave" d={WAVE} fill={`url(#${gradId})`} />
+        </g>
+        {charging && (
+          <g className="bat-sparks">
+            {[0, 1, 2, 3].map((i) => (
+              <circle
+                key={i}
+                className="bat-spark"
+                cx={inner.x}
+                cy={4.4 + ((i * 2.3) % 6.2)}
+                r="0.75"
+                style={{ animationDelay: `${i * 0.33}s` }}
+              />
+            ))}
+          </g>
+        )}
+        {surge && <rect className="bat-surge" x={inner.x} y={inner.y} width={inner.w} height={inner.h} />}
+      </g>
+      {label && (
+        <text className="bat-label" x="13.4" y="10.7" textAnchor="middle">
+          {Math.round(pct)}
+        </text>
+      )}
       {charging && (
-        // Lucide's `zap` outline, scaled into the ring and filled.
-        <path
-          d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
-          fill={tone}
-          transform="translate(8 8) scale(0.36) translate(-12 -12)"
-        />
+        <g className="bat-bolt-wrap">
+          <path
+            className="bat-bolt"
+            d="M14.6 1.6 9.6 8h3.6l-1.3 5.4 5.1-6.6h-3.7z"
+            fill="#fff"
+            stroke="#000"
+            strokeWidth="1"
+            strokeLinejoin="round"
+          />
+        </g>
       )}
     </svg>
   );

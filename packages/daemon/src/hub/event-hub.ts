@@ -27,8 +27,8 @@ export class EventHub {
   private readonly log: EventLog;
   private readonly subscribers = new Set<Subscriber>();
   private readonly approvals = new ApprovalRegistry();
-  /** Held AskUserQuestion hooks: resolves with one option index per question. */
-  private readonly questions = new HoldRegistry<number[]>();
+  /** Held AskUserQuestion hooks: resolves with the chosen option indices per question. */
+  private readonly questions = new HoldRegistry<number[][]>();
   private usage: AgentUsage[] = [];
 
   constructor(
@@ -167,23 +167,23 @@ export class EventHub {
 
   /**
    * Hold an AskUserQuestion hook open so the user can answer from the notch.
-   * Resolves with one chosen option index per question, or "timeout" — then
+   * Resolves with the chosen option indices per question, or "timeout" — then
    * Claude's own terminal picker takes over and the card stays for jump.
    */
   async requestQuestionAnswer(
     agent: AgentKind,
     sessionId: string,
     question: PendingQuestion,
-  ): Promise<number[] | "timeout"> {
+  ): Promise<number[][] | "timeout"> {
     this.setPendingQuestion(agent, sessionId, question);
     const outcome = await this.questions.await(question.id, this.approvalHoldMs);
     if (outcome !== "timeout") this.setPendingQuestion(agent, sessionId, null);
     return outcome;
   }
 
-  /** Resolve a held question from the UI with one option index per question. */
-  answerQuestion(id: string, options: number[]): boolean {
-    return this.questions.resolve(id, options);
+  /** Resolve a held question from the UI with the chosen indices per question. */
+  answerQuestion(id: string, selections: number[][]): boolean {
+    return this.questions.resolve(id, selections);
   }
 
   /** Surface (or clear) an AskUserQuestion the agent is waiting on. */

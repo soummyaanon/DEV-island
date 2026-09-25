@@ -64,6 +64,7 @@ import {
   askAssistant,
   assistantReason,
   assistantSupport,
+  isWebUrl,
   cancelAssistant,
   clearAssistantTimers,
   runShortcut,
@@ -74,6 +75,7 @@ import {
   resetAssistant,
   setAssistantModel,
 } from "./assistant";
+import { composeGreeting, waitForAssistant } from "./greeting";
 import { initVoice, speak, startListening, stopListening, stopSpeaking } from "./voice";
 import {
   checkNow,
@@ -139,15 +141,17 @@ if (!app.requestSingleInstanceLock()) {
   // Claude questions are answered through the daemon's held hook — no terminal
   // focus or synthetic keystrokes needed. Codex (and an expired hold) falls
   // back to jump + keystrokes (single-question only; multi just jumps).
-  async function answerQuestion(session: SessionSnapshot, options: number[]): Promise<void> {
+  async function answerQuestion(session: SessionSnapshot, selections: number[][]): Promise<void> {
     const q = session.pending_question;
-    if (q && session.agent === "claude-code" && (await daemon.answerQuestion(q.id, options))) {
-      console.log(`[jump] answered ${q.id} via hook (${options.join(",")})`);
+    if (q && session.agent === "claude-code" && (await daemon.answerQuestion(q.id, selections))) {
+      console.log(`[jump] answered ${q.id} via hook (${selections.map((s) => s.join("+")).join(",")})`);
       sendToNotch("agent-island:chime", "approve");
       return;
     }
-    if (options.length === 1) answerInTerminal(session, String(options[0] + 1));
-    else jumpToTerminal(session);
+    // Keystrokes can only pick one option of one question; anything else jumps.
+    if (selections.length === 1 && selections[0].length === 1 && !q?.questions[0]?.multiSelect) {
+      answerInTerminal(session, String(selections[0][0] + 1));
+    } else jumpToTerminal(session);
   }
 
   // While an agent waits on a single multiple-choice question, ⌘1..⌘9 answer
@@ -165,10 +169,10 @@ if (!app.requestSingleInstanceLock()) {
     }
     questionId = q?.id ?? null;
     questionKeyCount = 0;
-    if (!session || !q || q.questions.length !== 1) return;
+    if (!session || !q || q.questions.length !== 1 || q.questions[0].multiSelect) return;
     questionKeyCount = Math.min(9, q.questions[0].options.length);
     for (let i = 1; i <= questionKeyCount; i++) {
-      globalShortcut.register(`CommandOrControl+${i}`, () => void answerQuestion(session, [i - 1]));
+      globalShortcut.register(`CommandOrControl+${i}`, () => void answerQuestion(session, [[i - 1]]));
     }
   }
 
@@ -371,6 +375,7 @@ if (!app.requestSingleInstanceLock()) {
       voice: settings.voice,
       speakReplies: settings.speakReplies,
       edgeGlow: settings.edgeGlow,
+      greeting: settings.greeting,
       naturalScroll,
       // Which material the renderer should style for: native/vibrancy = a
       // real glass panel sits beneath; css = draw the panel itself.
@@ -498,6 +503,7 @@ if (!app.requestSingleInstanceLock()) {
         case "voice":
         case "speakReplies":
         case "edgeGlow":
+        case "greeting":
           settings[key] = value === true;
           if (key === "voice" && !settings.voice) stopSpeaking();
           sendToNotch("agent-island:ui-prefs", uiPrefs());
@@ -547,7 +553,12 @@ if (!app.requestSingleInstanceLock()) {
     startWeather(weatherOptions());
 
     // Battery: instant plug/unplug from powerMonitor, percentage from pmset.
-    onPower((payload) => sendToNotch("agent-island:power", payload));
+    onPower((payload) => {
+      console.log(
+        `[power] ${payload ? `${payload.percent}% ${payload.state}${payload.event ? ` (${payload.event})` : ""}` : "none"}`,
+      );
+      sendToNotch("agent-island:power", payload);
+    });
     startPower(settings.battery);
     ipcMain.handle("agent-island:get-power", () => getPower());
 
@@ -797,6 +808,45 @@ if (!app.requestSingleInstanceLock()) {
       },
     );
     ipcMain.on("agent-island:assistant-cancel", (_e, id: string) => cancelAssistant(id));
+    // The hello: once per launch (the renderer asks when it mounts), and again
+    // when you come back after a while away from the Mac.
+    const greetingFacts = () => {
+      const p = getPower();
+      return {
+        weather: getWeather()?.summary ?? null,
+        battery: p ? { percent: p.percent, charging: p.state !== "discharging" } : null,
+      };
+    };
+    let greetedAtLaunch = false;
+    ipcMain.handle("agent-island:get-greeting", async () => {
+      if (!settings.greeting || greetedAtLaunch) return null;
+      greetedAtLaunch = true;
+      await waitForAssistant(3000);
+      return composeGreeting({ ...greetingFacts(), occasion: "launch" });
+    });
+    const AWAY_MS = 20 * 60_000;
+    let awaySince = 0;
+    powerMonitor.on("lock-screen", () => (awaySince = Date.now()));
+    powerMonitor.on("suspend", () => (awaySince = awaySince || Date.now()));
+    const welcomeBack = () => {
+      const away = awaySince ? Date.now() - awaySince : 0;
+      awaySince = 0;
+      if (!settings.greeting || away < AWAY_MS) return;
+      void composeGreeting({ ...greetingFacts(), occasion: "welcome-back" }).then((g) =>
+        sendToNotch("agent-island:greeting", g),
+      );
+    };
+    powerMonitor.on("unlock-screen", welcomeBack);
+    powerMonitor.on("resume", () => {
+      // A resume without a lock screen (no password) still counts as coming back.
+      setTimeout(() => {
+        if (awaySince) welcomeBack();
+      }, 1500);
+    });
+
+    ipcMain.on("agent-island:open-source", (_e, url: unknown) => {
+      if (typeof url === "string" && isWebUrl(url)) void shell.openExternal(url);
+    });
 
     // Voice mode (Swift sidecar): listen → transcript → the renderer asks the
     // assistant → the reply is spoken back.
@@ -824,9 +874,14 @@ if (!app.requestSingleInstanceLock()) {
 
     ipcMain.on(
       "agent-island:answer",
-      (_e, { session, options }: { session: SessionSnapshot; options: number[] }) => {
-        console.log(`[jump] answer [${options.join(",")}] for ${session.key}`);
-        void answerQuestion(session, options);
+      (_e, { session, selections }: { session: SessionSnapshot; selections: unknown }) => {
+        const valid =
+          Array.isArray(selections) &&
+          selections.every((s) => Array.isArray(s) && s.every((i) => Number.isInteger(i) && i >= 0));
+        if (!valid) return;
+        const picks = selections as number[][];
+        console.log(`[jump] answer [${picks.map((s) => s.join("+")).join(",")}] for ${session.key}`);
+        void answerQuestion(session, picks);
       },
     );
 

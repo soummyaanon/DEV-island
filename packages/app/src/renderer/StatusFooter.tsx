@@ -1,5 +1,9 @@
 import type { AgentUsage } from "@agent-island/shared";
-import { BatteryRing, Icon } from "./Icons";
+import type { CSSProperties, ReactNode } from "react";
+import { Battery, Icon } from "./Icons";
+import { ClaudeSprite } from "./ClaudeSprite";
+import { OpenAiSprite } from "./OpenAiSprite";
+import { CursorSprite } from "./CursorSprite";
 
 /**
  * One footer row: each agent's 5-hour and weekly limits as small rings, then the ambient facts — battery,
@@ -40,21 +44,34 @@ export function formatAge(iso: string, now: number): string {
   return `${Math.round(secs / 60)}m ago`;
 }
 
-/** A limit as a small ring: the arc is what's USED, warming as it fills. */
-function QuotaRing({ used, size = 12 }: { used: number; size?: number }) {
+/**
+ * A limit as a small ring: the arc is what's USED, warming as it fills. It
+ * draws itself in when it appears and glides to each new reading; past 90%
+ * it pulses softly so a nearly spent window is noticed without shouting.
+ * (All CSS; reduced motion shows the final arc at once.)
+ */
+function QuotaRing({ used, size = 13 }: { used: number; size?: number }) {
   const r = 6.2;
   const c = 2 * Math.PI * r;
   const tone = used >= 90 ? "var(--failed)" : used >= 70 ? "var(--waiting)" : "var(--done)";
   return (
-    <svg width={size} height={size} viewBox="0 0 16 16" className="ring" aria-hidden>
-      <circle cx="8" cy="8" r={r} fill="none" stroke="currentColor" strokeOpacity="0.18" strokeWidth="2.2" />
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 16 16"
+      className={`ring quota-ring${used >= 90 ? " hot" : ""}`}
+      style={{ "--ring-c": c.toFixed(2), "--ring-tone": tone } as CSSProperties}
+      aria-hidden
+    >
+      <circle cx="8" cy="8" r={r} fill="none" stroke="currentColor" strokeOpacity="0.16" strokeWidth="2" />
       <circle
+        className="quota-arc"
         cx="8"
         cy="8"
         r={r}
         fill="none"
         stroke={tone}
-        strokeWidth="2.2"
+        strokeWidth="2"
         strokeLinecap="round"
         strokeDasharray={c.toFixed(2)}
         strokeDashoffset={(c * (1 - used / 100)).toFixed(2)}
@@ -64,9 +81,17 @@ function QuotaRing({ used, size = 12 }: { used: number; size?: number }) {
   );
 }
 
+/** Each agent's own mark beside its limits, instead of a word. */
+const AGENT_MARK: Record<string, (size: number) => ReactNode> = {
+  "claude-code": (size) => <ClaudeSprite size={size} />,
+  codex: (size) => <OpenAiSprite size={size} />,
+  cursor: (size) => <CursorSprite size={size} />,
+};
+
 const AGENT_LABEL: Record<string, string> = {
   "claude-code": "claude",
   codex: "codex",
+  cursor: "cursor",
 };
 
 export interface FooterPower {
@@ -115,7 +140,13 @@ export function StatusFooter({
     const windows = [...entry.windows].sort((a, b) => windowRank(a.label) - windowRank(b.label)).slice(0, 2);
     if (windows.length === 0 && !entry.credits) return [];
     return [
-      { agent: AGENT_LABEL[entry.agent] ?? entry.agent, windows, credits: entry.credits, updatedAt: entry.updated_at },
+      {
+        kind: entry.agent,
+        agent: AGENT_LABEL[entry.agent] ?? entry.agent,
+        windows,
+        credits: entry.credits,
+        updatedAt: entry.updated_at,
+      },
     ];
   });
 
@@ -138,7 +169,13 @@ export function StatusFooter({
     <div className="usage-compact">
       {quotas.map((quota) => (
         <span className="usage-item quota" key={quota.agent}>
-          <b>{quota.agent}</b>
+          {AGENT_MARK[quota.kind] ? (
+            <span className="quota-mark" title={quota.agent}>
+              {AGENT_MARK[quota.kind](11)}
+            </span>
+          ) : (
+            <b>{quota.agent}</b>
+          )}
           {quota.windows.map((w) => {
             const used = Math.max(0, Math.min(100, Math.round(w.used_percent)));
             const detail = `${quota.agent} ${WINDOW_NAME[w.label] ?? w.label} limit: ${used}% used${
@@ -156,8 +193,12 @@ export function StatusFooter({
         </span>
       ))}
       {power && (
-        <span className={`usage-item power${power.low ? " low" : ""}`} title={powerDetail} aria-label={powerDetail}>
-          <BatteryRing percent={power.percent} charging={power.state !== "discharging"} low={power.low} />
+        <span
+          className={`usage-item power${power.low ? " low" : ""}${power.state !== "discharging" ? " on-power" : ""}`}
+          title={powerDetail}
+          aria-label={powerDetail}
+        >
+          <Battery percent={power.percent} charging={power.state !== "discharging"} low={power.low} />
           <b>{power.percent}%</b>
         </span>
       )}

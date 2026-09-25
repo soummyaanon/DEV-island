@@ -7,14 +7,15 @@ import { QuestionCard } from "./QuestionCard";
 import { AGENT_LOOK, AgentAvatar, AgentOrb, STATE_TINT, orbState } from "./agent-avatar";
 import { AssistantBar } from "./AssistantBar";
 import { BotCrew } from "./BotCrew";
-import { BotAvatar } from "bot-avatars";
+import { GreetingCard, greetingDuration } from "./GreetingCard";
+import { IdleCrew } from "./IdleCrew";
 import { IslandGlow } from "./IslandGlow";
 import { FieldBeam } from "./FieldBeam";
 import { assistantUnavailableReason } from "./assistant-context";
 import { StatusFooter } from "./StatusFooter";
 import { LIVE_ACTIVITY_MS, LiveActivity, type LiveActivityKind } from "./LiveActivity";
 import { wingContent } from "./wing-priority";
-import { BatteryRing, Icon } from "./Icons";
+import { Battery, Icon } from "./Icons";
 import { playSound } from "./sounds";
 import { DEFAULT_SOUND_PREFS, type SoundPrefs, type SoundTheme } from "./sound-prefs";
 import { summarizeTransitions, useAnnouncer, useFocusTrap, useReducedMotion } from "./a11y";
@@ -29,7 +30,7 @@ const MAX_ROWS = 5;
 const MAX_BUBBLES = 8;
 
 /** Discrete moments the edge spark reacts to — each gets its own color/pattern. */
-type PulseKind = "done" | "failed" | "attention" | "question" | "approve";
+type PulseKind = "done" | "failed" | "attention" | "question" | "approve" | "hello" | "charge";
 
 /** Wing order: one thinking orb per agent kind that is working. */
 const AGENT_ORDER = ["claude-code", "codex", "cursor"] as const;
@@ -83,6 +84,16 @@ export function App() {
     setMoment({ key, kind, n: momentSeq.current });
     if (momentTimer.current !== null) window.clearTimeout(momentTimer.current);
     momentTimer.current = window.setTimeout(() => setMoment(null), MOMENT_MS);
+  }, []);
+  // The hello at launch / after time away: the island drops open for a few
+  // seconds with the bot crew and a line from the on-device model.
+  const [greeting, setGreeting] = useState<{ title: string; line: string; ai: boolean; n: number } | null>(null);
+  const greetSeq = useRef(0);
+  const greetTimer = useRef<number | null>(null);
+  const dismissGreeting = useCallback(() => {
+    if (greetTimer.current !== null) window.clearTimeout(greetTimer.current);
+    greetTimer.current = null;
+    setGreeting(null);
   }, []);
   const promptInputRef = useRef<HTMLInputElement>(null);
   // Set when a send was dropped for lack of Accessibility — shows a hint.
@@ -172,6 +183,7 @@ export function App() {
     promptFocused ||
     assistantFocused ||
     a11yFocused ||
+    greeting !== null ||
     pending.length > 0 ||
     asking.length > 0 ||
     needsYou.length > 0;
@@ -433,6 +445,25 @@ export function App() {
     return window.agentIsland.onUiPrefs?.(apply);
   }, []);
 
+  // Say hello: once at launch (asked for here, so it can't race the page
+  // load), and whenever main pushes a welcome-back. Shown only, never spoken.
+  useEffect(() => {
+    const show = (g: { title: string; line: string; ai: boolean } | null) => {
+      if (!g) return;
+      greetSeq.current += 1;
+      setGreeting({ ...g, n: greetSeq.current });
+      firePulse("hello");
+      window.agentIsland.haptic?.("success");
+      if (greetTimer.current !== null) window.clearTimeout(greetTimer.current);
+      greetTimer.current = window.setTimeout(() => {
+        greetTimer.current = null;
+        setGreeting(null);
+      }, greetingDuration(g.line));
+    };
+    void window.agentIsland.getGreeting?.().then(show);
+    return window.agentIsland.onGreeting?.(show);
+  }, [firePulse]);
+
   // Spring motion: integrate once, publish as CSS timing functions. Reduced
   // Motion swaps both for a 1ms step so CSS and any JS timing agree.
   const reducedMotion = useReducedMotion();
@@ -482,8 +513,11 @@ export function App() {
         minutesRemaining: p.minutesRemaining,
         low: p.low,
       });
-      if (p.event === "plugged") showActivity("battery-plugged", p.percent);
-      else if (p.event === "unplugged") showActivity("battery-unplugged", p.percent);
+      if (p.event === "plugged") {
+        showActivity("battery-plugged", p.percent);
+        // Electricity runs round the island's edge as the charger goes in.
+        firePulse("charge");
+      } else if (p.event === "unplugged") showActivity("battery-unplugged", p.percent);
       else if (p.low && !prevLow.current) showActivity("battery-low", p.percent);
       prevLow.current = p.low;
     };
@@ -667,6 +701,7 @@ export function App() {
     promptFocused && "prompt",
     assistantFocused && "assistant",
     a11yFocused && "a11y",
+    greeting !== null && "greeting",
     pending.length > 0 && "approval",
     asking.length > 0 && "question",
     needsYou.length > 0 && "needs-you",
@@ -751,6 +786,9 @@ export function App() {
   // At rest — sessions present, nothing running — the battery on the left and
   // one round bot on the right, awake: it looks around and hops now and then.
   const sleeping = showGlow && wing === "empty";
+  // No sessions at all: a tiny bot dozes in the right wing so the island is
+  // never just gone. It wakes (and hops) while the hello is up.
+  const idleBot = !expanded && connected && sessions.length === 0 && wing === "empty";
   const wingMoment = wing === "moment" && moment && momentSession ? { ...moment, session: momentSession } : null;
   const lowBattery = wing === "low-battery" ? power : null;
   // Weather fills the collapsed island only when nothing else claims it. Note
@@ -800,6 +838,8 @@ export function App() {
             ? weather?.summary
             : sleeping
               ? `${sessions.length} sessions, all resting${power ? `, battery ${power.percent}%` : ""}`
+              : idleBot
+                ? `No agents running${power ? `, battery ${power.percent}%` : ""}`
               : `${active.length} active sessions`;
   // Footer total: what every visible session's agent tree is using right now.
   const totals = visible.reduce<{ cpu: number; rssMb: number } | null>((acc, s) => {
@@ -807,8 +847,12 @@ export function App() {
     if (!t) return acc;
     return { cpu: (acc?.cpu ?? 0) + t.cpu, rssMb: (acc?.rssMb ?? 0) + t.rssMb };
   }, null);
-  // Nothing to show at all: the island shrinks to the notch and disappears.
-  const resting = sessions.length === 0 && wing === "empty";
+  // Offline with nothing to show: the island shrinks to the notch and disappears.
+  const resting = sessions.length === 0 && wing === "empty" && !idleBot;
+  // While the hello is up (and you're not otherwise using the island), the
+  // panel shows only the greeting.
+  const greetingOnly =
+    greeting !== null && !hoverExpands && !pinned && pending.length === 0 && asking.length === 0 && !assistantFocused;
 
   return (
     <div className={`app${animated ? "" : " paused"}${a11yFocused ? " a11y-focus" : ""}`}>
@@ -835,7 +879,7 @@ export function App() {
             liveActivity ? " has-activity" : ""
           }${lowBattery ? " has-low-batt" : ""}${wingMoment ? ` has-moment moment-${wingMoment.kind}` : ""}${
             assistantOpen ? " assistant-on" : ""
-          } spr-${shown.length}`}
+          }${greetingOnly ? " greeting-only" : ""}${idleBot ? " idle-bot" : ""} spr-${shown.length}`}
           style={{ "--rubber": rubber } as CSSProperties}
           role="region"
           aria-label="Agent Island"
@@ -869,16 +913,16 @@ export function App() {
                 <span className="sprite-slot wing-moment" key={`m-${wingMoment.n}`}>
                   <AgentAvatar session={wingMoment.session} now={now} size={24} interactive={false} paused={!animated} />
                 </span>
-              ) : sleeping ? (
+              ) : sleeping || idleBot ? (
                 power ? (
                   <span className="sprite-slot wing-idle-battery" key="idle-batt">
-                    <BatteryRing
-                      size={12}
+                    <Battery
+                      size={13}
                       percent={power.percent}
                       charging={power.state !== "discharging"}
                       low={power.low}
+                      label
                     />
-                    <b>{power.percent}%</b>
                   </span>
                 ) : null
               ) : liveActivity ? (
@@ -902,10 +946,8 @@ export function App() {
               )}
             </span>
             <span className={`spacer-info${lowBattery ? " wing-low" : ""}`} aria-label={countLabel}>
-              {sleeping ? (
-                <span className="wing-sleeper" key="sleep-r">
-                  <BotAvatar type="circle" state="default" size={20} seed={0.7} theme="dark" interactive={false} paused={!animated} aria-hidden />
-                </span>
+              {sleeping || idleBot ? (
+                <IdleCrew key="crew" paused={!animated} awake={greeting !== null} />
               ) : (
                 <span key={countText}>{countText}</span>
               )}
@@ -918,6 +960,16 @@ export function App() {
                   reports the panel's natural width independent of the width the
                   island currently has, so the measurement can't feed itself. */}
               <div className="panel-measure" ref={measureRef}>
+              {greeting && (
+                <GreetingCard
+                  key={`greet-${greeting.n}`}
+                  title={greeting.title}
+                  line={greeting.line}
+                  ai={greeting.ai}
+                  paused={!animated}
+                  onDismiss={dismissGreeting}
+                />
+              )}
               {pending.map((s) => (
                 <ApprovalCard
                   key={`ap-${s.key}`}
@@ -980,7 +1032,9 @@ export function App() {
               )}
               <StatusFooter
                 usage={usage}
-                power={power}
+                // Battery is an idle-time fact: while any agent works, the
+                // footer is about the agents.
+                power={active.length === 0 ? power : null}
                 focus={focus}
                 totals={totals}
                 onClearFocus={() => window.agentIsland.clearFocus?.()}
