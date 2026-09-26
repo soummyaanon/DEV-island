@@ -19,33 +19,55 @@ env:
   # True only when the cross-repo publish token is configured. Until then the
   # run still succeeds and uploads the DMG as a build artifact instead.
   HAS_TOKEN: ${{ secrets.RELEASES_TOKEN != '' }}
+  HAS_CERT: ${{ secrets.MACOS_CERTIFICATE != '' }}
 
 jobs:
   build-and-release:
     # macOS 26 image (arm64, Xcode 26): the native helper needs the macOS 26
     # SDK for Apple Intelligence (FoundationModels) and on-device voice
     # (SpeechAnalyzer). An older runner still builds, but ships "basic" mode.
+    # macOS 26 image (arm64, Xcode 26): Apple Intelligence (FoundationModels)
+    # and on-device voice (SpeechAnalyzer) need the macOS 26 SDK.
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
+      - run: swift --version
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
+      # The native app's own suite, including the daemon's parity tests: a
+      # release that would break approvals never gets built.
+      - name: Test
+        working-directory: apps/mac
+        run: ./scripts/test.sh
 
-      - run: pnpm install --frozen-lockfile
-
-      # Without Apple credentials this produces an ad-hoc signed build. Users
-      # must approve it once through Privacy & Security → Open Anyway.
-      - name: Build release DMG
+      # Optional Developer ID: with MACOS_CERTIFICATE (a base64 .p12) and its
+      # password set, the app is signed with the hardened runtime and, with the
+      # NOTARY_* secrets too, the DMG is notarised. Without them the build is
+      # ad-hoc signed, as 1.x ships: users approve it once in Privacy & Security.
+      - name: Import signing certificate
+        if: env.HAS_CERT == 'true'
         env:
-          # A release must never quietly ship without the helper (haptics,
-          # glass, the assistant, voice): fail instead of degrading.
-          AGENT_ISLAND_REQUIRE_NATIVE: "1"
-        run: pnpm package
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          security create-keychain -p "" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "" "$keychain"
+          echo "$MACOS_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$keychain" -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "" "$keychain"
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          identity="$(security find-identity -v -p codesigning "$keychain" | awk -F'"' '/Developer ID Application/{print $2; exit}')"
+          echo "CODESIGN_IDENTITY=$identity" >> "$GITHUB_ENV"
+
+      - name: Build release DMG
+        working-directory: apps/mac
+        env:
+          NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
+          NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
+          NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
+        run: ./scripts/dmg.sh
 
       # Notes: the annotated tag's message, written for users (git tag -a).
       # GitHub's generated notes only link into THIS private repo, which the
@@ -77,7 +99,7 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: ${{ github.ref_name }}
           body: ${{ steps.notes.outputs.body }}
-          files: packages/app/release/*.dmg
+          files: apps/mac/build/Agent-Island.dmg
 
       # Fallback when RELEASES_TOKEN isn't set yet: keep the build green and make
       # the DMG downloadable from the run, without leaking source to a release.
@@ -86,7 +108,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Agent-Island-dmg
-          path: packages/app/release/*.dmg
+          path: apps/mac/build/Agent-Island.dmg
 
       - name: Warn that RELEASES_TOKEN is missing
         if: env.HAS_TOKEN != 'true'

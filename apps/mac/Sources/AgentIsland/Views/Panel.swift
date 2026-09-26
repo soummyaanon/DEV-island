@@ -1,0 +1,618 @@
+import IslandCore
+import SwiftUI
+
+/// The open island: the sessions (robot bubbles, or detailed rows), the usage
+/// footer, and the controls. Phases 4–6 add the cards, prompt, assistant and
+/// the remaining controls above and beside these.
+struct Panel: View {
+  let model: IslandModel
+
+  var body: some View {
+    // Elapsed times tick while open, and only then.
+    TimelineView(.periodic(from: .now, by: 1)) { timeline in
+      let now = timeline.date
+      VStack(alignment: .leading, spacing: 0) {
+        let sessions = model.sessions.sessions
+        if let greeting = model.greeting {
+          GreetingCard(greeting: greeting.value, at: greeting.at, paused: model.isPaused) { model.dismissGreeting() }
+            .id(greeting.id)
+        }
+        if !model.greetingOnly {
+        ForEach(model.pending, id: \.key) { session in
+          if let approval = session.pendingApproval {
+            ApprovalCard(session: session, approval: approval, model: model)
+              .modifier(Entrance(kind: .rowIn, delay: 0.06))
+          }
+        }
+        ForEach(model.asking, id: \.key) { session in
+          if let question = session.pendingQuestion {
+            QuestionCard(session: session, question: question, model: model)
+              .id(question.id)
+              .modifier(Entrance(kind: .rowIn, delay: 0.06))
+          }
+        }
+        if model.settings.sessionView == .compact && !sessions.isEmpty {
+          FlowLayout(spacing: 4) {
+            ForEach(Array(sessions.prefix(SessionList.maxBubbles).enumerated()), id: \.element.key) { index, session in
+              SessionBubble(session: session, now: now, model: model)
+                .modifier(Entrance(kind: .rowIn, delay: 0.05 + Double(index) * 0.022))
+            }
+          }
+          .padding(.init(top: 6, leading: 8, bottom: 4, trailing: 8))
+        } else {
+          VStack(spacing: 1) {
+            ForEach(Array(sessions.prefix(SessionList.maxRows).enumerated()), id: \.element.key) { index, session in
+              SessionRow(session: session, now: now, model: model)
+                .modifier(Entrance(kind: .rowIn, delay: 0.05 + Double(index) * 0.022))
+            }
+            if sessions.isEmpty && !model.sessions.connected {
+              Text("offline")
+                .islandFont(12)
+                .foregroundStyle(Palette.textDim)
+                .frame(maxWidth: .infinity)
+                .padding(.init(top: 10, leading: 12, bottom: 14, trailing: 12))
+            }
+          }
+          .padding(.init(top: 3, leading: 6, bottom: 7, trailing: 6))
+        }
+        if let weather = model.weather.reading {
+          WeatherCard(reading: weather, paused: model.isPaused)
+        }
+        StatusFooter(model: model, now: now)
+        if model.ask.isOpen {
+          AssistantPanel(state: model.ask)
+        }
+        if model.showsPrompt && !model.ask.isOpen && model.needsAccessibility {
+          Hovering { hovered in
+            Button {
+              Accessibility.request()
+            } label: {
+              Text("⚠ Grant Accessibility to send prompts →")
+                .islandFont(10, weight: .semibold)
+                .foregroundStyle(Color(hex: 0xFFCF70))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.init(top: 4, leading: 8, bottom: 4, trailing: 8))
+                .background(RoundedRectangle(cornerRadius: 7).fill(Palette.waiting.opacity(hovered ? 0.2 : 0.12)))
+                .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(Palette.waiting.opacity(0.32)))
+            }
+            .buttonStyle(.plain)
+          }
+          .help("Agent Island needs Accessibility to type into Cursor's Composer or your terminal. App updates invalidate an existing grant even when the toggle still shows on: clicking refreshes our entry; tick Agent Island in the list that opens.")
+          .padding(.init(top: 4, leading: 8, bottom: 0, trailing: 8))
+        }
+        Controls(model: model)
+        }
+      }
+      .frame(maxWidth: model.maxIslandWidth, alignment: .leading)
+    }
+  }
+}
+
+// MARK: - Sessions
+
+/// A session's robot with a small state badge on its shoulder.
+struct AgentAvatar: View {
+  let session: SessionSnapshot
+  let now: Date
+  var size: CGFloat = 30
+  var badge = true
+  var paused = false
+  /// Follows the pointer and hops at a click (the row's click still jumps).
+  var interactive = true
+
+  var body: some View {
+    BotAvatar(
+      look: .agent(session.agent), state: session.avatarState(now: now), size: size, seed: session.seed, paused: paused,
+      interactive: interactive
+    )
+      .overlay(alignment: .bottomTrailing) {
+        if badge {
+          Circle()
+            .fill(Palette.state(session.state))
+            .frame(width: 8, height: 8)
+            .padding(2)
+            .background(Circle().fill(.black))
+            .offset(x: 3, y: 2)
+            .modifier(BadgePulse(active: session.state == .waitingForApproval && !paused))
+        }
+      }
+  }
+}
+
+private struct BadgePulse: ViewModifier {
+  let active: Bool
+
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  func body(content: Content) -> some View {
+    if active && !reduceMotion {
+      content.phaseAnimator([0.55, 1.0]) { view, opacity in view.opacity(opacity) } animation: { _ in .easeInOut(duration: 1.4) }
+    } else {
+      content
+    }
+  }
+}
+
+/// A detailed row: robot, project and elapsed; the activity (with a thinking
+/// orb while busy) and where it runs. Click to jump back to it.
+private struct SessionRow: View {
+  let session: SessionSnapshot
+  let now: Date
+  let model: IslandModel
+
+  var body: some View {
+    Button {
+      JumpBack.jump(to: session)
+    } label: {
+      HStack(alignment: .top, spacing: 8) {
+        AgentAvatar(session: session, now: now, paused: model.isPaused)
+          .padding(.init(top: -2, leading: -2, bottom: -2, trailing: 0))
+        VStack(alignment: .leading, spacing: 2) {
+          HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(session.projectName)
+              .islandFont(12.5, weight: .medium)
+              .foregroundStyle(Palette.text)
+              .lineLimit(1)
+              .frame(maxWidth: 210, alignment: .leading)
+              .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 8)
+            Text(session.elapsed(now: now))
+              .islandFont(9.5)
+              .monospacedDigit()
+              .foregroundStyle(Palette.textDim)
+          }
+          HStack(alignment: .center, spacing: 8) {
+            HStack(spacing: 1) {
+              if session.isThinking {
+                ThinkingOrb(state: session.orbState, tint: Palette.tint(session.state), paused: model.isPaused)
+                  .padding(.init(top: -6, leading: -2, bottom: -4, trailing: 2))
+              }
+              Text(session.title)
+                .islandFont(11)
+                .foregroundStyle(Palette.textDim)
+                .lineLimit(1)
+            }
+            .frame(maxWidth: 312, alignment: .leading)
+            Spacer(minLength: 8)
+            Text(session.contextLine)
+              .islandFont(9.5)
+              .foregroundStyle(Palette.textDim)
+              .lineLimit(1)
+              .frame(maxWidth: 178, alignment: .trailing)
+            if let stats = model.procStats[session.key] {
+              Text("\(stats.cpu)% · \(Format.memory(megabytes: Double(stats.rssMB)))")
+                .islandFont(9.5)
+                .monospacedDigit()
+                .foregroundStyle(stats.heat == .burning ? Palette.failed : stats.heat == .hot ? Palette.waiting : Palette.textDim)
+                .fixedSize()
+            }
+          }
+        }
+      }
+      .padding(.init(top: 6, leading: 8, bottom: 6, trailing: 8))
+      .contentShape(Rectangle())
+    }
+    .buttonStyle(HoverRow(hovered: model.hovered == session.key, radius: 9))
+    .onHover { inside in model.hovered = inside ? session.key : (model.hovered == session.key ? nil : model.hovered) }
+    .help(helpText)
+    .accessibilityLabel(session.spokenDescription(now: now))
+  }
+
+  private var helpText: String {
+    if let term = session.metaString("term_program") { "Jump to \(session.projectName) in \(term)" } else { "Jump to terminal" }
+  }
+}
+
+/// A compact session: its robot with the project name underneath. Hover for
+/// the whole story (the same sentence VoiceOver reads); click to jump.
+private struct SessionBubble: View {
+  let session: SessionSnapshot
+  let now: Date
+  let model: IslandModel
+
+  var body: some View {
+    let hovered = model.hovered == session.key
+    Button {
+      JumpBack.jump(to: session)
+    } label: {
+      VStack(spacing: 3) {
+        AgentAvatar(session: session, now: now, size: 32, badge: false, paused: model.isPaused, interactive: false)
+          .padding(.top, 1)
+        Text(session.projectName)
+          .islandFont(9.5)
+          .foregroundStyle(hovered ? Palette.text : Palette.textDim)
+          .lineLimit(1)
+      }
+      .frame(width: 54)
+      .padding(.init(top: 4, leading: 2, bottom: 3, trailing: 2))
+      .contentShape(Rectangle())
+    }
+    .buttonStyle(HoverRow(hovered: hovered, radius: 10))
+    .onHover { inside in model.hovered = inside ? session.key : (hovered ? nil : model.hovered) }
+    .help(session.spokenDescription(now: now))
+    .accessibilityLabel(session.spokenDescription(now: now))
+  }
+}
+
+/// A faint lift under the pointer, a touch more while pressed.
+private struct HoverRow: ButtonStyle {
+  let hovered: Bool
+  let radius: CGFloat
+
+  func makeBody(configuration: Configuration) -> some View {
+    configuration.label
+      .background(
+        RoundedRectangle(cornerRadius: radius)
+          .fill(.white.opacity(configuration.isPressed ? 0.1 : hovered ? 0.06 : 0))
+      )
+      .animation(.easeOut(duration: 0.1), value: hovered)
+  }
+}
+
+/// Wraps its children onto new lines at the proposed width.
+struct FlowLayout: Layout {
+  var spacing: CGFloat
+
+  func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+    let rows = arrange(width: proposal.width ?? .infinity, subviews: subviews)
+    return CGSize(width: rows.map(\.width).max() ?? 0, height: rows.reduce(0) { $0 + $1.height } + spacing * CGFloat(max(0, rows.count - 1)))
+  }
+
+  func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+    var y = bounds.minY
+    for row in arrange(width: bounds.width, subviews: subviews) {
+      var x = bounds.minX
+      for index in row.indices {
+        let size = subviews[index].sizeThatFits(.unspecified)
+        subviews[index].place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+        x += size.width + spacing
+      }
+      y += row.height + spacing
+    }
+  }
+
+  private func arrange(width: CGFloat, subviews: Subviews) -> [(indices: [Int], width: CGFloat, height: CGFloat)] {
+    var rows: [(indices: [Int], width: CGFloat, height: CGFloat)] = []
+    for index in subviews.indices {
+      let size = subviews[index].sizeThatFits(.unspecified)
+      if let last = rows.last, last.width + spacing + size.width <= width {
+        rows[rows.count - 1].indices.append(index)
+        rows[rows.count - 1].width += spacing + size.width
+        rows[rows.count - 1].height = max(last.height, size.height)
+      } else {
+        rows.append(([index], size.width, size.height))
+      }
+    }
+    return rows
+  }
+}
+
+// MARK: - Footer
+
+/// One row: each agent's 5-hour and weekly limits as small rings, then the
+/// battery when no agent is working. Hidden when there's nothing to say.
+/// Focus and the resource total join in phase 5.
+private struct StatusFooter: View {
+  let model: IslandModel
+  let now: Date
+
+  var body: some View {
+    let quotas = QuotaSummary.from(model.sessions.usage, now: now)
+    // Battery is an idle-time fact: while any agent works, the footer is about the agents.
+    let reading = model.active.isEmpty ? model.reading : nil
+    let focus = model.focus.active ? model.focus : nil
+    let total = model.settings.procStats ? model.procTotal.flatMap { $0.cpu + $0.rssMB > 0 ? $0 : nil } : nil
+    if !quotas.isEmpty || reading != nil || focus != nil || total != nil {
+      HStack(spacing: 10) {
+        ForEach(quotas, id: \.agent) { quota in
+          HStack(spacing: 6) {
+            AgentMarkView(agent: quota.agent, size: 11)
+              .opacity(0.85)
+              .help(quota.agent.shortName)
+            ForEach(quota.windows, id: \.label) { window in
+              HStack(spacing: 3) {
+                QuotaRing(used: window.used)
+                Text(window.short).foregroundStyle(Palette.textDim)
+                Text("\(window.used)%").foregroundStyle(Palette.text).monospacedDigit()
+              }
+              .help(window.detail)
+              .accessibilityElement(children: .ignore)
+              .accessibilityLabel(window.detail)
+            }
+            if let credits = quota.credits {
+              Text("\(credits) credits").foregroundStyle(Palette.textDim)
+            }
+          }
+        }
+        Spacer(minLength: 0)
+        if let reading {
+          HStack(spacing: 5) {
+            BatteryRing(percent: reading.percent, charging: !reading.isOnBattery, low: reading.isLow, size: 14, animated: !model.isPaused)
+            Text("\(reading.percent)%")
+              .fontWeight(.semibold)
+              .foregroundStyle(reading.isLow ? Palette.failed : reading.isOnBattery ? Palette.text : Palette.done)
+          }
+          .help(PowerDescription.detail(reading))
+          .accessibilityElement(children: .ignore)
+          .accessibilityLabel(PowerDescription.detail(reading))
+        }
+        if let focus {
+          Hovering { hovered in
+            Button {
+              model.setFocus(MacFocus())
+            } label: {
+              HStack(spacing: 5) {
+                Image(systemName: "moon.fill").islandFont(10)
+                // Hovering strikes it through: a click turns it off.
+                Text(focus.name ?? "Focus").fontWeight(.semibold).foregroundStyle(Color(hex: 0xC9B8FF)).strikethrough(hovered)
+              }
+            }
+            .buttonStyle(.plain)
+          }
+          .foregroundStyle(Palette.textDim)
+          .help("Focus is on (from your Shortcuts automation). Click if it stayed on by mistake.")
+        }
+        if let total {
+          HStack(spacing: 5) {
+            Image(systemName: "cpu").islandFont(10)
+            Text("\(total.cpu)%").fontWeight(.semibold).foregroundStyle(Palette.text).monospacedDigit()
+            Text(Format.memory(megabytes: Double(total.rssMB)))
+          }
+          .help("What your agents are using right now")
+        }
+      }
+      .islandFont(9.5)
+      .lineLimit(1)
+      .frame(minHeight: 25)
+      .padding(.init(top: 4, leading: 6, bottom: 5, trailing: 6))
+      .padding(.init(top: 2, leading: 8, bottom: 0, trailing: 8))
+    }
+  }
+}
+
+/// A limit as a small ring: the arc is what's USED, warming as it fills; past
+/// 90% it glows softly so a nearly spent window gets noticed.
+private struct QuotaRing: View {
+  let used: Int
+  /// It draws in from empty when it appears.
+  private let drawn = State(initialValue: false)
+
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  var body: some View {
+    let tone = used >= 90 ? Palette.failed : used >= 70 ? Palette.waiting : Palette.done
+    let scale = 13.0 / 16
+    RingArc(fill: drawn.wrappedValue || reduceMotion ? Double(used) / 100 : 0, lineWidth: 2 * scale, color: tone)
+      .frame(width: 6.2 * 2 * scale, height: 6.2 * 2 * scale)
+      .frame(width: 13, height: 13)
+      .animation(reduceMotion ? nil : .timingCurve(0.22, 1, 0.36, 1, duration: 0.9), value: used)
+      .onAppear {
+        guard !reduceMotion else { return }
+        withAnimation(.timingCurve(0.22, 1, 0.36, 1, duration: 0.9)) { drawn.wrappedValue = true }
+      }
+      .modifier(HotGlow(color: tone, active: used >= 90 && !reduceMotion))
+  }
+}
+
+private struct HotGlow: ViewModifier {
+  let color: Color
+  let active: Bool
+
+  func body(content: Content) -> some View {
+    if active {
+      content.phaseAnimator([0.0, 2.5]) { view, radius in view.shadow(color: color, radius: radius) } animation: { _ in .easeInOut(duration: 1.2) }
+    } else {
+      content
+    }
+  }
+}
+
+enum PowerDescription {
+  /// "1:05" or "40m"; empty when unknown.
+  static func remaining(_ minutes: Int?) -> String {
+    guard let minutes, minutes > 0 else { return "" }
+    return minutes >= 60 ? String(format: "%d:%02d", minutes / 60, minutes % 60) : "\(minutes)m"
+  }
+
+  static func detail(_ reading: PowerReading) -> String {
+    let time = remaining(reading.minutesRemaining)
+    return switch reading.state {
+    case .discharging: "\(reading.percent)% battery" + (time.isEmpty ? "" : ", \(time) left")
+    case .charging: "\(reading.percent)%, charging" + (time.isEmpty ? "" : ", \(time) to full")
+    case .charged: "Fully charged"
+    case .ac: "\(reading.percent)%, on power"
+    }
+  }
+}
+
+// MARK: - Controls
+
+/// The footer: a field in the left slot (the prompt bar; the assistant joins
+/// in phase 6), and every key on the right.
+private struct Controls: View {
+  let model: IslandModel
+
+  var body: some View {
+    HStack(spacing: 8) {
+      if model.ask.isOpen {
+        AssistantField(state: model.ask, voiceEnabled: model.settings.voice, paused: model.isPaused)
+          .frame(minWidth: 150, maxWidth: 250)
+          .transition(.opacity)
+      } else if model.showsPrompt {
+        PromptBar(model: model)
+          .frame(minWidth: 150, maxWidth: 250)
+          .transition(.opacity)
+      } else if model.crewAvailable && model.sessions.sessions.isEmpty {
+        BotCrewButton(
+          working: model.ask.live != nil, talk: model.sessions.connected, paused: !model.isExpanded || model.isPaused,
+          disabledReason: nil
+        ) { model.toggleAsk() }
+      }
+      Spacer(minLength: 0)
+      if let version = model.updates.available {
+        Hovering { hovered in
+          Button("↑ update \(version)") { model.updates.openDownload() }
+            .buttonStyle(.plain)
+            .islandFont(9.5, weight: .bold)
+            .foregroundStyle(Palette.accent)
+            .padding(.init(top: 3, leading: 7, bottom: 3, trailing: 7))
+            .background(RoundedRectangle(cornerRadius: 6).fill(Palette.accent.opacity(hovered ? 0.14 : 0)))
+        }
+        .help("Download Agent Island \(version)")
+      }
+      HStack(spacing: 6) {
+        Keycap(symbol: model.settings.sounds ? "speaker.wave.2.fill" : "speaker.slash.fill", label: model.settings.sounds ? "Sound on" : "Sound off", off: !model.settings.sounds) {
+          model.changeSettings { $0.sounds.toggle() }
+        }
+        if model.crewAvailable && !model.sessions.sessions.isEmpty {
+          // With agents on screen the crew steps aside; Ask stays one click away.
+          Keycap(symbol: "sparkles", label: model.ask.isOpen ? "Close Apple Intelligence" : "Ask Apple Intelligence", on: model.ask.isOpen) {
+            model.toggleAsk()
+          }
+        }
+        if model.promptTarget != nil {
+          Keycap(symbol: "square.and.pencil", label: model.promptOpen ? "Close the prompt" : "Send a prompt to the agent", on: model.promptOpen) {
+            model.togglePrompt()
+          }
+        }
+        Keycap(symbol: "gearshape.fill", label: "Settings") { model.openSettings() }
+        Keycap(symbol: "power", label: "Quit") { NSApp.terminate(nil) }
+      }
+    }
+    .padding(.init(top: 2, leading: 12, bottom: 6, trailing: 12))
+    .padding(.bottom, 4)
+  }
+}
+
+/// A small raised key, lit from above; pressing sinks it.
+struct Keycap: View {
+  let symbol: String
+  let label: String
+  var on = false
+  var off = false
+  let action: () -> Void
+
+  var body: some View {
+    Button(action: action) {
+      Image(systemName: symbol)
+        .islandFont(12, weight: .medium)
+        // Embossed: a dark cast below, a faint catch-light above.
+        .shadow(color: .black.opacity(0.85), radius: 0, y: 1)
+        .shadow(color: .white.opacity(0.18), radius: 0, y: -0.5)
+    }
+    .buttonStyle(KeycapStyle(on: on, off: off))
+    .help(label)
+    .accessibilityLabel(label)
+  }
+}
+
+private struct KeycapStyle: ButtonStyle {
+  let on: Bool
+  let off: Bool
+
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  func makeBody(configuration: Configuration) -> some View {
+    Hovering { hovered in
+      let pressed = configuration.isPressed || on
+      configuration.label
+        .foregroundStyle(on ? Color(hex: 0xC9B3FF) : off ? .white.opacity(0.3) : hovered ? Palette.text : .white.opacity(0.62))
+        .frame(width: 24, height: 24)
+        .background(
+          Circle().fill(LinearGradient(
+            stops: [
+              .init(color: .white.opacity(hovered ? 0.2 : 0.13), location: 0),
+              .init(color: .white.opacity(hovered ? 0.05 : 0.03), location: 0.55),
+              .init(color: .black.opacity(hovered ? 0.15 : 0.2), location: 1),
+            ],
+            startPoint: .top, endPoint: .bottom
+          ))
+        )
+        .overlay(Circle().strokeBorder(LinearGradient(colors: [.white.opacity(pressed ? 0.04 : 0.18), .black.opacity(0.55)], startPoint: .top, endPoint: .bottom), lineWidth: 1))
+        .shadow(color: on ? Color(hex: 0xB18CFF).opacity(0.35) : .black.opacity(pressed ? 0 : 0.7), radius: on ? 3 : 1, y: on ? 0 : 1)
+        .offset(y: configuration.isPressed ? 1 : 0)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.09), value: configuration.isPressed)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.12), value: hovered)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.12), value: on)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.12), value: off)
+    }
+  }
+}
+
+/// A quiet recessed pill for a free-form prompt to the session that's
+/// running. Return sends it into the agent's terminal; Escape clears and
+/// closes it.
+private struct PromptBar: View {
+  let model: IslandModel
+  @FocusState private var focused: Bool
+
+  var body: some View {
+    let binding = Binding(get: { model.promptText }, set: { model.promptText = $0 })
+    HStack(spacing: 6) {
+      TextField("", text: binding, prompt: fieldPrompt(placeholder))
+        .textFieldStyle(.plain)
+        .islandFont(11)
+        .foregroundStyle(Palette.text)
+        .tint(Palette.caret)
+        .focused($focused)
+        .onSubmit { model.submitPrompt() }
+        .onExitCommand {
+          model.promptText = ""
+          model.promptOpen = false
+          focused = false
+        }
+        .accessibilityLabel(model.promptTarget?.agent == .cursor ? "Send a prompt to Cursor" : "Send a prompt to the agent")
+      Button { model.submitPrompt() } label: {
+        Image(systemName: "arrow.up.circle")
+          .islandFont(11)
+          .frame(width: 22, height: 22)
+      }
+      .buttonStyle(SendKey(ready: !model.promptText.trimmingCharacters(in: .whitespaces).isEmpty))
+      .disabled(model.promptText.trimmingCharacters(in: .whitespaces).isEmpty)
+      .help("Send prompt")
+      .accessibilityLabel("Send prompt")
+    }
+    .padding(.init(top: 0, leading: 8, bottom: 0, trailing: 3))
+    .frame(height: 28)
+    .modifier(FieldPill(focused: focused))
+    .overlay { FieldBeam(focused: focused, paused: model.isPaused) }
+    .onChange(of: focused) { _, now in model.promptFocused = now }
+    .onAppear { if model.promptOpen { focused = true } }
+    .onChange(of: model.promptOpen) { _, open in focused = open }
+  }
+
+  private var placeholder: String {
+    if !model.asking.isEmpty { return "Reply to the agent…" }
+    return model.promptTarget?.agent == .cursor ? "Ask Cursor…" : "Ask the agent…"
+  }
+}
+
+/// The panel's weather: the scene, with the temperature and summary over a scrim.
+private struct WeatherCard: View {
+  let reading: WeatherReading
+  let paused: Bool
+
+  var body: some View {
+    WeatherScene(condition: reading.condition, variant: .card, paused: paused)
+      .frame(maxWidth: .infinity)
+      .overlay(alignment: .leading) {
+        HStack(spacing: 8) {
+          Text(reading.temperature)
+            .islandFont(13.5, weight: .semibold)
+            .monospacedDigit()
+            .foregroundStyle(.white)
+          Text(reading.summary + (reading.stale ? " · offline" : ""))
+            .islandFont(10)
+            .foregroundStyle(.white.opacity(0.86))
+            .lineLimit(1)
+        }
+        .padding(.horizontal, 11)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .background(LinearGradient(colors: [.black.opacity(0.55), .black.opacity(0.18)], startPoint: .leading, endPoint: .trailing))
+      }
+      .clipShape(RoundedRectangle(cornerRadius: 9))
+      .padding(.init(top: 4, leading: 8, bottom: 0, trailing: 8))
+      .accessibilityElement(children: .ignore)
+      .accessibilityLabel(reading.summary + (reading.stale ? ", offline" : ""))
+  }
+}
