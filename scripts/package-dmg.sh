@@ -3,6 +3,8 @@
 # CI supplies Developer ID + notarization credentials. Local builds fall back
 # to ad-hoc signing so they remain launchable on the developer's own machine.
 set -euo pipefail
+# A release that dies must say where: several steps below are quiet by design.
+trap 'echo "==> package-dmg failed at line $LINENO: $BASH_COMMAND" >&2' ERR
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_DIR="$ROOT/packages/app"
@@ -49,9 +51,16 @@ rm -f "$RW"
 # fresh name per release guarantees every user's window opens at OUR size.
 hdiutil create -volname "Agent Island $VERSION" -srcfolder "$STAGE" -ov -format UDRW "$RW" >/dev/null
 MOUNT=$(hdiutil attach "$RW" -readwrite -noverify -noautoopen | awk -F'\t' '/\/Volumes\//{print $3}')
+if [[ -z "$MOUNT" ]]; then
+  echo "==> hdiutil attach did not report a mount point" >&2
+  exit 1
+fi
 # Style the volume we actually mounted — a stale "Agent Island" volume from a
 # user-opened DMG would otherwise steal the name (mounts as "Agent Island 1").
 VOLNAME=$(basename "$MOUNT")
+# Keep Spotlight off the fresh volume: mds indexing it is what holds it busy
+# when we try to detach (CI runners index new mounts eagerly).
+mdutil -i off "$MOUNT" >/dev/null 2>&1 || true
 
 # Best-effort: a styling failure still ships a working (plain) DMG.
 if ! /usr/bin/osascript <<OSA
@@ -80,7 +89,22 @@ then
   echo "    (styling failed — shipping an unstyled DMG)"
 fi
 sync
-hdiutil detach "$MOUNT" -quiet || hdiutil detach "$MOUNT" -force -quiet
+# Finder (just closed the window) or Spotlight can hold the volume for a few
+# seconds; a busy detach used to fail silently (-quiet) and kill the release.
+# Retry politely, then force, and say what happened either way.
+detached=0
+for attempt in 1 2 3 4 5; do
+  if hdiutil detach "$MOUNT" >/dev/null 2>&1; then
+    detached=1
+    break
+  fi
+  echo "    volume busy, retrying detach ($attempt/5)"
+  sleep $((attempt * 2))
+done
+if [[ "$detached" != 1 ]] && ! hdiutil detach "$MOUNT" -force; then
+  echo "==> could not detach $MOUNT" >&2
+  exit 1
+fi
 
 hdiutil convert "$RW" -format UDZO -imagekey zlib-level=9 -ov -o "$DMG" >/dev/null
 rm -f "$RW"
