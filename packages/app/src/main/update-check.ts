@@ -2,6 +2,7 @@ import { app, Notification, net, shell } from "electron";
 import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { join } from "node:path";
+import { runsOnThisMac } from "./update-compat";
 
 /**
  * Update NOTIFIER — not an auto-updater. Without an Apple Developer ID the
@@ -78,6 +79,9 @@ async function checkOnce(onUpdate: (info: UpdateInfo) => void): Promise<void> {
     const release = (await res.json()) as { tag_name?: string; html_url?: string };
     const latest = typeof release.tag_name === "string" ? release.tag_name : "";
     if (!latest || !isNewerVersion(app.getVersion(), latest)) return;
+    // 2.0 needs macOS 14: on an older Mac, stay on 1.x rather than offer an
+    // update that couldn't open.
+    if (!runsOnThisMac(latest, process.getSystemVersion())) return;
 
     // Point the notifier at the direct DMG download, not the release page.
     pendingUrl = DIRECT_DOWNLOAD;
@@ -124,6 +128,9 @@ export async function checkNow(onUpdate: (info: UpdateInfo) => void): Promise<vo
  */
 export async function downloadAndInstall(): Promise<boolean> {
   if (!app.isPackaged) return false; // dev build is the Electron binary, not a real .app
+  // Only an update the check found (and found this Mac can run): the DMG URL
+  // always serves the latest, which may need a newer macOS.
+  if (!pendingUpdate) return false;
   try {
     const res = await net.fetch(DIRECT_DOWNLOAD, { redirect: "follow" });
     if (!res.ok) return false;
