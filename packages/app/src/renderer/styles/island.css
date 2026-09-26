@@ -1171,7 +1171,9 @@ body {
   .notch-spacer.state-working .spacer-info {
     animation: none;
   }
-  .edge-spark {
+  /* [data-fx] matches the per-event rules' weight, so their flashes and
+     throbs don't win over the fade. */
+  .edge-spark[data-fx] {
     animation-name: spark-life;
   }
 }
@@ -2091,11 +2093,281 @@ body {
 .usage-item.power.on-power b {
   color: var(--done);
 }
-/* The charger went in: a green electric crackle round the island's edge. */
+/* ---- Charging ----
+   The charger went in: current runs in along the edge (ChargeSpark.tsx), a
+   bolt strikes the battery ring and throws sparks, and the rim washes in the
+   charge colour. Colour and temper follow the Mac's Energy Mode. */
+[data-energy] {
+  --charge: var(--done);
+}
+[data-energy="low"] {
+  --charge: #ffd60a;
+}
+[data-energy="high"] {
+  --charge: #64d2ff;
+}
+/* The charger came out: the same moment, run backwards, in plain white. */
+.la-unplug,
+.wing-unplug,
+.charge-spark.out {
+  --charge: #ececec;
+}
 .edge-spark[data-fx="charge"] {
-  --fx: var(--done);
-  --dur: 1s;
-  animation-name: spark-flash;
+  --fx: var(--charge, var(--done));
+  --dur: 2.4s;
+  animation-name: spark-charge;
+}
+.edge-spark[data-fx="discharge"] {
+  --fx: #ececec;
+  --dur: 1.8s;
+  animation-name: spark-life;
+}
+/* No wash inside for the charger: the middle stays black so the bolt ring and
+   the percentage keep their contrast, and the rim is drawn by ChargeSpark along
+   the island's real outline (a box-shadow would box it in, top edge and all).
+   The element still runs, so the pulse clears on its animationend. Reduced
+   Motion skips ChargeSpark, so there the plain glow stays. */
+@media (prefers-contrast: no-preference) and (prefers-reduced-motion: no-preference) {
+  .edge-spark[data-fx="charge"],
+  .edge-spark[data-fx="discharge"] {
+    box-shadow: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .edge-spark[data-fx="charge"] {
+    animation-name: spark-life;
+  }
+}
+
+/* Current along the edge: a white-hot core in a coloured sheath, one run per
+   half, ear → just past the middle. pathLength is 100, so a 14-long dash
+   travelling from offset 14 to -40 puts its head at 0 then 54. */
+.charge-spark {
+  position: absolute;
+  top: 0;
+  left: -10px;
+  pointer-events: none;
+  z-index: 6;
+  overflow: visible;
+  --run: 0.9s;
+  --runs: 1;
+}
+.charge-spark[data-energy="high"] {
+  --run: 0.6s;
+  --runs: 2;
+}
+.charge-spark[data-energy="low"] {
+  --run: 1.5s;
+}
+.charge-spark path {
+  fill: none;
+  stroke-linecap: round;
+  stroke-dasharray: 14 200;
+  stroke-dashoffset: 14;
+  animation: charge-run var(--run) cubic-bezier(0.5, 0, 0.3, 1) var(--runs) both;
+}
+.charge-spark.out path:not(.cs-rim) {
+  animation-direction: reverse;
+}
+/* The rim: flickers on with the current, holds, drains away. */
+.charge-spark .cs-rim {
+  stroke: color-mix(in srgb, var(--charge) 75%, #fff);
+  stroke-width: 1.5;
+  stroke-dasharray: none;
+  filter: drop-shadow(0 0 3px var(--charge));
+  animation: spark-charge 2.3s ease-out both;
+}
+.charge-spark.out .cs-rim {
+  animation: spark-life 1.7s ease-out both;
+}
+.charge-spark .cs-glow {
+  stroke: var(--charge);
+  stroke-width: 5;
+  filter: blur(2.5px);
+}
+.charge-spark .cs-core {
+  stroke: #fff;
+  stroke-width: 1.6;
+}
+.charge-spark[data-energy="low"] .cs-core {
+  stroke: color-mix(in srgb, var(--charge) 40%, #fff);
+  stroke-width: 1.3;
+}
+@keyframes charge-run {
+  0% {
+    stroke-dashoffset: 14;
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: -40;
+    opacity: 0;
+  }
+}
+
+/* The bolt strikes the ring: drops in big and white-hot, lands, settles with
+   a glow in the charge colour. The sparks fly just after it hits. */
+.la-charge {
+  position: relative;
+  height: 22px;
+}
+.la-charge .battery {
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--charge) 70%, transparent));
+  animation: none;
+}
+.la-charge .bat-arc {
+  stroke: var(--charge);
+}
+/* The whole ring plays every time: it waits out the wing's pop-in, then fills
+   from empty (plugged) or drains from full (unplugged) to the real level. */
+.la-charge .battery.surge .bat-arc {
+  animation-duration: 1.3s;
+  animation-delay: 0.2s;
+}
+.battery.drain .bat-arc {
+  animation: bat-drain 1.3s cubic-bezier(0.4, 0, 0.2, 1) 0.2s both;
+}
+@keyframes bat-drain {
+  from {
+    stroke-dashoffset: 0;
+  }
+}
+/* …and the bolt lets go: a last flare, then it shrinks away. */
+.la-charge .battery.drain .bat-bolt-wrap {
+  animation: bolt-release 0.9s ease-in 0.15s both;
+}
+@keyframes bolt-release {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  25% {
+    transform: scale(1.35);
+    opacity: 1;
+    filter: drop-shadow(0 0 3px #fff);
+  }
+  100% {
+    transform: scale(0.2) translateY(2px);
+    opacity: 0;
+  }
+}
+/* Percentage in the right wing, in the charge colour, like the phone's. */
+.spacer-info.wing-charge {
+  color: var(--charge);
+  font-size: calc(var(--fs-small) + 2px);
+  font-weight: 800;
+  text-shadow: 0 0 6px color-mix(in srgb, var(--charge) 55%, transparent);
+  animation: none;
+}
+.la-charge .bat-bolt-wrap {
+  transform-box: fill-box;
+  transform-origin: center;
+  filter: drop-shadow(0 0 1.5px var(--charge));
+  animation: bolt-strike 0.65s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+.la-charge[data-energy="low"] .bat-bolt-wrap {
+  animation-duration: 1s;
+  animation-timing-function: ease-out;
+}
+@keyframes bolt-strike {
+  0% {
+    transform: scale(2.6) translateY(-3px);
+    opacity: 0;
+  }
+  18% {
+    transform: scale(1.7);
+    opacity: 1;
+    filter: drop-shadow(0 0 4px #fff) drop-shadow(0 0 6px var(--charge));
+  }
+  45% {
+    transform: scale(0.85);
+  }
+  70% {
+    transform: scale(1.12);
+  }
+  100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 1.5px var(--charge));
+  }
+}
+.charge-sparks {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  /* Same units as the ring's 16-box, so the rays start just off its edge. */
+  width: calc(100% * 28 / 16);
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  overflow: visible;
+  pointer-events: none;
+}
+.charge-sparks line {
+  stroke: #fff;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-dasharray: 3 12;
+  stroke-dashoffset: 3;
+  opacity: 0;
+  filter: drop-shadow(0 0 1.5px var(--charge));
+  animation: spark-shoot 0.55s ease-out both;
+}
+.la-charge[data-energy="high"] .charge-sparks line {
+  stroke-width: 1.5;
+  animation-duration: 0.4s;
+}
+@keyframes spark-shoot {
+  0% {
+    stroke-dashoffset: 3;
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: -5;
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .la-charge .bat-bolt-wrap,
+  .battery.drain .bat-arc {
+    animation: none;
+  }
+  .la-charge .battery.drain .bat-bolt-wrap {
+    animation: none;
+    opacity: 0;
+  }
+  .charge-sparks {
+    display: none;
+  }
+}
+@keyframes spark-charge {
+  0% {
+    opacity: 0;
+  }
+  5% {
+    opacity: 1;
+  }
+  11% {
+    opacity: 0.15;
+  }
+  17% {
+    opacity: 1;
+  }
+  22% {
+    opacity: 0.3;
+  }
+  28% {
+    opacity: 1;
+  }
+  60% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0;
+  }
 }
 
 /* ---- Idle crew: three bots in the right wing ----

@@ -2,6 +2,7 @@ import AVFoundation
 import AppKit
 import CoreLocation
 import Foundation
+import IOKit.ps
 #if canImport(FoundationModels)
 import FoundationModels
 #endif
@@ -126,6 +127,57 @@ private func respond(_ line: String) {
   // stdout is a pipe here, so it's block-buffered — without this the parent
   // waits on a reply that's sitting in our buffer.
   fflush(stdout)
+}
+
+// MARK: - Power
+
+/// The charger going in or out, and Low Power Mode flipping, pushed the moment
+/// they happen. Electron's powerMonitor on-ac/on-battery stays silent on some
+/// macOS releases, and a once-a-minute pmset read misses a quick unplug, so
+/// IOKit's power-source notification is the source of truth.
+///
+/// `power` starts the watch (again = re-report, which also re-arms it after a
+/// respawn). Out-of-band lines, only on change:
+///   power source ac|battery
+///   power lowpower 0|1
+private var lastPowerSource: String?
+private var lastLowPower: Bool?
+private var watchingPower = false
+
+private func providingPowerSource() -> String? {
+  guard let info = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
+    let type = IOPSGetProvidingPowerSourceType(info)?.takeUnretainedValue()
+  else { return nil }
+  return (type as String) == kIOPMBatteryPowerKey ? "battery" : "ac"
+}
+
+private func reportPower() {
+  if let source = providingPowerSource(), source != lastPowerSource {
+    lastPowerSource = source
+    respond("power source \(source)")
+  }
+  let low = ProcessInfo.processInfo.isLowPowerModeEnabled
+  if low != lastLowPower {
+    lastLowPower = low
+    respond("power lowpower \(low ? 1 : 0)")
+  }
+}
+
+private func watchPower() {
+  if watchingPower {
+    lastPowerSource = nil
+    lastLowPower = nil
+    return reportPower()
+  }
+  watchingPower = true
+  // A C callback: no captures, it just re-reads on the main run loop.
+  if let source = IOPSNotificationCreateRunLoopSource({ _ in reportPower() }, nil)?.takeRetainedValue() {
+    CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
+  }
+  NotificationCenter.default.addObserver(
+    forName: .NSProcessInfoPowerStateDidChange, object: nil, queue: .main
+  ) { _ in reportPower() }
+  reportPower()
 }
 
 // MARK: - Location
@@ -1615,6 +1667,8 @@ private func handle(_ input: String) {
   case "ai": handleAI(argument)
   case "voice": handleVoice(argument)
   case "speak": handleSpeak(argument)
+  // Streams out of band on every change, like location.
+  case "power": watchPower()
   case "quit": exit(0)
   default: respond("err unknown-command \(command)")
   }

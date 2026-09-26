@@ -36,18 +36,12 @@ export function islandSilhouette(width: number, height: number): string {
   return `${islandOutline(width, height)} Z`;
 }
 
-export function IslandGlow({
-  target,
-  active,
-  bright,
-}: {
-  target: RefObject<HTMLElement | null>;
-  active: boolean;
-  /** A little stronger while an answer is being worked on. */
-  bright: boolean;
-}) {
+/** The island body's live size while `active`, following every resize. */
+export function useIslandSize(
+  target: RefObject<HTMLElement | null>,
+  active: boolean,
+): { w: number; h: number } | null {
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
-  const uid = useId().replace(/:/g, "");
 
   useEffect(() => {
     const el = target.current;
@@ -67,6 +61,22 @@ export function IslandGlow({
       if (frame !== 0) cancelAnimationFrame(frame);
     };
   }, [target, active]);
+
+  return size;
+}
+
+export function IslandGlow({
+  target,
+  active,
+  bright,
+}: {
+  target: RefObject<HTMLElement | null>;
+  active: boolean;
+  /** A little stronger while an answer is being worked on. */
+  bright: boolean;
+}) {
+  const size = useIslandSize(target, active);
+  const uid = useId().replace(/:/g, "");
 
   if (!active || !size || size.w <= 0) return null;
   const edge = islandOutline(size.w, size.h);

@@ -98,7 +98,8 @@ export function batteryHue(percent: number, low: boolean): number {
  * red through amber to green. On a charger the ring glows and a small bolt
  * sits in the middle (or, with `label`, the percentage stays put and the glow
  * alone says charging); low (on battery) the arc turns red and blinks. Plugging
- * in redraws the arc from empty (`surge`). All CSS on SVG — decorative; the
+ * in redraws the arc from empty (`surge`); pulling the plug runs it backwards,
+ * draining from full with the bolt letting go (`drain`). All CSS on SVG — decorative; the
  * number beside it carries the meaning. `size` is the ring's diameter.
  */
 export function Battery({
@@ -107,6 +108,7 @@ export function Battery({
   low,
   size = 14,
   surge = false,
+  drain = false,
   label = false,
   className,
 }: {
@@ -117,6 +119,8 @@ export function Battery({
   size?: number;
   /** The moment the charger goes in: the arc fills up from empty. */
   surge?: boolean;
+  /** The moment the charger comes out: the arc drains from full, the bolt fades. */
+  drain?: boolean;
   /** Print the percentage inside the ring, always readable, in place of the bolt. */
   label?: boolean;
   className?: string;
@@ -130,7 +134,7 @@ export function Battery({
   const filled = Math.max(0.04, pct / 100);
   const dead = low && !charging;
   const hue = batteryHue(pct, dead);
-  const cls = `battery${charging ? " charging" : ""}${dead ? " low" : ""}${surge ? " surge" : ""}${
+  const cls = `battery${charging ? " charging" : ""}${dead ? " low" : ""}${surge ? " surge" : ""}${drain ? " drain" : ""}${
     pct >= 100 ? " full" : ""
   }${label ? " labelled" : ""}${className ? ` ${className}` : ""}`;
   return (
@@ -162,7 +166,7 @@ export function Battery({
         </text>
       )}
       {/* With the number inside, the bolt makes room: the glow says "charging". */}
-      {charging && !label && (
+      {(charging || drain) && !label && (
         <g className="bat-bolt-wrap">
           <path className="bat-bolt" d="M8.8 4.4 5.8 8.6h2.1l-.7 3 3-4.2H8.1z" fill="#fff" />
         </g>

@@ -41,7 +41,7 @@ import {
   setHapticsEnabled,
   setHapticsQuiet,
 } from "./haptics";
-import { getPower, onPower, setPowerEnabled, startPower } from "./power";
+import { getPower, onPower, setPowerEnabled, simulatePowerEvent, startPower } from "./power";
 import { setProcStatsActive, setProcStatsEnabled, startProcStats } from "./proc-stats";
 import { clearFocus, getFocus, onFocus, setFocus } from "./focus";
 import { DEEP_LINK_SCHEME, focusLinks, parseDeepLink } from "./deep-link";
@@ -555,12 +555,14 @@ if (!app.requestSingleInstanceLock()) {
     // Battery: instant plug/unplug from powerMonitor, percentage from pmset.
     onPower((payload) => {
       console.log(
-        `[power] ${payload ? `${payload.percent}% ${payload.state}${payload.event ? ` (${payload.event})` : ""}` : "none"}`,
+        `[power] ${payload ? `${payload.percent}% ${payload.state}${payload.event ? ` (${payload.event})` : ""} ${payload.energyMode}` : "none"}`,
       );
       sendToNotch("agent-island:power", payload);
     });
     startPower(settings.battery);
     ipcMain.handle("agent-island:get-power", () => getPower());
+    // Dev only: `kill -USR2 <main pid>` plays the charger going in, then out, without a charger.
+    if (!app.isPackaged) process.on("SIGUSR2", simulatePowerEvent);
 
     // Focus, via deep links (see handleDeepLink).
     ipcMain.handle("agent-island:get-focus", () => focusPayload());

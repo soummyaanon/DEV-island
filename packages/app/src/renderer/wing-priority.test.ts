@@ -16,6 +16,11 @@ describe("wingContent", () => {
   it("working agents beat ambience and live activities", () => {
     expect(wingContent({ ...base, active: 1, activity: true, lowBattery: true, weather: true })).toBe("working");
   });
+  it("the charger going in or out beats working agents, but not attention or a moment", () => {
+    expect(wingContent({ ...base, active: 2, activity: true, powerMoment: true })).toBe("activity");
+    expect(wingContent({ ...base, needsYou: 1, activity: true, powerMoment: true })).toBe("attention");
+    expect(wingContent({ ...base, moment: true, activity: true, powerMoment: true })).toBe("moment");
+  });
   it("a live activity beats low battery and weather", () => {
     expect(wingContent({ ...base, activity: true, lowBattery: true, weather: true })).toBe("activity");
   });

@@ -11,10 +11,11 @@ import { GreetingCard, greetingDuration } from "./GreetingCard";
 import { IdleCrew } from "./IdleCrew";
 import { WorkCrew } from "./WorkCrew";
 import { IslandGlow } from "./IslandGlow";
+import { ChargeSpark } from "./ChargeSpark";
 import { FieldBeam } from "./FieldBeam";
 import { assistantUnavailableReason } from "./assistant-context";
 import { StatusFooter } from "./StatusFooter";
-import { LIVE_ACTIVITY_MS, LiveActivity, type LiveActivityKind } from "./LiveActivity";
+import { LIVE_ACTIVITY_MS, LiveActivity, type EnergyMode, type LiveActivityKind } from "./LiveActivity";
 import { wingContent } from "./wing-priority";
 import { Battery, Icon } from "./Icons";
 import { playSound } from "./sounds";
@@ -31,7 +32,7 @@ const MAX_ROWS = 5;
 const MAX_BUBBLES = 8;
 
 /** Discrete moments the edge spark reacts to — each gets its own color/pattern. */
-type PulseKind = "done" | "failed" | "attention" | "question" | "approve" | "hello" | "charge";
+type PulseKind = "done" | "failed" | "attention" | "question" | "approve" | "hello" | "charge" | "discharge";
 
 /** Wing order: one thinking orb per agent kind that is working. */
 const AGENT_ORDER = ["claude-code", "codex", "cursor"] as const;
@@ -134,6 +135,7 @@ export function App() {
     state: "charging" | "discharging" | "charged" | "ac";
     minutesRemaining: number | null;
     low: boolean;
+    energyMode: EnergyMode;
   } | null>(null);
   const [focus, setFocus] = useState<{ active: boolean; name: string | null; mute: boolean } | null>(null);
   const [procStats, setProcStats] = useState<
@@ -501,6 +503,7 @@ export function App() {
         minutesRemaining: number | null;
         event: string | null;
         low: boolean;
+        energyMode?: string;
       } | null,
     ) => {
       if (!p) {
@@ -513,12 +516,17 @@ export function App() {
         state: p.state as "charging" | "discharging" | "charged" | "ac",
         minutesRemaining: p.minutesRemaining,
         low: p.low,
+        energyMode: p.energyMode === "low" || p.energyMode === "high" ? p.energyMode : "automatic",
       });
       if (p.event === "plugged") {
         showActivity("battery-plugged", p.percent);
         // Electricity runs round the island's edge as the charger goes in.
         firePulse("charge");
-      } else if (p.event === "unplugged") showActivity("battery-unplugged", p.percent);
+      } else if (p.event === "unplugged") {
+        showActivity("battery-unplugged", p.percent);
+        // …and drains back out of it as the charger comes out.
+        firePulse("discharge");
+      }
       else if (p.low && !prevLow.current) showActivity("battery-low", p.percent);
       prevLow.current = p.low;
     };
@@ -768,8 +776,9 @@ export function App() {
   const momentSession = moment ? (sessions.find((s) => s.key === moment.key) ?? null) : null;
 
   // What the collapsed wings show — one winner, strict order (wing-priority.ts):
-  // an agent needing you or working always beats a live activity, which beats
-  // low battery, which beats weather. Nothing shows while expanded.
+  // an agent needing you or working beats a live activity (except the charger
+  // going in, which briefly beats working), which beats low battery, which
+  // beats weather. Nothing shows while expanded.
   const wing = expanded
     ? "empty"
     : wingContent({
@@ -777,6 +786,7 @@ export function App() {
         active: active.length,
         moment: momentSession !== null,
         activity: activity !== null,
+        powerMoment: activity?.kind === "battery-plugged" || activity?.kind === "battery-unplugged",
         lowBattery: power?.low === true,
         weather: weather !== null,
       });
@@ -784,6 +794,9 @@ export function App() {
   // green-bluish breathing glow.
   const showGlow = !expanded && sessions.length > 0 && active.length === 0;
   const liveActivity = wing === "activity" ? activity : null;
+  // The charger moments own both wings: bolt ring left, percentage right.
+  const charging = liveActivity?.kind === "battery-plugged";
+  const unplugging = liveActivity?.kind === "battery-unplugged";
   // At rest — sessions present, nothing running — the battery on the left and
   // one round bot on the right, awake: it looks around and hops now and then.
   const sleeping = showGlow && wing === "empty";
@@ -803,14 +816,14 @@ export function App() {
       ? `${needsYou.length}!`
       : wingMoment
         ? wingMoment.kind
-        : active.length > 0
-        ? String(active.length)
         : liveActivity
           ? liveActivity.kind.startsWith("battery")
             ? `${liveActivity.percent}%`
             : liveActivity.kind === "focus-on"
               ? (focus?.name ?? "Focus")
               : ""
+        : active.length > 0
+          ? String(active.length)
           : lowBattery
             ? `${lowBattery.percent}%`
             : ambientWeather
@@ -894,6 +907,7 @@ export function App() {
             <div
               className="edge-spark"
               data-fx={pulse.kind}
+              data-energy={pulse.kind === "charge" ? (power?.energyMode ?? "automatic") : undefined}
               key={pulse.n}
               aria-hidden
               onAnimationEnd={() => setPulse(null)}
@@ -928,7 +942,11 @@ export function App() {
                 ) : null
               ) : liveActivity ? (
                 <span className="sprite-slot" key={`la-${liveActivity.n}`}>
-                  <LiveActivity kind={liveActivity.kind} percent={liveActivity.percent} />
+                  <LiveActivity
+                    kind={liveActivity.kind}
+                    percent={liveActivity.percent}
+                    energyMode={power?.energyMode}
+                  />
                 </span>
               ) : lowBattery ? (
                 <span className="sprite-slot wing-low" key="low-batt">
@@ -946,10 +964,16 @@ export function App() {
                 ))
               )}
             </span>
-            <span className={`spacer-info${lowBattery ? " wing-low" : ""}`} aria-label={countLabel}>
+            <span
+              className={`spacer-info${lowBattery ? " wing-low" : ""}${charging || unplugging ? " wing-charge" : ""}${
+                unplugging ? " wing-unplug" : ""
+              }`}
+              data-energy={charging ? (power?.energyMode ?? "automatic") : undefined}
+              aria-label={countLabel}
+            >
               {sleeping || idleBot ? (
                 <IdleCrew key="crew" paused={!animated} awake={greeting !== null} />
-              ) : needsYou.length === 0 && !wingMoment && active.length > 0 ? (
+              ) : needsYou.length === 0 && !wingMoment && !liveActivity && active.length > 0 ? (
                 <WorkCrew key="work" active={active} paused={!animated} />
               ) : (
                 <span key={countText}>{countText}</span>
@@ -1250,6 +1274,14 @@ export function App() {
             </div>
           </div>
         </div>
+        {(pulse?.kind === "charge" || pulse?.kind === "discharge") && animated && !reducedMotion && (
+          <ChargeSpark
+            key={pulse.n}
+            target={islandBodyRef}
+            energyMode={power?.energyMode ?? "automatic"}
+            direction={pulse.kind === "charge" ? "in" : "out"}
+          />
+        )}
         <IslandGlow target={islandBodyRef} active={aiPrefs.edgeGlow && assistantOpen && expanded && animated} bright={assistantLive} />
       </div>
     </div>

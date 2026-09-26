@@ -73,6 +73,8 @@ export interface PowerPayload {
   event: string | null;
   /** On battery at or under 20%. */
   low: boolean;
+  /** Energy Mode: "automatic" | "low" | "high". */
+  energyMode?: string;
 }
 
 export interface FocusPayload {
