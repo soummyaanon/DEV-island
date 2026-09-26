@@ -23,3 +23,18 @@ jobs:
       - run: pnpm typecheck
 
       - run: pnpm test
+
+  # The native rewrite (docs/superpowers/plans/2026-09-26-swift-native-island.md).
+  native:
+    runs-on: macos-26
+    defaults:
+      run:
+        working-directory: apps/mac
+    steps:
+      - uses: actions/checkout@v4
+
+      - run: swift --version
+
+      - run: ./scripts/test.sh
+
+      - run: ./scripts/bundle.sh

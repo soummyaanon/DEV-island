@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDisplayName</key>
+	<string>Agent Island Next</string>
+	<key>CFBundleExecutable</key>
+	<string>AgentIsland</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.agentisland.app.next</string>
+	<key>CFBundleName</key>
+	<string>Agent Island Next</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>2.0.0</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>Agent Island</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>agent-island</string>
+			</array>
+		</dict>
+	</array>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.0</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Agent Island brings your agent's terminal tab to the front when you click its session.</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSLocationUsageDescription</key>
+	<string>Agent Island shows the local weather in the island. Your location is rounded to about a kilometre and only sent to Open-Meteo.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Agent Island shows the local weather in the island. Your location is rounded to about a kilometre and only sent to Open-Meteo.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Agent Island listens for your question when you press the mic in the Ask bar. It's transcribed on your Mac.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Agent Island turns your spoken question into text on your Mac.</string>
+</dict>
+</plist>
