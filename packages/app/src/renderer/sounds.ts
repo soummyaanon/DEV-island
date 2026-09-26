@@ -1,4 +1,4 @@
-// Sound themes: three synthesized WebAudio sets (no files) plus the bundled
+// Sound themes: six synthesized WebAudio sets (no files) plus the bundled
 // "anime" MP3 pack. Which theme plays is resolved per event via SoundPrefs.
 
 import { resolveTheme, type SoundEvent, type SoundPrefs, type SoundTheme } from "./sound-prefs";
@@ -56,6 +56,29 @@ function slide(from: number, to: number, at: number, dur: number, volume = 0.06)
   osc.start(t0);
   osc.stop(t0 + dur + 0.02);
 }
+
+/**
+ * A struck tone with overtones: the fundamental plus `partials` (ratio,
+ * relative volume), each decaying faster the higher it sits — a mallet on
+ * wood, a finger on glass, a bowl. `detune` (cents) adds a slow beating twin.
+ */
+function strike(
+  freq: number,
+  at: number,
+  dur: number,
+  volume: number,
+  partials: Array<[number, number]>,
+  detune = 0,
+): void {
+  const tones: Array<[number, number, number]> = [[freq, volume, dur]];
+  for (const [ratio, rel] of partials) tones.push([freq * ratio, volume * rel, dur / Math.sqrt(ratio)]);
+  if (detune) tones.push([freq * 2 ** (detune / 1200), volume * 0.6, dur]);
+  for (const [f, v, d] of tones) note(f, at, d, v, "sine", 0.004);
+}
+
+const glass = (f: number, at: number, v = 0.05) => strike(f, at, 0.9, v, [[2.76, 0.25], [5.4, 0.08]], 7);
+const wood = (f: number, at: number, v = 0.09) => strike(f, at, 0.32, v, [[4, 0.3], [9.9, 0.06]]);
+const bowl = (f: number, at: number, v = 0.06) => strike(f, at, 2.2, v, [[2.71, 0.35], [5.1, 0.12]], 4);
 
 function mp3(url: string, volume = 0.5): void {
   const player = new Audio(url);
@@ -135,6 +158,65 @@ const THEMES: Record<SoundTheme, ThemeSounds> = {
     approve: () => {
       note(659.25, 0, 0.3, 0.06, "sine", 0.03);
     },
+  },
+  glass: {
+    // Two rising crystal pings.
+    success: () => {
+      glass(1567.98, 0);
+      glass(2093, 0.1, 0.055);
+    },
+    // A quick bright triple tap, loud enough to cut through.
+    attention: () => {
+      glass(2349.3, 0, 0.09);
+      glass(2349.3, 0.12, 0.09);
+      glass(2793.8, 0.24, 0.1);
+    },
+    // One ping that lifts at the end.
+    question: () => {
+      glass(1760, 0, 0.06);
+      glass(2637, 0.14, 0.05);
+    },
+    // A single clear ting.
+    approve: () => glass(2093, 0, 0.06),
+  },
+  marimba: {
+    // A little rising figure: G A C E.
+    success: () => {
+      wood(392, 0);
+      wood(440, 0.08);
+      wood(523.25, 0.16);
+      wood(659.25, 0.24, 0.1);
+    },
+    // Repeated high knocks.
+    attention: () => {
+      for (let i = 0; i < 4; i++) wood(880, i * 0.11, 0.14);
+    },
+    // Low-high "hm?".
+    question: () => {
+      wood(523.25, 0, 0.1);
+      wood(783.99, 0.12, 0.11);
+    },
+    // Two quick taps down to home.
+    approve: () => {
+      wood(659.25, 0, 0.09);
+      wood(523.25, 0.07, 0.09);
+    },
+  },
+  zen: {
+    // A low bowl, then its fifth.
+    success: () => {
+      bowl(261.63, 0);
+      bowl(392, 0.35, 0.045);
+    },
+    // Two firm strikes of a higher bowl.
+    attention: () => {
+      bowl(523.25, 0, 0.1);
+      bowl(523.25, 0.45, 0.11);
+    },
+    // One bowl that asks.
+    question: () => bowl(440, 0, 0.08),
+    // A soft low touch.
+    approve: () => bowl(329.63, 0, 0.05),
   },
   anime: {
     success: () => mp3(thikHaUrl, 0.55),

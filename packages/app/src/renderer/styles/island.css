@@ -89,8 +89,8 @@ body {
   border-radius: 0 0 12px 12px;
   overflow: hidden;
   transition:
-    width var(--dur-close) ease-in,
-    border-radius var(--dur-close) ease-in;
+    width var(--dur-close) var(--ease-close),
+    border-radius var(--dur-close) var(--ease-close);
 }
 
 /* Expanded width is measured from the content (see island-width.ts) and handed
@@ -382,7 +382,7 @@ body {
   grid-template-rows: 0fr;
   background: var(--panel-bg);
   border-radius: inherit;
-  transition: grid-template-rows var(--dur-close) ease-in;
+  transition: grid-template-rows var(--dur-close) var(--ease-close);
 }
 .island.expanded .panel-wrap {
   grid-template-rows: 1fr;
@@ -398,7 +398,7 @@ body {
 }
 .island.expanded .panel {
   opacity: 1;
-  transition: opacity 160ms ease-out 60ms;
+  transition: opacity 180ms ease-out 50ms;
 }
 
 /* ---- Entrance choreography ----
@@ -408,7 +408,7 @@ body {
    doesn't remount and doesn't replay. */
 .island.expanded .row {
   animation: row-in 220ms ease-out both;
-  animation-delay: calc(60ms + var(--i, 0) * 18ms);
+  animation-delay: calc(50ms + var(--i, 0) * 22ms);
 }
 @keyframes row-in {
   from {
@@ -436,7 +436,7 @@ body {
   }
   60% {
     opacity: 1;
-    transform: scale(1.06);
+    transform: scale(1.03);
   }
   100% {
     opacity: 1;
@@ -451,7 +451,7 @@ body {
 @keyframes count-roll {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(5px);
   }
   to {
     opacity: 1;
@@ -1544,7 +1544,7 @@ body {
 }
 .island.expanded .bubbles > li {
   animation: row-in 220ms ease-out both;
-  animation-delay: calc(60ms + var(--i, 0) * 18ms);
+  animation-delay: calc(50ms + var(--i, 0) * 22ms);
 }
 .bubble {
   font: inherit;
@@ -2024,63 +2024,28 @@ body {
   }
 }
 
-/* ---- Liquid battery ----
-   The liquid glides to each new level and its surface wobbles forever.
-   Charging: sparks stream in, the bolt flickers like a live wire, the cell
-   breathes a glow in its own colour. Low: red, blinking, a small shiver.
-   Plugging in: a white surge floods through the liquid. */
+/* ---- Battery ring ----
+   Same shape as the usage rings: the arc is the charge and glides to each new
+   level. Charging: the ring breathes a glow in its own colour and the bolt
+   flickers. Low: red and blinking. Plugging in: the arc refills from empty. */
 .battery {
   display: block;
   flex: none;
   overflow: visible;
-  filter: drop-shadow(0 0 1.5px hsl(var(--bat-hue) 90% 55% / 0.45));
 }
-.bat-shell {
-  stroke: currentColor;
-  stroke-opacity: 0.5;
-}
-.bat-nub {
-  fill: currentColor;
-  fill-opacity: 0.5;
-}
-.bat-liquid {
-  transition: transform 1s cubic-bezier(0.22, 1, 0.36, 1);
-}
-.bat-wave {
-  animation: bat-wave 2.6s linear infinite;
-}
-@keyframes bat-wave {
-  to {
-    transform: translateY(-4.9px);
-  }
+.bat-arc {
+  transition: stroke-dashoffset 1s cubic-bezier(0.22, 1, 0.36, 1), stroke 0.4s ease;
 }
 .battery.charging {
   animation: bat-glow 1.8s ease-in-out infinite;
 }
-.battery.charging .bat-wave {
-  animation-duration: 1.1s;
-}
 @keyframes bat-glow {
-  50% {
-    filter: drop-shadow(0 0 3.5px hsl(var(--bat-hue) 95% 60% / 0.9));
-  }
-}
-.bat-spark {
-  fill: #fff;
-  opacity: 0;
-  animation: bat-spark 1.3s linear infinite;
-}
-@keyframes bat-spark {
-  0% {
-    transform: translateX(0);
-    opacity: 0;
-  }
-  20% {
-    opacity: 0.95;
-  }
+  0%,
   100% {
-    transform: translateX(var(--bat-run));
-    opacity: 0;
+    filter: drop-shadow(0 0 1px hsl(var(--bat-hue) 90% 55% / 0.4));
+  }
+  50% {
+    filter: drop-shadow(0 0 2.5px hsl(var(--bat-hue) 95% 60% / 0.85));
   }
 }
 .bat-bolt {
@@ -2104,17 +2069,7 @@ body {
     opacity: 1;
   }
 }
-.battery.low {
-  animation: bat-shiver 3.2s ease-in-out infinite;
-}
-.battery.low .bat-shell {
-  stroke: var(--failed);
-  stroke-opacity: 0.85;
-}
-.battery.low .bat-wave {
-  animation-duration: 4.5s;
-}
-.battery.low .bat-liquid {
+.battery.low .bat-arc {
   animation: bat-blink 1.6s ease-in-out infinite;
 }
 @keyframes bat-blink {
@@ -2122,35 +2077,12 @@ body {
     opacity: 0.35;
   }
 }
-@keyframes bat-shiver {
-  0%,
-  88%,
-  100% {
-    transform: none;
-  }
-  90% {
-    transform: translateX(-0.7px) rotate(-2deg);
-  }
-  93% {
-    transform: translateX(0.7px) rotate(2deg);
-  }
-  96% {
-    transform: translateX(-0.4px);
-  }
+.battery.surge .bat-arc {
+  animation: bat-fill 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
-.bat-surge {
-  fill: #fff;
-  opacity: 0;
-  animation: bat-surge 0.8s ease-out 2;
-}
-@keyframes bat-surge {
-  0% {
-    transform: translateX(-22px);
-    opacity: 0.9;
-  }
-  100% {
-    transform: translateX(22px);
-    opacity: 0;
+@keyframes bat-fill {
+  from {
+    stroke-dashoffset: var(--ring-c);
   }
 }
 .usage-item.power {
@@ -2168,9 +2100,8 @@ body {
 
 /* ---- Idle crew: three bots in the right wing ----
    Packed tight: the idle island is only notch + 84px, a 42px wing each side
-   (battery left, crew right). They hop in a quick wave every 3.5s; every
-   12s the last one sneaks left behind the real notch, peeks out the far
-   side, and dashes back (its seat empties while it's gone). */
+   (battery left, crew right), playing hide and seek (IdleCrew.tsx runs the
+   round). Every move is a slow slide, never a hop, so the island stays calm. */
 .island:has(.idle-crew):not(.expanded):not(.bare) {
   width: calc(var(--notch-width, 196px) + 84px);
 }
@@ -2186,100 +2117,94 @@ body {
 }
 .idle-bot {
   display: block;
-  animation: crew-hop 3.5s ease-in-out infinite;
 }
 .idle-bot + .idle-bot {
   margin-left: -4px;
 }
-.idle-bot canvas,
-.idle-runner canvas {
+.idle-bot canvas {
   display: block;
 }
-.idle-bot-1 {
-  animation-delay: 0.1s;
+.idle-bot {
+  transition:
+    transform 0.9s cubic-bezier(0.45, 0, 0.25, 1),
+    opacity 0.9s ease;
 }
-.idle-bot-2 {
-  animation:
-    crew-hop 3.5s ease-in-out 0.2s infinite,
-    crew-seat 12s linear infinite;
-}
-@keyframes crew-hop {
-  0%,
-  16%,
-  100% {
-    transform: none;
-  }
-  5% {
-    transform: translateY(-4px) scale(1.05, 0.95);
-  }
-  11% {
-    transform: translateY(0) scale(1.08, 0.9);
-  }
-}
-@keyframes crew-seat {
-  0%,
-  69.9%,
-  95%,
-  100% {
-    opacity: 1;
-  }
-  70%,
-  94.9% {
-    opacity: 0;
-  }
-}
-.idle-runner {
-  /* Positioned against the right wing (its transform makes it the
-     containing block). The wing is 42px with 11px padding, so the notch's
-     left edge sits notch + 31px from the wing's right edge; stop 5px
-     short of it for a peek. */
-  --peek: calc(var(--notch-width, 196px) + 26px);
-  position: absolute;
-  z-index: 1;
-  top: calc(50% - 8px);
-  right: 0;
+/* The left one sneaks behind the hardware notch, just to the left. */
+.idle-bot.hide-notch-hidden {
+  transform: translateX(-16px);
   opacity: 0;
-  animation: crew-run 12s linear infinite;
 }
-@keyframes crew-run {
-  0%,
-  69.9% {
-    right: 0;
-    opacity: 0;
-  }
-  70% {
-    right: 0;
-    opacity: 1;
-    animation-timing-function: cubic-bezier(0.5, 0, 0.75, 0.3);
-  }
-  78% {
-    right: var(--peek);
-    transform: none;
-  }
-  80% {
-    transform: translateY(-3px) rotate(-8deg);
-  }
-  82% {
-    transform: translateY(0) rotate(6deg);
-  }
-  84% {
-    transform: none;
-    right: var(--peek);
-    animation-timing-function: cubic-bezier(0.25, 0.7, 0.5, 1);
-  }
-  94.9% {
-    right: 0;
-    opacity: 1;
-  }
-  95%,
-  100% {
-    right: 0;
-    opacity: 0;
-  }
+.idle-bot.hide-notch-peek {
+  transform: translateX(-7px);
 }
-/* The hello wakes the crew: they bounce with it and nobody wanders off. */
+/* The middle one ducks below the band, where the island clips it. */
+.idle-bot.hide-duck-hidden {
+  transform: translateY(18px);
+  opacity: 0;
+}
+.idle-bot.hide-duck-peek {
+  transform: translateY(7px);
+}
+/* "It" leans into its count, eyes shut. */
+.idle-bot.counting {
+  transform: rotate(-8deg);
+  opacity: 0.75;
+}
+/* The hello: a little dance on the spot, a sway with no hop. */
 .idle-crew.awake .idle-bot {
-  animation: crew-hop 1s ease-in-out infinite;
+  transition: none;
+  animation: crew-sway 1.2s ease-in-out infinite alternate;
+}
+.idle-crew.awake .idle-bot-1 {
+  animation-delay: -0.6s;
+}
+@keyframes crew-sway {
+  from {
+    transform: rotate(-9deg);
+  }
+  to {
+    transform: rotate(9deg);
+  }
+}
+
+/* ---- Working crew: one bot per working session in the right wing ---- */
+.work-crew {
+  display: inline-flex;
+  align-items: center;
+  margin: -2px 0 -1px;
+}
+.work-bot {
+  display: block;
+  animation: work-bot-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.work-bot + .work-bot {
+  margin-left: -3px;
+}
+.work-bot canvas {
+  display: block;
+}
+@keyframes work-bot-in {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+.work-more {
+  margin-left: 2px;
+  font-size: var(--fs-micro);
+  font-weight: 700;
+  color: var(--text-dim);
+}
+/* Bots, not a number: no count pulse, no roll-in. */
+.notch-spacer.state-working .spacer-info:has(.work-crew) {
+  animation: none;
+}
+.spacer-info > .work-crew {
+  display: inline-flex;
+  animation: none;
+}
+.island:has(.work-crew.more):not(.expanded):not(.bare) {
+  width: calc(var(--notch-width, 196px) + 100px);
 }
 
 /* ---- Usage rings ---- */
@@ -2310,7 +2235,6 @@ body {
 .app.paused .battery,
 .app.paused .battery *,
 .app.paused .idle-bot,
-.app.paused .idle-runner,
 .app.paused .quota-ring,
 .app.paused .quota-arc {
   animation-play-state: paused;
@@ -2324,48 +2248,25 @@ body {
     animation: none !important;
     transition: none !important;
   }
-  .idle-runner {
-    display: none;
-  }
 }
 /* The crew is not a count: no roll-in, and it lays out in a row. */
 .spacer-info > .idle-crew {
   display: inline-flex;
   animation: none;
 }
-.spacer-info > .idle-runner {
-  display: block;
-  animation: crew-run 12s linear infinite;
-}
-.spacer-info:has(.idle-runner) {
-  position: relative;
-}
 
-/* The percentage lives inside the cell: bold, outlined so it reads on any
-   liquid colour. On a charger it trades places with the bolt every 2s. */
+/* The percentage sits inside the ring: as big and bold as the ring allows,
+   bright on the black band, with a hairline shadow to lift it off the arc. */
 .bat-label {
-  font: 800 8.4px/1 -apple-system, "SF Pro Rounded", system-ui, sans-serif;
+  font: 800 7.4px/1 "SF Pro Rounded", -apple-system, system-ui, sans-serif;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.3px;
+  letter-spacing: -0.35px;
   fill: #fff;
-  stroke: rgba(0, 0, 0, 0.72);
-  stroke-width: 1.8px;
   paint-order: stroke;
+  stroke: rgba(0, 0, 0, 0.6);
+  stroke-width: 0.6px;
 }
-.battery.labelled.charging .bat-label {
-  animation: bat-swap 4s ease-in-out infinite;
-}
-/* The swap fades the wrapper; the bolt inside keeps its own flicker. */
-.battery.labelled.charging .bat-bolt-wrap {
-  animation: bat-swap 4s ease-in-out -2s infinite;
-}
-@keyframes bat-swap {
-  0%,
-  42% {
-    opacity: 1;
-  }
-  50%,
-  92% {
-    opacity: 0;
-  }
+.bat-label.wide {
+  font-size: 6.1px;
+  letter-spacing: -0.45px;
 }

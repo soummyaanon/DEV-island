@@ -9,6 +9,7 @@ import { AssistantBar } from "./AssistantBar";
 import { BotCrew } from "./BotCrew";
 import { GreetingCard, greetingDuration } from "./GreetingCard";
 import { IdleCrew } from "./IdleCrew";
+import { WorkCrew } from "./WorkCrew";
 import { IslandGlow } from "./IslandGlow";
 import { FieldBeam } from "./FieldBeam";
 import { assistantUnavailableReason } from "./assistant-context";
@@ -917,7 +918,7 @@ export function App() {
                 power ? (
                   <span className="sprite-slot wing-idle-battery" key="idle-batt">
                     <Battery
-                      size={13}
+                      size={16}
                       percent={power.percent}
                       charging={power.state !== "discharging"}
                       low={power.low}
@@ -948,6 +949,8 @@ export function App() {
             <span className={`spacer-info${lowBattery ? " wing-low" : ""}`} aria-label={countLabel}>
               {sleeping || idleBot ? (
                 <IdleCrew key="crew" paused={!animated} awake={greeting !== null} />
+              ) : needsYou.length === 0 && !wingMoment && active.length > 0 ? (
+                <WorkCrew key="work" active={active} paused={!animated} />
               ) : (
                 <span key={countText}>{countText}</span>
               )}

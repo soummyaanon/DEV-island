@@ -3,7 +3,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { AgentKind } from "@agent-island/shared";
 
-export const SOUND_THEMES = ["8bit", "arcade", "soft", "anime"] as const;
+export const SOUND_THEMES = ["8bit", "arcade", "soft", "glass", "marimba", "zen", "anime"] as const;
 export type SoundTheme = (typeof SOUND_THEMES)[number];
 
 export const SOUND_EVENTS = ["success", "attention", "question", "approve"] as const;

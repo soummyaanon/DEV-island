@@ -1,5 +1,6 @@
-import { StrictMode, useEffect, useState } from "react";
+import { StrictMode, useEffect, useState, type CSSProperties } from "react";
 import { createRoot } from "react-dom/client";
+import { BotAvatar } from "bot-avatars";
 import { ClaudeSprite } from "./ClaudeSprite";
 import { OpenAiSprite } from "./OpenAiSprite";
 import { CursorSprite } from "./CursorSprite";
@@ -9,6 +10,7 @@ import {
   EVENT_LABELS,
   SOUND_EVENTS,
   SOUND_THEMES,
+  THEME_BLURBS,
   THEME_LABELS,
   resolveTheme,
   type SoundEvent,
@@ -100,15 +102,15 @@ const DEFAULTS: SettingsState = {
 };
 
 const NAV = [
-  { id: "integrations", label: "Integrations", icon: "integrations" },
-  { id: "intelligence", label: "Intelligence", icon: "sparkles" },
-  { id: "appearance", label: "Appearance", icon: "appearance" },
-  { id: "sounds", label: "Sounds", icon: "sounds" },
-  { id: "weather", label: "Weather", icon: "weather" },
-  { id: "live", label: "Live activities", icon: "live" },
-  { id: "accessibility", label: "Accessibility", icon: "accessibility" },
-  { id: "general", label: "General", icon: "general" },
-  { id: "updates", label: "Updates", icon: "updates" },
+  { id: "integrations", label: "Integrations", icon: "integrations", tile: "#ff8c42" },
+  { id: "intelligence", label: "Intelligence", icon: "sparkles", tile: "#a77bff" },
+  { id: "appearance", label: "Appearance", icon: "appearance", tile: "#3d8bff" },
+  { id: "sounds", label: "Sounds", icon: "sounds", tile: "#ff5a7a" },
+  { id: "weather", label: "Weather", icon: "weather", tile: "#35b8ff" },
+  { id: "live", label: "Live activities", icon: "live", tile: "#2fcb7a" },
+  { id: "accessibility", label: "Accessibility", icon: "accessibility", tile: "#3d6bff" },
+  { id: "general", label: "General", icon: "general", tile: "#8e8e93" },
+  { id: "updates", label: "Updates", icon: "updates", tile: "#ffb020" },
 ] as const;
 type SectionId = (typeof NAV)[number]["id"];
 
@@ -285,7 +287,11 @@ function Settings() {
   const [state, setState] = useState<SettingsState>(DEFAULTS);
   const [checking, setChecking] = useState(false);
   const [installing, setInstalling] = useState(false);
-  const [section, setSection] = useState<SectionId>("integrations");
+  // `settings.html#sounds` opens straight on a section.
+  const [section, setSection] = useState<SectionId>(() => {
+    const hash = window.location.hash.slice(1);
+    return NAV.some((n) => n.id === hash) ? (hash as SectionId) : "integrations";
+  });
   // Which location layer actually answered, so the panel can say so rather than
   // implying a precision it doesn't have.
   const [locationSource, setLocationSource] = useState<string | null>(null);
@@ -333,7 +339,7 @@ function Settings() {
     custom: state.customSounds as SoundPrefs["custom"],
   };
 
-  const activeLabel = NAV.find((n) => n.id === section)?.label ?? "";
+  const active = NAV.find((n) => n.id === section) ?? NAV[0];
 
   return (
     <div className="settings">
@@ -343,7 +349,13 @@ function Settings() {
       <div className="title-drag" aria-hidden />
       <aside className="s-sidebar">
         <div className="drag-strip" aria-hidden />
-        <div className="s-brand">Agent Island</div>
+        <div className="s-brand">
+          {/* A tiny island: the black pill with one of the crew in its wing. */}
+          <span className="s-brand-pill" aria-hidden>
+            <BotAvatar type="clover" size={12} seed={0.12} theme="dark" interactive={false} jumpEvery={0} />
+          </span>
+          <span className="s-brand-name">Agent Island</span>
+        </div>
         <nav className="s-nav">
           {NAV.map((n) => (
             <button
@@ -352,8 +364,8 @@ function Settings() {
               className={`s-nav-item${section === n.id ? " active" : ""}`}
               onClick={() => setSection(n.id)}
             >
-              <span className="s-nav-ic" aria-hidden>
-                <Icon name={n.icon} size={14} />
+              <span className="s-tile" style={{ "--tile": n.tile } as CSSProperties} aria-hidden>
+                <Icon name={n.icon} size={12} />
               </span>
               {n.label}
               {n.id === "updates" && state.update && <span className="s-nav-dot" aria-hidden />}
@@ -367,9 +379,16 @@ function Settings() {
       </aside>
 
       <main className="s-detail">
+        {/* Keyed on the section so each switch plays the short fade-in. */}
+        <div className="s-page" key={section}>
         <header className="s-head">
-          <h1>{activeLabel}</h1>
-          <p>{SECTION_BLURB[section]}</p>
+          <span className="s-tile s-tile-lg" style={{ "--tile": active.tile } as CSSProperties} aria-hidden>
+            <Icon name={active.icon} size={20} />
+          </span>
+          <div>
+            <h1>{active.label}</h1>
+            <p>{SECTION_BLURB[section]}</p>
+          </div>
         </header>
 
         {section === "intelligence" && (() => {
@@ -501,6 +520,7 @@ function Settings() {
         )}
 
         {section === "sounds" && (
+          <>
           <div className="s-group">
             <Row
               title="Sound effects"
@@ -508,23 +528,46 @@ function Settings() {
               on={state.sounds}
               onChange={(v) => set("sounds", v)}
             />
-            <div className="s-row">
-              <div className="s-text">
-                <b>Theme</b>
-                <span>The sound set for all events.</span>
-              </div>
-              <select
-                className="s-select"
-                value={state.soundTheme}
-                onChange={(e) => set("soundTheme", e.target.value)}
+          </div>
+          <h2 className="s-sub-h">Theme</h2>
+          <div className="s-themes" role="radiogroup" aria-label="Sound theme">
+            {SOUND_THEMES.map((t) => (
+              <div
+                key={t}
+                role="radio"
+                aria-checked={state.soundTheme === t}
+                tabIndex={0}
+                className={`s-theme${state.soundTheme === t ? " on" : ""}`}
+                onClick={() => {
+                  set("soundTheme", t);
+                  previewSound("success", t);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter" && e.key !== " ") return;
+                  e.preventDefault();
+                  set("soundTheme", t);
+                  previewSound("success", t);
+                }}
               >
-                {SOUND_THEMES.map((t) => (
-                  <option key={t} value={t}>
-                    {THEME_LABELS[t]}
-                  </option>
-                ))}
-              </select>
-            </div>
+                <b>{THEME_LABELS[t]}</b>
+                <span>{THEME_BLURBS[t]}</span>
+                <button
+                  type="button"
+                  className="s-play"
+                  title={`Preview ${THEME_LABELS[t]}`}
+                  aria-label={`Preview ${THEME_LABELS[t]}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    previewSound("success", t);
+                  }}
+                >
+                  <Icon name="play" size={11} />
+                </button>
+              </div>
+            ))}
+          </div>
+          <h2 className="s-sub-h">Per event</h2>
+          <div className="s-group">
             {SOUND_EVENTS.map((event: SoundEvent) => {
               const custom = state.customSounds[event];
               const customName = state.customSoundNames[event] || "Custom";
@@ -583,6 +626,7 @@ function Settings() {
               );
             })}
           </div>
+          </>
         )}
 
         {section === "weather" && (
@@ -842,6 +886,7 @@ function Settings() {
             )}
           </div>
         )}
+        </div>
       </main>
     </div>
   );

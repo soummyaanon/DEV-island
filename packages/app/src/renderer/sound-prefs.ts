@@ -1,6 +1,6 @@
 /** Sound preference model + pure resolution logic (kept import-light for tests). */
 
-export const SOUND_THEMES = ["8bit", "arcade", "soft", "anime"] as const;
+export const SOUND_THEMES = ["8bit", "arcade", "soft", "glass", "marimba", "zen", "anime"] as const;
 export type SoundTheme = (typeof SOUND_THEMES)[number];
 
 export const SOUND_EVENTS = ["success", "attention", "question", "approve"] as const;
@@ -21,7 +21,21 @@ export const THEME_LABELS: Record<SoundTheme, string> = {
   "8bit": "8-bit",
   arcade: "Arcade",
   soft: "Soft",
+  glass: "Glass",
+  marimba: "Marimba",
+  zen: "Zen",
   anime: "Anime",
+};
+
+/** One line per theme, for the Settings picker. */
+export const THEME_BLURBS: Record<SoundTheme, string> = {
+  "8bit": "Chiptune blips and arpeggios.",
+  arcade: "Coins, klaxons and power-ups.",
+  soft: "Gentle sine chimes.",
+  glass: "Bright crystal pings with a shimmer.",
+  marimba: "Warm wooden taps.",
+  zen: "Low singing bowls that ring out.",
+  anime: "The bundled voice pack.",
 };
 
 export const EVENT_LABELS: Record<SoundEvent, string> = {

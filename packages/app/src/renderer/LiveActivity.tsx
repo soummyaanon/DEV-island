@@ -34,7 +34,7 @@ export function LiveActivity({ kind, percent = 0 }: LiveActivityProps) {
   return (
     <span className={`la la-battery ${kind}`} aria-hidden>
       <Battery
-        size={13}
+        size={16}
         percent={percent}
         charging={kind === "battery-plugged"}
         low={kind === "battery-low"}

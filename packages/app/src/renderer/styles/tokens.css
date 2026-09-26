@@ -35,6 +35,8 @@
   --spring-settle: cubic-bezier(0.22, 1, 0.36, 1);
   --dur-settle: 300ms;
   --dur-close: 180ms;
+  /* Leaving: starts moving at once and speeds away (plain ease-in hesitates). */
+  --ease-close: cubic-bezier(0.3, 0, 0.8, 0.15);
 }
 
 :root[data-text-size="large"] {
