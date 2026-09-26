@@ -484,7 +484,8 @@ final class IslandController {
   }
 }
 
-/// Takes the first click even though the panel never becomes key.
-final class IslandHostingView<Content: View>: NSHostingView<Content> {
+/// Takes the first click even though the panel never becomes key. Not
+/// generic: Swift 6.3's optimiser crashes inlining a generic one's deinit.
+final class IslandHostingView: NSHostingView<IslandView> {
   override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }
