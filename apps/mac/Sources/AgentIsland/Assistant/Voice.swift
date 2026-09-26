@@ -199,13 +199,14 @@ final class Listener {
         for try await result in transcriber.results {
           guard let self else { return }
           let text = String(result.text.characters)
+          // Spelled out: Swift 6.3 misreads the implicit self after `guard let self`.
           if result.isFinal {
-            finalText += text
-            volatileText = ""
+            self.finalText += text
+            self.volatileText = ""
           } else {
-            volatileText = text
+            self.volatileText = text
           }
-          send(.partial(id: id, text: finalText + volatileText))
+          self.send(.partial(id: self.id, text: self.finalText + self.volatileText))
         }
       } catch {}
     }
