@@ -34,9 +34,14 @@ final class Voice {
   func start(id: String) {
     speaker.stop()
     stopListening(superseded: true)
+    // A turn that ends late (a superseded one finalising) mustn't drop the
+    // listener that replaced it: that would free a running audio engine.
     let send: @MainActor @Sendable (VoiceEvent) -> Void = { [weak self] event in
-      if case .final = event { self?.listener = nil }
-      if case .error = event { self?.listener = nil }
+      switch event {
+      case let .final(ended, _), let .error(ended, _):
+        if self?.listenerID == ended { self?.listener = nil }
+      default: break
+      }
       self?.onEvent(event)
     }
     if #available(macOS 26.0, *) {
@@ -53,6 +58,11 @@ final class Voice {
   func stop(id: String) {
     if #available(macOS 26.0, *), let listener = listener as? Listener, listener.id == id { listener.stop() }
     if let listener = listener as? LegacyListener, listener.id == id { listener.stop() }
+  }
+
+  private var listenerID: String? {
+    if #available(macOS 26.0, *), let listener = listener as? Listener { return listener.id }
+    return (listener as? LegacyListener)?.id
   }
 
   private func stopListening(superseded: Bool) {
@@ -155,6 +165,65 @@ private struct TurnClock {
   }
 }
 
+/// The app target is main-actor by default, so a closure written inside a
+/// listener is main-actor isolated, and Swift traps the moment AVFAudio or
+/// Speech call it on their own threads. Every callback that runs off the main
+/// thread is built here, in a nonisolated context, instead.
+private enum AudioCallbacks {
+  /// Hands each buffer's loudness to `level`, then `feed`s the buffer on.
+  nonisolated static func tap(level: @escaping @Sendable (Float) -> Void, feed: @escaping (AVAudioPCMBuffer) -> Void) -> AVAudioNodeTapBlock {
+    { buffer, _ in
+      level(loudness(buffer))
+      feed(buffer)
+    }
+  }
+
+  /// Converts to the analyzer's format and yields into its input stream.
+  /// The converter is only ever touched here, on the audio thread.
+  @available(macOS 26.0, *)
+  nonisolated static func analyzerFeed(converter: AVAudioConverter, to format: AVAudioFormat, from inputFormat: AVAudioFormat, into continuation: AsyncStream<AnalyzerInput>.Continuation) -> (AVAudioPCMBuffer) -> Void {
+    { buffer in
+      let capacity = AVAudioFrameCount(Double(buffer.frameLength) * format.sampleRate / inputFormat.sampleRate + 32)
+      guard let out = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: capacity) else { return }
+      nonisolated(unsafe) var fed = false
+      var error: NSError?
+      converter.convert(to: out, error: &error) { _, status in
+        if fed {
+          status.pointee = .noDataNow
+          return nil
+        }
+        fed = true
+        status.pointee = .haveData
+        return buffer
+      }
+      if error == nil, out.frameLength > 0 { continuation.yield(AnalyzerInput(buffer: out)) }
+    }
+  }
+
+  /// Speech calls this on its own queue.
+  nonisolated static func recognitionHandler(_ deliver: @escaping @Sendable (_ text: String?, _ isFinal: Bool, _ failed: Bool) -> Void) -> (SFSpeechRecognitionResult?, (any Error)?) -> Void {
+    { result, error in deliver(result?.bestTranscription.formattedString, result?.isFinal ?? false, error != nil) }
+  }
+
+  /// Speech answers the grant on its own queue too.
+  @concurrent
+  nonisolated static func speechAuthorized() async -> Bool {
+    await withCheckedContinuation { done in
+      SFSpeechRecognizer.requestAuthorization { done.resume(returning: $0 == .authorized) }
+    }
+  }
+
+  /// Loudness goes to the turn clock and the orb, on the main actor.
+  nonisolated static func level(id: String, heard: @escaping @MainActor @Sendable (Float) -> Void, send: @escaping @MainActor @Sendable (VoiceEvent) -> Void) -> @Sendable (Float) -> Void {
+    { rms in
+      Task { @MainActor in
+        heard(rms)
+        send(.level(id: id, value: Double(min(1, rms * 6))))
+      }
+    }
+  }
+}
+
 /// macOS 26: SpeechAnalyzer's on-device transcriber, which needs only the
 /// microphone (no speech-recognition grant, so no second prompt).
 @available(macOS 26.0, *)
@@ -165,8 +234,10 @@ final class Listener {
   private var analyzer: SpeechAnalyzer?
   private var input: AsyncStream<AnalyzerInput>.Continuation?
   private var finished = false
+  private var tapped = false
   private var clock = TurnClock()
   private var watchdog: Task<Void, Never>?
+  private var deviceChange: NSObjectProtocol?
   private var finalText = ""
   private var volatileText = ""
 
@@ -177,7 +248,10 @@ final class Listener {
 
   func start() async {
     guard await AVCaptureDevice.requestAccess(for: .audio) else { return fail("mic-denied") }
+    // Each await is a chance for the user to have stopped already.
+    guard !finished else { return }
     let locale = await SpeechTranscriber.supportedLocale(equivalentTo: Locale.current) ?? Locale(identifier: "en-US")
+    guard !finished else { return }
     let transcriber = SpeechTranscriber(locale: locale, transcriptionOptions: [], reportingOptions: [.volatileResults], attributeOptions: [])
     do {
       if let install = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) {
@@ -187,9 +261,10 @@ final class Listener {
     } catch { return fail("model-unavailable") }
     guard !finished else { return }
 
+    guard let format = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [transcriber]) else { return fail("no-format") }
+    guard !finished else { return }
     let analyzer = SpeechAnalyzer(modules: [transcriber])
     self.analyzer = analyzer
-    guard let format = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [transcriber]) else { return fail("no-format") }
     let (stream, continuation) = AsyncStream<AnalyzerInput>.makeStream()
     input = continuation
 
@@ -211,36 +286,22 @@ final class Listener {
       } catch {}
     }
     do { try await analyzer.start(inputSequence: stream) } catch { return fail("analyzer") }
+    guard !finished else {
+      await analyzer.cancelAndFinishNow()
+      return
+    }
 
     let node = engine.inputNode
     let inputFormat = node.outputFormat(forBus: 0)
-    guard inputFormat.channelCount > 0, let converter = AVAudioConverter(from: inputFormat, to: format) else { return fail("no-microphone") }
-    // The tap runs on the audio thread; the converter is used only there.
-    let audioConverter = converter
-    let id = id
-    let send = send
-    let level: @Sendable (Float) -> Void = { [weak self] rms in
-      Task { @MainActor in
-        self?.clock.heard(rms)
-        send(.level(id: id, value: Double(min(1, rms * 6))))
-      }
-    }
-    node.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { buffer, _ in
-      level(loudness(buffer))
-      let capacity = AVAudioFrameCount(Double(buffer.frameLength) * format.sampleRate / inputFormat.sampleRate + 32)
-      guard let out = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: capacity) else { return }
-      nonisolated(unsafe) var fed = false
-      var error: NSError?
-      audioConverter.convert(to: out, error: &error) { _, status in
-        if fed {
-          status.pointee = .noDataNow
-          return nil
-        }
-        fed = true
-        status.pointee = .haveData
-        return buffer
-      }
-      if error == nil, out.frameLength > 0 { continuation.yield(AnalyzerInput(buffer: out)) }
+    guard inputFormat.channelCount > 0, inputFormat.sampleRate > 0, let converter = AVAudioConverter(from: inputFormat, to: format) else { return fail("no-microphone") }
+    let level = AudioCallbacks.level(id: id, heard: { [weak self] in self?.clock.heard($0) }, send: send)
+    let feed = AudioCallbacks.analyzerFeed(converter: converter, to: format, from: inputFormat, into: continuation)
+    node.installTap(onBus: 0, bufferSize: 4096, format: inputFormat, block: AudioCallbacks.tap(level: level, feed: feed))
+    tapped = true
+    // A mic plugged in or unplugged mid-turn stops the engine; end the turn
+    // with what was heard rather than feed a dead tap.
+    deviceChange = NotificationCenter.default.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main) { [weak self] _ in
+      MainActor.assumeIsolated { self?.stop() }
     }
     do { try engine.start() } catch { return fail("mic-start") }
     send(.listening(id: id))
@@ -248,7 +309,7 @@ final class Listener {
       while !Task.isCancelled {
         try? await Task.sleep(for: .milliseconds(100))
         guard let self else { return }
-        if clock.isOver { stop() }
+        if self.clock.isOver { self.stop() }
       }
     }
   }
@@ -256,27 +317,34 @@ final class Listener {
   func stop() {
     guard !finished else { return }
     finished = true
-    watchdog?.cancel()
-    engine.inputNode.removeTap(onBus: 0)
-    engine.stop()
-    input?.finish()
+    release()
     Task { [weak self] in
       guard let self else { return }
-      try? await analyzer?.finalizeAndFinishThroughEndOfInput()
-      send(.final(id: id, text: (finalText + volatileText).trimmingCharacters(in: .whitespacesAndNewlines)))
+      try? await self.analyzer?.finalizeAndFinishThroughEndOfInput()
+      self.send(.final(id: self.id, text: (self.finalText + self.volatileText).trimmingCharacters(in: .whitespacesAndNewlines)))
     }
   }
 
   func fail(_ reason: String) {
     guard !finished else { return }
     finished = true
-    watchdog?.cancel()
-    if engine.isRunning {
-      engine.inputNode.removeTap(onBus: 0)
-      engine.stop()
-    }
-    input?.finish()
+    release()
+    if let analyzer { Task { await analyzer.cancelAndFinishNow() } }
     send(.error(id: id, reason: reason))
+  }
+
+  /// Gives the mic back: tap, engine, stream, clock, device watch.
+  private func release() {
+    watchdog?.cancel()
+    watchdog = nil
+    if let deviceChange { NotificationCenter.default.removeObserver(deviceChange) }
+    deviceChange = nil
+    if tapped {
+      engine.inputNode.removeTap(onBus: 0)
+      tapped = false
+    }
+    if engine.isRunning { engine.stop() }
+    input?.finish()
   }
 }
 
@@ -290,8 +358,11 @@ final class LegacyListener {
   private var request: SFSpeechAudioBufferRecognitionRequest?
   private var task: SFSpeechRecognitionTask?
   private var finished = false
+  private var stopping = false
+  private var tapped = false
   private var clock = TurnClock()
   private var watchdog: Task<Void, Never>?
+  private var deviceChange: NSObjectProtocol?
   private var text = ""
 
   init(id: String, send: @escaping @MainActor @Sendable (VoiceEvent) -> Void) {
@@ -300,26 +371,25 @@ final class LegacyListener {
   }
 
   func start() {
-    SFSpeechRecognizer.requestAuthorization { [weak self] status in
-      Task { @MainActor in
-        guard let self else { return }
-        guard status == .authorized else { return self.fail("speech-denied") }
-        guard await AVCaptureDevice.requestAccess(for: .audio) else { return self.fail("mic-denied") }
-        self.begin()
-      }
+    Task { [weak self] in
+      guard await AudioCallbacks.speechAuthorized() else { self?.fail("speech-denied"); return }
+      guard await AVCaptureDevice.requestAccess(for: .audio) else { self?.fail("mic-denied"); return }
+      self?.begin()
     }
   }
 
   private func begin() {
-    guard !finished, let recognizer, recognizer.isAvailable else { return fail("model-unavailable") }
+    guard !finished else { return }
+    guard let recognizer, recognizer.isAvailable else { return fail("model-unavailable") }
+    let node = engine.inputNode
+    let format = node.outputFormat(forBus: 0)
+    guard format.channelCount > 0, format.sampleRate > 0 else { return fail("no-microphone") }
+
     let request = SFSpeechAudioBufferRecognitionRequest()
     request.shouldReportPartialResults = true
     if recognizer.supportsOnDeviceRecognition { request.requiresOnDeviceRecognition = true }
     self.request = request
-    task = recognizer.recognitionTask(with: request) { [weak self] result, error in
-      let text = result?.bestTranscription.formattedString
-      let isFinal = result?.isFinal ?? false
-      let failed = error != nil
+    task = recognizer.recognitionTask(with: request, resultHandler: AudioCallbacks.recognitionHandler { [weak self] text, isFinal, failed in
       Task { @MainActor in
         guard let self else { return }
         if let text {
@@ -330,22 +400,13 @@ final class LegacyListener {
           self.finish()
         }
       }
-    }
-    let node = engine.inputNode
-    let format = node.outputFormat(forBus: 0)
-    guard format.channelCount > 0 else { return fail("no-microphone") }
+    })
     nonisolated(unsafe) let audioRequest = request
-    let id = id
-    let send = send
-    let level: @Sendable (Float) -> Void = { [weak self] rms in
-      Task { @MainActor in
-        self?.clock.heard(rms)
-        send(.level(id: id, value: Double(min(1, rms * 6))))
-      }
-    }
-    node.installTap(onBus: 0, bufferSize: 2048, format: format) { buffer, _ in
-      audioRequest.append(buffer)
-      level(loudness(buffer))
+    let level = AudioCallbacks.level(id: id, heard: { [weak self] in self?.clock.heard($0) }, send: send)
+    node.installTap(onBus: 0, bufferSize: 2048, format: format, block: AudioCallbacks.tap(level: level) { audioRequest.append($0) })
+    tapped = true
+    deviceChange = NotificationCenter.default.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main) { [weak self] _ in
+      MainActor.assumeIsolated { self?.stop() }
     }
     do { try engine.start() } catch { return fail("mic-start") }
     send(.listening(id: id))
@@ -353,15 +414,15 @@ final class LegacyListener {
       while !Task.isCancelled {
         try? await Task.sleep(for: .milliseconds(100))
         guard let self else { return }
-        if clock.isOver { stop() }
+        if self.clock.isOver { self.stop() }
       }
     }
   }
 
   func stop() {
-    guard !finished else { return }
-    engine.inputNode.removeTap(onBus: 0)
-    engine.stop()
+    guard !finished, !stopping else { return }
+    stopping = true
+    releaseMic()
     request?.endAudio()
     // The final result usually follows endAudio; if not, finish with what we have.
     Task { [weak self] in
@@ -373,11 +434,7 @@ final class LegacyListener {
   private func finish() {
     guard !finished else { return }
     finished = true
-    watchdog?.cancel()
-    if engine.isRunning {
-      engine.inputNode.removeTap(onBus: 0)
-      engine.stop()
-    }
+    releaseMic()
     task?.cancel()
     send(.final(id: id, text: text.trimmingCharacters(in: .whitespacesAndNewlines)))
   }
@@ -385,12 +442,20 @@ final class LegacyListener {
   func fail(_ reason: String) {
     guard !finished else { return }
     finished = true
-    watchdog?.cancel()
-    if engine.isRunning {
-      engine.inputNode.removeTap(onBus: 0)
-      engine.stop()
-    }
+    releaseMic()
     task?.cancel()
     send(.error(id: id, reason: reason))
+  }
+
+  private func releaseMic() {
+    watchdog?.cancel()
+    watchdog = nil
+    if let deviceChange { NotificationCenter.default.removeObserver(deviceChange) }
+    deviceChange = nil
+    if tapped {
+      engine.inputNode.removeTap(onBus: 0)
+      tapped = false
+    }
+    if engine.isRunning { engine.stop() }
   }
 }
