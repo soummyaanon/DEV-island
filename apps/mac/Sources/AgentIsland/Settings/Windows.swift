@@ -84,9 +84,13 @@ final class WindowsController: NSObject, NSWindowDelegate {
 
   /// Closing the intro still counts as onboarded: never trap anyone.
   func finishOnboarding() {
+    markOnboarded()
+    onboarding?.close()
+  }
+
+  private func markOnboarded() {
     try? FileManager.default.createDirectory(at: OnboardingState.flag.deletingLastPathComponent(), withIntermediateDirectories: true)
     try? Date.now.ISO8601Format().write(to: OnboardingState.flag, atomically: true, encoding: .utf8)
-    onboarding?.close()
   }
 
   // MARK: Windows
@@ -101,8 +105,9 @@ final class WindowsController: NSObject, NSWindowDelegate {
     let closing = notification.object as? NSWindow
     if closing === onboarding {
       trustPoll?.cancel()
-      finishOnboarding()
+      // Already closing: calling close() again from here recursed until the stack ran out.
       onboarding = nil
+      markOnboarded()
     }
     let othersOpen = [settings, onboarding].contains { $0 != nil && $0 !== closing && $0!.isVisible }
     if !othersOpen { NSApp.setActivationPolicy(.accessory) }
