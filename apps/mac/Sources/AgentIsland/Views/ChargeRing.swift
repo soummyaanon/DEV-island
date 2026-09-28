@@ -74,11 +74,10 @@ private struct ChargeFill: View {
     if still {
       RingArc(fill: to, lineWidth: lineWidth, color: color, track: AnyShapeStyle(.foreground.opacity(0.18)))
     } else {
-      Color.clear.keyframeAnimator(initialValue: from, repeating: false) { _, fill in
+      // Holds for 0.2s, then 1.3s to the real level.
+      PlayOnce(duration: 1.5) { time in
+        let fill = time < 0.2 ? from : from + (to - from) * curve.value(at: min(1, (time - 0.2) / 1.3))
         RingArc(fill: fill, lineWidth: lineWidth, color: color, track: AnyShapeStyle(.foreground.opacity(0.18)))
-      } keyframes: { _ in
-        LinearKeyframe(from, duration: 0.2)
-        LinearKeyframe(to, duration: 1.3, timingCurve: curve)
       }
     }
   }
@@ -169,10 +168,10 @@ private struct BoltMotion: ViewModifier {
       let curve = plugged
         ? (calm ? CubicBezier(0, 0, 0.58, 1) : CubicBezier(0.2, 0.9, 0.3, 1.2))
         : CubicBezier(0.42, 0, 1, 1)
-      content.keyframeAnimator(initialValue: 0.0, repeating: false) { view, time in
+      PlayOnce(duration: delay + duration) { time in
         let t = min(1, max(0, (time - delay) / duration))
         let pose = plugged ? BoltPose.strike(t, curve: curve) : BoltPose.release(t, curve: curve)
-        view
+        content
           .shadow(color: .white.opacity(pose.white), radius: pose.blur)
           .shadow(color: color.opacity(1 - pose.white), radius: pose.blur)
           .shadow(color: color.opacity(pose.halo), radius: 6 * pose.halo)
@@ -180,9 +179,32 @@ private struct BoltMotion: ViewModifier {
           // The lift sits inside the scale, as in the CSS transform list.
           .offset(y: pose.lift * pose.scale * unit)
           .opacity(pose.opacity)
-      } keyframes: { _ in
-        LinearKeyframe(delay + duration, duration: delay + duration)
       }
+    }
+  }
+}
+
+/// Plays `content` once, from appearing, over `duration` seconds, then holds
+/// the last frame. `keyframeAnimator(repeating: false)` doesn't do this: it
+/// never plays and shows the first frame forever, which on the charger was an
+/// empty ring with the bolt at zero opacity.
+private struct PlayOnce<Content: View>: View {
+  let duration: Double
+  @ViewBuilder let content: (Double) -> Content
+
+  private let start = State<Date?>(initialValue: nil)
+  private let done = State(initialValue: false)
+
+  var body: some View {
+    let (duration, start, done) = (duration, start.wrappedValue, done.wrappedValue)
+    TimelineView(.animation(minimumInterval: nil, paused: done)) { timeline in
+      let elapsed = done ? duration : start.map { min(duration, max(0, timeline.date.timeIntervalSince($0))) } ?? 0
+      content(elapsed)
+    }
+    .onAppear { self.start.wrappedValue = .now }
+    .task {
+      try? await Task.sleep(for: .seconds(duration))
+      self.done.wrappedValue = true
     }
   }
 }
@@ -200,7 +222,7 @@ private struct Sparks: View {
     let delays = (0..<count).map { 0.12 + Double($0 % 3) * 0.04 }
     let total = (delays.max() ?? 0) + duration
     // One clock for every ray; each reads its own eased progress off it.
-    Color.clear.keyframeAnimator(initialValue: 0.0, repeating: false) { _, time in
+    PlayOnce(duration: total) { time in
       ZStack {
         ForEach(0..<count, id: \.self) { i in
           let p = easeOut.y(at: (time - delays[i]) / duration)
@@ -214,8 +236,6 @@ private struct Sparks: View {
             .rotationEffect(.degrees(360 / Double(count) * Double(i) + Double(i % 2) * 14))
         }
       }
-    } keyframes: { _ in
-      LinearKeyframe(total, duration: total)
     }
   }
 }
