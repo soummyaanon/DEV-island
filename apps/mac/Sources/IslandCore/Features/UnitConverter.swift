@@ -16,8 +16,7 @@ public enum UnitConverter {
   }
 
   /// One alias table: what you type → the unit and how it's shown.
-  // Foundation's units are immutable singletons, safe to share.
-  nonisolated(unsafe) private static let units: [(names: [String], unit: Dimension, symbol: String)] = [
+  private static let units: [(names: [String], unit: Dimension, symbol: String)] = [
     // Length
     (["mm", "millimeter", "millimeters", "millimetre", "millimetres"], UnitLength.millimeters, "mm"),
     (["cm", "centimeter", "centimeters", "centimetre", "centimetres"], UnitLength.centimeters, "cm"),

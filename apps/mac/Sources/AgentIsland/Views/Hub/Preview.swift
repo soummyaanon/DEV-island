@@ -27,6 +27,7 @@ enum PreviewRenderer {
     model.system.detail = .displays
     model.system.refresh(full: false)
     pages.append(("controls-displays", AnyView(HubPage(model: model, tab: .controls, now: .now))))
+    pages.append(("displays", AnyView(DisplaysDetail(system: model.system).frame(width: 420))))
     pages.append(("drop", AnyView(ShelfDropZone(model: model))))
     pages.append(("prompter-stage", AnyView(PrompterStage(model: model))))
     for (name, page) in pages {

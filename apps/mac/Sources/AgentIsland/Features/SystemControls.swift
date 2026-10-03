@@ -17,6 +17,15 @@ final class SystemControls {
     var builtIn: Bool
     var main: Bool
     var brightness: Float?
+    /// Where it sits in the arrangement (global display coordinates).
+    var frame: CGRect
+  }
+
+  /// The display picked in the Displays preview; nil is the main one.
+  var pickedDisplay: CGDirectDisplayID?
+
+  var picked: Display? {
+    displays.first { $0.id == pickedDisplay } ?? displays.first(where: \.main) ?? displays.first
   }
 
   private(set) var volume: Float?
@@ -127,7 +136,7 @@ final class SystemControls {
       let id = CGDirectDisplayID(number.uint32Value)
       return Display(
         id: id, name: screen.localizedName, size: screen.frame.size, builtIn: CGDisplayIsBuiltin(id) != 0,
-        main: CGDisplayIsMain(id) != 0, brightness: Brightness.get(id)
+        main: CGDisplayIsMain(id) != 0, brightness: Brightness.get(id), frame: CGDisplayBounds(id)
       )
     }
     if displays != self.displays {

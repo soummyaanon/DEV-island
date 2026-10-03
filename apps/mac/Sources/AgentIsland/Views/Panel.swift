@@ -662,67 +662,60 @@ private struct WeatherCard: View {
 }
 
 
-/// One dot per page — sessions, then each tool. The current one shows its
-/// icon; hover any to see it; click to go straight there. For the first few
-/// opens a chevron nudges, saying the island swipes sideways.
+/// A compact swiper: back, the current page's icon, next. The icon steps
+/// forward on a click; for the first few opens the arrows nudge, saying the
+/// island swipes sideways.
 private struct PageDots: View {
   let model: IslandModel
 
   var body: some View {
-    HStack(spacing: 4) {
-      if model.swipeHintsLeft > 0 && model.hubTab == nil {
-        SwipeHint()
-      }
-      ForEach(Array(model.pages.enumerated()), id: \.offset) { _, page in
-        PageDot(page: page, current: page == model.hubTab) { model.showTab(page) }
-      }
-    }
-    .padding(.horizontal, 4)
-    .help("Swipe sideways with two fingers, or click a dot")
-  }
-}
-
-private struct PageDot: View {
-  let page: HubTab?
-  let current: Bool
-  let action: () -> Void
-
-  var body: some View {
-    Hovering { hovered in
-      Button(action: action) {
-        ZStack {
-          if current || hovered {
-            Capsule()
-              .fill(.white.opacity(current ? 0.9 : 0.25))
-              .frame(width: 22, height: 14)
-            Image(systemName: page?.symbol ?? "person.2.fill")
-              .font(.system(size: 7.5, weight: .bold))
-              .foregroundStyle(current ? .black : .white)
-          } else {
-            Circle().fill(.white.opacity(0.3)).frame(width: 5, height: 5)
-          }
-        }
-        .frame(width: current || hovered ? 22 : 9, height: 16)
-        .contentShape(Rectangle())
+    let pages = model.pages
+    let index = pages.firstIndex(of: model.hubTab) ?? 0
+    HStack(spacing: 1) {
+      arrow("chevron.compact.left", enabled: index > 0, label: "Previous") { model.stepPage(-1) }
+      Button { model.stepPage(index == pages.count - 1 ? -index : 1) } label: {
+        Image(systemName: model.hubTab?.symbol ?? "person.2.fill")
+          .font(.system(size: 8, weight: .bold))
+          .foregroundStyle(.black)
+          .frame(width: 22, height: 14)
+          .background(Capsule().fill(.white.opacity(0.9)))
+          .contentTransition(.symbolEffect(.replace))
       }
       .buttonStyle(.plain)
-      .help(page?.title ?? "Sessions")
-      .accessibilityLabel(page?.title ?? "Sessions")
-      .accessibilityAddTraits(current ? .isSelected : [])
-      .animation(.interpolatingSpring(mass: 1, stiffness: 380, damping: 30), value: current || hovered)
+      .help(model.hubTab?.title ?? "Sessions")
+      .accessibilityLabel("Page: \(model.hubTab?.title ?? "Sessions")")
+      arrow("chevron.compact.right", enabled: index < pages.count - 1, label: "Next", hint: model.swipeHintsLeft > 0 && model.hubTab == nil) {
+        model.stepPage(1)
+      }
     }
+    .help("Swipe sideways with two fingers")
+  }
+
+  private func arrow(_ symbol: String, enabled: Bool, label: String, hint: Bool = false, action: @escaping () -> Void) -> some View {
+    Button(action: action) {
+      Image(systemName: symbol)
+        .font(.system(size: 11, weight: .bold))
+        .foregroundStyle(hint ? Palette.accent : .white.opacity(enabled ? 0.55 : 0.15))
+        .frame(width: 14, height: 18)
+        .modifier(Nudge(active: hint))
+        .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .disabled(!enabled)
+    .accessibilityLabel(label)
   }
 }
 
-/// A small chevron that drifts left and back: "swipe".
-private struct SwipeHint: View {
+/// Drifts a few points toward where the swipe goes, and back.
+private struct Nudge: ViewModifier {
+  let active: Bool
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-  var body: some View {
-    Image(systemName: "chevron.compact.left")
-      .font(.system(size: 11, weight: .bold))
-      .foregroundStyle(Palette.accent)
-      .phaseAnimator(reduceMotion ? [0.0] : [0.0, -4.0, 0.0]) { view, x in view.offset(x: x) } animation: { _ in .easeInOut(duration: 0.6) }
-      .help("Swipe left with two fingers for tools")
+  func body(content: Content) -> some View {
+    if active && !reduceMotion {
+      content.phaseAnimator([0.0, 3.0, 0.0]) { view, x in view.offset(x: x) } animation: { _ in .easeInOut(duration: 0.6) }
+    } else {
+      content
+    }
   }
 }

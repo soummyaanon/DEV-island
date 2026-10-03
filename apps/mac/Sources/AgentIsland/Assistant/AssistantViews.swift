@@ -285,16 +285,14 @@ struct BotCrewButton: View {
       if disabledReason == nil { action() }
     } label: {
       HStack(spacing: 8) {
-        // Three bots on one clock, overlapping by 5; each follows the pointer
-        // and hops at a click, which still opens the assistant.
+        // One mascot, a little bigger: it follows the pointer and hops at a
+        // click, which still opens the assistant.
         BotStage(
-          bots: BotLook.crew.enumerated().map { index, member in
-            StageBot(
-              look: member.look, state: working ? .working : .idle, seed: member.seed, size: 22,
-              style: BotPose.Style(turn: 1.4), box: CGRect(x: 17 * CGFloat(index), y: 0, width: 22, height: 22)
-            )
-          },
-          size: CGSize(width: 22 + 17 * 2, height: 22), paused: paused, interactive: true
+          bots: [StageBot(
+            look: BotLook.crew[0].look, state: working ? .working : .idle, seed: BotLook.crew[0].seed, size: 28,
+            style: BotPose.Style(turn: 1.4), box: CGRect(x: 0, y: 0, width: 28, height: 28)
+          )],
+          size: CGSize(width: 28, height: 28), paused: paused, interactive: true
         )
         if talk {
           // A new line every 4.5 s, rolling in; paused, the current one stays.

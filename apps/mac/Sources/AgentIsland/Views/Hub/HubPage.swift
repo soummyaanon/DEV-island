@@ -263,67 +263,125 @@ private struct SoundDetail: View {
   }
 }
 
-private struct DisplaysDetail: View {
+struct DisplaysDetail: View {
   let system: SystemControls
 
   var body: some View {
-    DetailBox(title: "Displays") {
-      ForEach(system.displays) { display in
-        DisplayRow(system: system, display: display)
-      }
-      if system.displays.count > 1 {
-        HStack {
-          Text("Mirror displays").islandFont(10.5).foregroundStyle(Palette.text)
-          Spacer()
-          Toggle("Mirror displays", isOn: Binding(get: { system.mirrored }, set: { _ in system.toggleMirroring() }))
-            .toggleStyle(.switch).controlSize(.mini).labelsHidden()
+    let picked = system.picked
+    HStack(alignment: .center, spacing: 12) {
+      // Left: the displays as they're arranged; click one to pick it.
+      DisplayArrangement(system: system)
+        .frame(width: 170, height: 76)
+      // Right: the picked display's few controls.
+      if let picked {
+        VStack(alignment: .leading, spacing: 6) {
+          Text(picked.name).islandFont(10, weight: .semibold).foregroundStyle(Palette.text).lineLimit(1)
+          ResolutionMenu(system: system, display: picked)
+          if let level = picked.brightness {
+            HStack(spacing: 5) {
+              Image(systemName: "sun.max.fill").font(.system(size: 9)).foregroundStyle(Palette.textDim)
+              Slider(value: Binding(get: { Double(level) }, set: { system.setBrightness(Float($0), display: picked.id) }), in: 0...1)
+                .controlSize(.mini).tint(.white)
+            }
+          }
+          HStack(spacing: 8) {
+            if system.displays.count > 1 {
+              CircleKey(symbol: "menubar.rectangle", on: picked.main, size: 24, label: picked.main ? "Main display" : "Make main") {
+                if !picked.main { system.makeMain(picked.id) }
+              }
+              CircleKey(symbol: "rectangle.on.rectangle", on: system.mirrored, size: 24, label: system.mirrored ? "Stop mirroring" : "Mirror") {
+                system.toggleMirroring()
+              }
+            }
+          }
         }
-        .padding(.top, 2)
+        .frame(maxWidth: .infinity, alignment: .leading)
+      }
+    }
+    .padding(8)
+    .background(RoundedRectangle(cornerRadius: 12).fill(.white.opacity(0.05)))
+  }
+}
+
+/// Each display drawn to scale where it sits: a laptop for the built-in
+/// panel, a monitor on a stand for the rest, the menu bar on the main one.
+private struct DisplayArrangement: View {
+  let system: SystemControls
+
+  var body: some View {
+    GeometryReader { proxy in
+      let displays = system.displays
+      let union = displays.map(\.frame).reduce(CGRect.null) { $0.union($1) }
+      let scale = union.isNull ? 1 : min((proxy.size.width - 8) / union.width, (proxy.size.height - 16) / union.height)
+      let offset = CGPoint(
+        x: (proxy.size.width - union.width * scale) / 2 - union.minX * scale,
+        y: (proxy.size.height - 12 - union.height * scale) / 2 - union.minY * scale
+      )
+      ZStack(alignment: .topLeading) {
+        ForEach(displays) { display in
+          let rect = CGRect(
+            x: display.frame.minX * scale + offset.x, y: display.frame.minY * scale + offset.y,
+            width: display.frame.width * scale, height: display.frame.height * scale
+          )
+          DeviceGlyph(display: display, picked: display.id == system.picked?.id, size: rect.size)
+            .frame(width: rect.width, height: rect.height + 10, alignment: .top)
+            .offset(x: rect.minX, y: rect.minY)
+            .onTapGesture { system.pickedDisplay = display.id }
+            .help("\(display.name) · \(Int(display.frame.width)) × \(Int(display.frame.height))")
+        }
       }
     }
   }
 }
 
-private struct DisplayRow: View {
+private struct DeviceGlyph: View {
+  let display: SystemControls.Display
+  let picked: Bool
+  let size: CGSize
+
+  var body: some View {
+    VStack(spacing: 0) {
+      RoundedRectangle(cornerRadius: 3, style: .continuous)
+        .fill(LinearGradient(colors: [Color(hex: 0x2B3550), Color(hex: 0x141824)], startPoint: .top, endPoint: .bottom))
+        .overlay(alignment: .top) {
+          // The menu bar sits on the main display.
+          if display.main { Rectangle().fill(.white.opacity(0.7)).frame(height: 2).padding(.horizontal, 2).padding(.top, 2) }
+        }
+        .overlay(RoundedRectangle(cornerRadius: 3, style: .continuous).strokeBorder(picked ? Palette.accent : .white.opacity(0.35), lineWidth: picked ? 1.6 : 1))
+        .frame(width: size.width - 2, height: max(8, size.height - 2))
+      if display.builtIn {
+        // The laptop's base.
+        Capsule().fill(.white.opacity(0.45)).frame(width: size.width + 4, height: 3)
+      } else {
+        // The monitor's stand.
+        Rectangle().fill(.white.opacity(0.35)).frame(width: 2, height: 4)
+        Capsule().fill(.white.opacity(0.35)).frame(width: min(18, size.width / 3), height: 2)
+      }
+    }
+    .contentShape(Rectangle())
+  }
+}
+
+private struct ResolutionMenu: View {
   let system: SystemControls
   let display: SystemControls.Display
 
   var body: some View {
     let modes = system.modes(for: display.id)
     let current = system.currentMode(for: display.id)
-    VStack(alignment: .leading, spacing: 4) {
-      HStack(spacing: 6) {
-        Image(systemName: display.builtIn ? "laptopcomputer" : "display").font(.system(size: 11)).foregroundStyle(Palette.text)
-        Text(display.name).islandFont(10.5, weight: .semibold).foregroundStyle(Palette.text).lineLimit(1)
-        if display.main { Text("Main").islandFont(8.5, weight: .semibold).foregroundStyle(Palette.accent) }
-        Spacer()
-        Menu {
-          ForEach(modes) { mode in
-            Button { system.setMode(mode, for: display.id) } label: {
-              if mode.id == current { Label(mode.label, systemImage: "checkmark") } else { Text(mode.label) }
-            }
-          }
-        } label: {
-          Text(modes.first { $0.id == current }.map { "\($0.width) × \($0.height)" } ?? "\(Int(display.size.width)) × \(Int(display.size.height))")
-            .islandFont(9.5)
-        }
-        .menuStyle(.borderlessButton)
-        .fixedSize()
-        .help("Resolution")
-        if !display.main && system.displays.count > 1 {
-          TextKey(title: "Make main", tint: Palette.textDim) { system.makeMain(display.id) }
+    Menu {
+      ForEach(modes) { mode in
+        Button { system.setMode(mode, for: display.id) } label: {
+          if mode.id == current { Label(mode.label, systemImage: "checkmark") } else { Text(mode.label) }
         }
       }
-      if let level = display.brightness {
-        HStack(spacing: 6) {
-          Image(systemName: "sun.min").font(.system(size: 9)).foregroundStyle(Palette.textDim)
-          Slider(value: Binding(get: { Double(level) }, set: { system.setBrightness(Float($0), display: display.id) }), in: 0...1)
-            .controlSize(.mini).tint(.white)
-          Image(systemName: "sun.max").font(.system(size: 9)).foregroundStyle(Palette.textDim)
-        }
-      }
+    } label: {
+      Text(modes.first { $0.id == current }.map { "\($0.width) × \($0.height)" } ?? "\(Int(display.size.width)) × \(Int(display.size.height))")
+        .islandFont(9.5).monospacedDigit()
     }
-    .padding(.vertical, 2)
+    .menuStyle(.borderlessButton)
+    .fixedSize()
+    .help("Resolution")
   }
 }
 
@@ -798,19 +856,8 @@ private struct WidgetsTab: View {
 
   var body: some View {
     SplitPane(leftWidth: 170) {
-      // Left: weather and markets.
+      // Left: markets.
       VStack(spacing: 8) {
-        if let weather = model.weather.reading {
-          VStack(spacing: 2) {
-            WeatherScene(condition: weather.condition, variant: .card, paused: model.isPaused)
-              .frame(width: 64, height: 64)
-              .clipShape(Circle())
-              .overlay(Text(weather.temperature).islandFont(15, weight: .semibold).foregroundStyle(.white).shadow(radius: 3))
-            Text(weather.summary).islandFont(9).foregroundStyle(Palette.textDim).lineLimit(1)
-          }
-        } else {
-          CircleKey(symbol: "cloud.sun.fill", caption: "Weather", size: 40, label: "Turn on weather") { model.changeSettings { $0.weather = true } }
-        }
         if model.settings.stocks {
           StocksList(model: model)
         } else {

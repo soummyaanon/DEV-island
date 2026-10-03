@@ -272,7 +272,7 @@ private struct Band: View {
     } else if model.isSleeping || model.isIdleBot {
       // At rest, one mascot keeps the island company.
       BotAvatar(
-        look: BotLook.crew[0].look, state: .idle, size: 16, seed: 0.12, paused: model.isPaused,
+        look: BotLook.crew[0].look, state: .idle, size: 19, seed: 0.12, paused: model.isPaused,
         style: BotPose.Style(jumpEvery: 0), interactive: false
       )
       .pop()
