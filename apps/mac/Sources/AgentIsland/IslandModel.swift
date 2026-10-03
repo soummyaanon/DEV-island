@@ -14,6 +14,19 @@ final class IslandModel {
 
   /// Locked, asleep, or covered: nothing may animate unseen.
   var isPaused = false
+  /// Low Power Mode is on.
+  var lowPowerMode = ProcessInfo.processInfo.isLowPowerModeEnabled
+  /// The closed island has looked the same for a while (`IslandController.settleAfter`).
+  var settled = false
+
+  /// The wings' working loops (the orbs, the music bars) hold still: unseen,
+  /// or in Low Power Mode.
+  var wingStill: Bool { isPaused || lowPowerMode }
+  /// The wings' decoration (the resting mascot, the working crew's hops, the
+  /// charging glow, the weather) holds still too once the island has settled:
+  /// nobody watches a notch that hasn't changed, and each frame costs battery
+  /// (in WindowServer as much as here). The orbs keep turning, slower.
+  var ambientStill: Bool { wingStill || settled }
 
   /// The pointer is over the island's shape.
   var isHovering = false {

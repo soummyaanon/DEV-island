@@ -13,10 +13,11 @@ struct ThinkingOrb: View {
   var paused = false
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.motionFrameRate) private var frameRate
 
   var body: some View {
     let still = paused || reduceMotion
-    TimelineView(.animation(minimumInterval: 1.0 / 30, paused: still)) { timeline in
+    TimelineView(.animation(minimumInterval: 1 / frameRate, paused: still)) { timeline in
       let time = still ? 1.3 : timeline.date.timeIntervalSinceReferenceDate
       Canvas { context, canvas in
         OrbRenderer.draw(state, time: time, tint: tint, bold: bold, in: &context, size: canvas)

@@ -32,12 +32,13 @@ private struct WeatherCanvas: View {
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @Environment(\.colorSchemeContrast) private var contrast
+  @Environment(\.motionFrameRate) private var frameRate
 
   var body: some View {
     let increased = contrast == .increased
     // Paused holds the current frame (1.x's `animation-play-state: paused`);
     // Reduce Motion swaps in a still illustration instead.
-    TimelineView(.animation(minimumInterval: 1.0 / 30, paused: paused || reduceMotion)) { timeline in
+    TimelineView(.animation(minimumInterval: 1 / frameRate, paused: paused || reduceMotion)) { timeline in
       let now = timeline.date
       Canvas { context, size in
         WeatherPainter(

@@ -23,6 +23,7 @@ final class IslandController {
   private var trayMenu: TrayMenu?
   private lazy var windows = WindowsController(model: model, sounds: sounds)
   private var sampler: Task<Void, Never>?
+  private var settle: Task<Void, Never>?
   /// When the Mac was locked or slept, for the welcome-back hello.
   private var awaySince: Date?
   /// The app that was frontmost before the island took keys, to hand them back to.
@@ -70,6 +71,7 @@ final class IslandController {
     watchPointer()
     watchScreens()
     watchVisibility()
+    watchEnergy()
     watchRequests()
     watchKeys()
     announceTransitions()
@@ -285,6 +287,47 @@ final class IslandController {
           }
           do { try await Task.sleep(for: ProcTotals.interval) } catch { return }
         }
+      }
+    }
+  }
+
+  // MARK: Energy
+
+  /// How long the closed island must look the same before its idle loops settle.
+  static let settleAfter: Duration = .seconds(20)
+
+  /// What the closed island looks like, as far as settling goes.
+  private struct Look: Equatable {
+    var open: Bool
+    var hovering: Bool
+    var wing: WingContent
+    var working: Int
+    var sleeping: Bool
+    var idleBot: Bool
+    var paused: Bool
+  }
+
+  /// Low Power Mode stills the wings. Any change to the island's look wakes
+  /// its idle loops; `settleAfter` of sameness lets them settle again.
+  private func watchEnergy() {
+    observe(NotificationCenter.default, .NSProcessInfoPowerStateDidChange) { controller in
+      let low = ProcessInfo.processInfo.isLowPowerModeEnabled
+      if low != controller.model.lowPowerMode { controller.model.lowPowerMode = low }
+    }
+    var last: Look?
+    track({ [model] in
+      Look(
+        open: model.isExpanded, hovering: model.isHovering, wing: model.wing, working: model.active.count,
+        sleeping: model.isSleeping, idleBot: model.isIdleBot, paused: model.isPaused
+      )
+    }) { [weak self] look in
+      guard let self, look != last else { return }
+      last = look
+      settle?.cancel()
+      if model.settled { model.settled = false }
+      settle = Task { [weak self] in
+        do { try await Task.sleep(for: Self.settleAfter) } catch { return }
+        self?.model.settled = true
       }
     }
   }

@@ -95,6 +95,7 @@ struct BotStage: View {
   var interactive = false
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.motionFrameRate) private var frameRate
   private let motion = State(initialValue: StageMotion())
 
   var body: some View {
@@ -105,7 +106,7 @@ struct BotStage: View {
     Color.clear
       .frame(width: size.width, height: size.height)
       .overlay {
-        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: still)) { timeline in
+        TimelineView(.animation(minimumInterval: 1 / frameRate, paused: still)) { timeline in
           let poses = motion.poses(at: timeline.date.timeIntervalSinceReferenceDate, pad: pad)
           Canvas { context, _ in
             for (bot, pose) in zip(bots, poses) {
@@ -580,13 +581,14 @@ struct WorkCrewView: View {
   let paused: Bool
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.motionFrameRate) private var frameRate
   private static let style = BotPose.Style(jumpHeight: 9, jumpSquash: 0.6, jumpSpin: 0)
 
   var body: some View {
     let crew = WorkCrew(active)
     let still = paused || reduceMotion
     HStack(spacing: -3) {
-      TimelineView(.animation(minimumInterval: 1.0 / 30, paused: still)) { timeline in
+      TimelineView(.animation(minimumInterval: 1 / frameRate, paused: still)) { timeline in
         let now = timeline.date.timeIntervalSinceReferenceDate
         HStack(spacing: -3) {
           ForEach(crew.shown) { session in

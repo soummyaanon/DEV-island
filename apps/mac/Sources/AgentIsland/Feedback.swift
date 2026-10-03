@@ -45,8 +45,31 @@ final class SoundPlayer {
       Log.app.error("audio engine: \(error.localizedDescription, privacy: .public)")
       return
     }
-    node.scheduleBuffer(buffer)
+    idleStop?.cancel()
+    playing += 1
+    node.scheduleBuffer(buffer) { [weak self] in
+      Task { @MainActor in self?.finished() }
+    }
     node.play()
+  }
+
+  /// Buffers scheduled and not yet played out.
+  private var playing = 0
+  private var idleStop: Task<Void, Never>?
+
+  /// A running engine holds the output device open (and coreaudiod busy)
+  /// even in silence, so it stops a moment after the last sound ends. The
+  /// nodes stop with it, ready for reuse.
+  private func finished() {
+    playing = max(0, playing - 1)
+    guard playing == 0 else { return }
+    idleStop?.cancel()
+    idleStop = Task { [weak self] in
+      do { try await Task.sleep(for: .seconds(2)) } catch { return }
+      guard let self, playing == 0 else { return }
+      nodes.forEach { $0.stop() }
+      if engine.isRunning { engine.stop() }
+    }
   }
 
   func playFile(_ url: URL, volume: Float) {

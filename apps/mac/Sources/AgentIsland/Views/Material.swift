@@ -31,10 +31,21 @@ private struct UIScaleKey: EnvironmentKey {
   static let defaultValue: CGFloat = 1
 }
 
+/// How often a looping drawing (bots, orbs, weather, glows) redraws. The
+/// wings ask for less (`Band`).
+private struct MotionFrameRateKey: EnvironmentKey {
+  static let defaultValue: Double = 30
+}
+
 extension EnvironmentValues {
   var uiScale: CGFloat {
     get { self[UIScaleKey.self] }
     set { self[UIScaleKey.self] = newValue }
+  }
+
+  var motionFrameRate: Double {
+    get { self[MotionFrameRateKey.self] }
+    set { self[MotionFrameRateKey.self] = newValue }
   }
 }
 

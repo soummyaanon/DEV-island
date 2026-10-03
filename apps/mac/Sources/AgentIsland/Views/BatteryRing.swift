@@ -121,12 +121,13 @@ private struct Breathe: ViewModifier {
   let active: Bool
 
   private let started = State(initialValue: Date.now)
+  @Environment(\.motionFrameRate) private var frameRate
 
   func body(content: Content) -> some View {
     if active {
       // Dim to bright and back, 0.9 s each way, ease-in-out (a phase animator's
       // two phases), on a 30 fps clock rather than every display refresh.
-      TimelineView(.animation(minimumInterval: 1.0 / 30)) { timeline in
+      TimelineView(.animation(minimumInterval: 1 / frameRate)) { timeline in
         let phase = (timeline.date.timeIntervalSince(started.wrappedValue) / 0.9).truncatingRemainder(dividingBy: 2)
         let u = CubicBezier.easeInOutCurve.y(at: phase < 1 ? phase : 2 - phase)
         content.shadow(

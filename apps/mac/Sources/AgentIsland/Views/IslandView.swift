@@ -182,6 +182,9 @@ private struct Band: View {
     .offset(y: model.isExpanded || reduceMotion ? 0 : max(model.rubber, 0) * 3)
     .opacity(model.isResting ? 0 : 1)
     .foregroundStyle(tint)
+    // The wings run all day: 20 fps reads the same at this size, and once
+    // the island has settled the orbs turn on at 10.
+    .environment(\.motionFrameRate, model.settled ? 10 : 20)
     .accessibilityElement(children: .ignore)
     .accessibilityLabel(WingText.label(model))
   }
@@ -207,7 +210,7 @@ private struct Band: View {
       if model.wing == .moment, let session = model.sessions.momentSession {
         BotAvatar(
           look: .agent(session.agent), state: session.avatarState(now: .now), size: 24, seed: session.seed,
-          paused: model.isPaused, interactive: false
+          paused: model.wingStill, interactive: false
         )
         .padding(.vertical, -4)
         .pop()
@@ -228,7 +231,7 @@ private struct Band: View {
         if let reading {
           BatteryRing(
             percent: reading.percent, charging: !reading.isOnBattery, low: reading.isLow, labelled: true,
-            animated: !model.isPaused
+            animated: !(reading.isLow ? model.wingStill : model.ambientStill)
           )
           .pop()
         }
@@ -243,12 +246,12 @@ private struct Band: View {
         case .plugged, .unplugged:
           ChargeRing(moment: activity, percent: reading.percent).pop().id(activity.id)
         case .low:
-          BatteryRing(percent: reading.percent, charging: false, low: true, animated: !model.isPaused).pop().id(activity.id)
+          BatteryRing(percent: reading.percent, charging: false, low: true, animated: !model.wingStill).pop().id(activity.id)
         }
       } else if model.wing == .lowBattery, let reading {
-        BatteryRing(percent: reading.percent, charging: false, low: true, animated: !model.isPaused).pop()
+        BatteryRing(percent: reading.percent, charging: false, low: true, animated: !model.wingStill).pop()
       } else if model.wing == .weather, let weather = model.weather.reading {
-        WeatherScene(condition: weather.condition, variant: .ambient, paused: model.isPaused).pop()
+        WeatherScene(condition: weather.condition, variant: .ambient, paused: model.ambientStill).pop()
       } else {
         HStack(spacing: 6) {
           ForEach(model.orbs, id: \.agent) { orb in
@@ -256,7 +259,7 @@ private struct Band: View {
               state: orb.state,
               tint: orb.waiting ? Palette.waiting : Color(hex: BotLook.agent(orb.agent).color),
               bold: true,
-              paused: model.isPaused
+              paused: model.wingStill
             )
             // Whatever arrives in the wing pops in; the old one just goes.
             .pop()
@@ -272,7 +275,7 @@ private struct Band: View {
     } else if model.isSleeping || model.isIdleBot {
       // At rest, one mascot keeps the island company.
       BotAvatar(
-        look: BotLook.crew[0].look, state: .idle, size: 19, seed: 0.12, paused: model.isPaused,
+        look: BotLook.crew[0].look, state: .idle, size: 19, seed: 0.12, paused: model.ambientStill,
         style: BotPose.Style(jumpEvery: 0), interactive: false
       )
       .pop()
@@ -284,10 +287,10 @@ private struct Band: View {
         .modifier(Entrance(kind: .countRoll))
         .id(timer.id)
     } else if model.wing == .media, let track = model.liveTrack {
-      EqualizerBars(playing: track.playing, tint: model.media.accent.map(Color.init(nsColor:)) ?? Palette.done, paused: model.isPaused)
+      EqualizerBars(playing: track.playing, tint: model.media.accent.map(Color.init(nsColor:)) ?? Palette.done, paused: model.wingStill)
         .pop()
     } else if model.showsWorkCrew {
-      WorkCrewView(active: model.active, paused: model.isPaused)
+      WorkCrewView(active: model.active, paused: model.ambientStill)
     } else {
       let text = WingText.count(model)
       let charge = model.wing == .activity ? model.power.activity.flatMap { $0.isCharger ? $0 : nil } : nil
