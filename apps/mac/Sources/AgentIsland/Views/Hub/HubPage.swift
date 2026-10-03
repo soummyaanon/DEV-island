@@ -38,13 +38,17 @@ struct HubField: View {
   @Binding var text: String
   /// Compact by default, centred in whatever holds it.
   var width: CGFloat = 170
+  /// Centred in the space it's given; off when it sits in a row.
+  var centered = true
   var onSubmit: () -> Void = {}
   @FocusState private var focused: Bool
 
   var body: some View {
-    field
-      .frame(width: width)
-      .frame(maxWidth: .infinity, alignment: .center)
+    if centered {
+      field.frame(width: width).frame(maxWidth: .infinity, alignment: .center)
+    } else {
+      field.frame(width: width)
+    }
   }
 
   private var field: some View {
@@ -477,6 +481,7 @@ private struct ClipboardTab: View {
 
   var body: some View {
     let clipboard = model.clipboard
+    let _ = clipboard.waitingForAccess
     SplitPane(leftWidth: 80) {
       // Left: what to show, and the two switches.
       Grid(horizontalSpacing: 8, verticalSpacing: 8) {
@@ -501,7 +506,14 @@ private struct ClipboardTab: View {
         }
       }
     } right: {
-      if clipboard.shown.isEmpty {
+      if clipboard.shown.isEmpty, !PasteAccess.backgroundAllowed {
+        VStack(spacing: 4) {
+          Image(systemName: "lock.doc").font(.system(size: 20, weight: .light)).foregroundStyle(Palette.textDim)
+          Text("Paste access: Always Allow").islandFont(9).foregroundStyle(Palette.textDim)
+        }
+        .frame(maxWidth: .infinity, minHeight: 120)
+        .help("macOS asks before apps read the clipboard. To keep history while you work, set Agent Island to Always Allow under Privacy & Security → Paste from Other Apps. Until then, it reads when you open this tab.")
+      } else if clipboard.shown.isEmpty {
         Image(systemName: clipboard.paused ? "pause.circle" : "doc.on.clipboard")
           .font(.system(size: 22)).foregroundStyle(Palette.textDim)
           .frame(maxWidth: .infinity, minHeight: 120)
@@ -518,6 +530,7 @@ private struct ClipboardTab: View {
         .help("Click to copy · ⌥-click to delete")
       }
     }
+    .onAppear { clipboard.captureNow() }
   }
 
   private func filter(_ kind: ClipboardHistory.Clip.Kind, _ symbol: String) -> some View {
@@ -852,7 +865,6 @@ private struct TimersTab: View {
 
 private struct WidgetsTab: View {
   let model: IslandModel
-  private let phrase = State(initialValue: "")
 
   var body: some View {
     SplitPane(leftWidth: 170) {
@@ -867,18 +879,7 @@ private struct WidgetsTab: View {
       .frame(maxWidth: .infinity)
     } right: {
       // Right: the converter.
-      VStack(spacing: 10) {
-        Image(systemName: "arrow.left.arrow.right.circle").font(.system(size: 22, weight: .light)).foregroundStyle(Palette.textDim)
-        HubField(model: model, placeholder: "10 km to mi", text: Binding(get: { phrase.wrappedValue }, set: { phrase.wrappedValue = $0 }))
-        if let result = UnitConverter.convert(phrase.wrappedValue) {
-          Text(result.text).islandFont(20, weight: .semibold).foregroundStyle(Palette.text).textSelection(.enabled)
-          CircleKey(symbol: "doc.on.doc", size: 24, label: "Copy") {
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(UnitConverter.format(result.value), forType: .string)
-          }
-        }
-      }
-      .frame(maxWidth: .infinity, minHeight: 110)
+      ConverterView(model: model)
     }
   }
 }
@@ -1041,5 +1042,90 @@ struct PrompterStage: View {
     }
     .frame(width: 460)
     .padding(.init(top: 4, leading: 12, bottom: 10, trailing: 12))
+  }
+}
+
+/// Pick a family, type a number, choose the units; swap with one click.
+/// Typing a whole phrase ("72 f to c") still works.
+private struct ConverterView: View {
+  let model: IslandModel
+  private let kindId = State(initialValue: UserDefaults.standard.string(forKey: "converterKind") ?? "length")
+  private let from = State(initialValue: "")
+  private let to = State(initialValue: "")
+  private let value = State(initialValue: "1")
+
+  private var kind: IslandCore.UnitConverter.Kind {
+    UnitConverter.kinds.first { $0.id == kindId.wrappedValue } ?? UnitConverter.kinds[0]
+  }
+
+  var body: some View {
+    let kind = kind
+    let fromUnit = kind.units.contains(from.wrappedValue) ? from.wrappedValue : kind.from
+    let toUnit = kind.units.contains(to.wrappedValue) ? to.wrappedValue : kind.to
+    let text = value.wrappedValue.replacingOccurrences(of: ",", with: ".")
+    let result: (value: Double, unit: String)? = if let number = Double(text) {
+      UnitConverter.convert(number, from: fromUnit, to: toUnit).map { ($0, toUnit) }
+    } else {
+      UnitConverter.convert(value.wrappedValue).map { ($0.value, $0.to) }
+    }
+    VStack(spacing: 8) {
+      // The families, as small round keys.
+      Grid(horizontalSpacing: 5, verticalSpacing: 5) {
+        GridRow { ForEach(UnitConverter.kinds.prefix(6)) { family($0) } }
+        GridRow { ForEach(UnitConverter.kinds.dropFirst(6)) { family($0) } }
+      }
+      // The number, and the two units either side of a swap.
+      HStack(spacing: 4) {
+        HubField(model: model, placeholder: "1", text: Binding(get: { value.wrappedValue }, set: { value.wrappedValue = $0 }), width: 62, centered: false)
+        unitMenu(kind.units, selected: fromUnit) { from.wrappedValue = $0 }
+        CircleKey(symbol: "arrow.left.arrow.right", size: 20, label: "Swap") {
+          from.wrappedValue = toUnit
+          to.wrappedValue = fromUnit
+        }
+        unitMenu(kind.units, selected: toUnit) { to.wrappedValue = $0 }
+      }
+      HStack(spacing: 6) {
+        Text(result.map { "\(UnitConverter.format($0.value)) \($0.unit)" } ?? "—")
+          .islandFont(18, weight: .semibold).monospacedDigit()
+          .foregroundStyle(result == nil ? Palette.textDim : Palette.text)
+          .lineLimit(1).minimumScaleFactor(0.6)
+          .contentTransition(.numericText())
+          .textSelection(.enabled)
+        if let result {
+          CircleKey(symbol: "doc.on.doc", size: 20, label: "Copy") {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(UnitConverter.format(result.value), forType: .string)
+          }
+        }
+      }
+    }
+    .frame(maxWidth: .infinity)
+    .animation(.easeOut(duration: 0.12), value: result?.value)
+  }
+
+  private func family(_ kind: IslandCore.UnitConverter.Kind) -> some View {
+    CircleKey(symbol: kind.symbol, on: kind.id == kindId.wrappedValue, size: 22, label: kind.name) {
+      kindId.wrappedValue = kind.id
+      from.wrappedValue = kind.from
+      to.wrappedValue = kind.to
+      UserDefaults.standard.set(kind.id, forKey: "converterKind")
+    }
+  }
+
+  private func unitMenu(_ units: [String], selected: String, pick: @escaping (String) -> Void) -> some View {
+    Menu {
+      ForEach(units, id: \.self) { unit in
+        Button { pick(unit) } label: {
+          if unit == selected { Label(unit, systemImage: "checkmark") } else { Text(unit) }
+        }
+      }
+    } label: {
+      Text(selected).islandFont(11, weight: .semibold).foregroundStyle(Palette.text)
+    }
+    .menuStyle(.borderlessButton)
+    .menuIndicator(.hidden)
+    .fixedSize()
+    .padding(.init(top: 3, leading: 8, bottom: 3, trailing: 8))
+    .background(Capsule().fill(.white.opacity(0.08)))
   }
 }

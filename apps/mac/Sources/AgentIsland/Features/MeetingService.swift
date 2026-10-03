@@ -79,8 +79,9 @@ final class MeetingService {
     lastTabCheck = .now
     cachedMeetTab = nil
     for app in NSWorkspace.shared.runningApplications {
+      // Only browsers already allowed: detection must never prompt.
       guard let browser = Browser.named(bundleId: app.bundleIdentifier), let script = browser.allTabsScript,
-        let out = await Osascript.run(script)
+        Automation.isAllowed(browser.bundleId) == true, let out = await Osascript.run(script)
       else { continue }
       if let url = out.split(separator: "\n").map(String.init).first(where: MeetingLink.isMeetCall) {
         cachedMeetTab = (browser.bundleId, url)

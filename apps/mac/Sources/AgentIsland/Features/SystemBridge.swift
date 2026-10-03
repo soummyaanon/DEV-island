@@ -286,3 +286,27 @@ enum SettingsPane {
   static let sound = "com.apple.Sound-Settings.extension"
   static let automation = "com.apple.preference.security?Privacy_Automation"
 }
+
+/// Whether this app may already send Apple Events to another, asked without
+/// prompting. Background reads (meeting tabs, music catch-up, the browser's
+/// tab) only go to apps already allowed; the first prompt only ever comes from
+/// something you clicked.
+enum Automation {
+  /// True: allowed. False: refused or not asked yet. Nil: the app isn't running.
+  static func isAllowed(_ bundleId: String) -> Bool? {
+    guard !NSRunningApplication.runningApplications(withBundleIdentifier: bundleId).isEmpty else { return nil }
+    let target = NSAppleEventDescriptor(bundleIdentifier: bundleId)
+    guard let desc = target.aeDesc else { return false }
+    let status = AEDeterminePermissionToAutomateTarget(desc, typeWildCard, typeWildCard, false)
+    return status == noErr
+  }
+}
+
+/// macOS 15.4+ asks before an app reads the clipboard in the background,
+/// unless you've set it to always allow.
+enum PasteAccess {
+  static var backgroundAllowed: Bool {
+    if #available(macOS 15.4, *) { return NSPasteboard.general.accessBehavior == .alwaysAllow }
+    return true
+  }
+}

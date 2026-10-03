@@ -146,6 +146,46 @@ public enum UnitConverter {
     return Result(value: value, input: number, from: from.symbol, to: to.symbol)
   }
 
+  /// A family of units for the picker: its icon, its units (display symbols,
+  /// in a sensible order) and the pair it starts on.
+  public struct Kind: Sendable, Identifiable, Equatable {
+    public let id: String
+    public let name: String
+    public let symbol: String
+    public let units: [String]
+    public let from: String
+    public let to: String
+  }
+
+  private static let kindInfo: [(id: String, name: String, symbol: String, from: String, to: String)] = [
+    ("length", "Length", "ruler", "km", "mi"),
+    ("mass", "Weight", "scalemass", "kg", "lb"),
+    ("temperature", "Temperature", "thermometer.medium", "°C", "°F"),
+    ("volume", "Volume", "drop", "l", "gal"),
+    ("speed", "Speed", "gauge.with.dots.needle.67percent", "km/h", "mph"),
+    ("area", "Area", "square.dashed", "m²", "ft²"),
+    ("duration", "Time", "clock", "h", "min"),
+    ("data", "Data", "internaldrive", "GB", "MB"),
+    ("energy", "Energy", "bolt", "kcal", "kJ"),
+    ("pressure", "Pressure", "barometer", "bar", "psi"),
+    ("angle", "Angle", "angle", "°", "rad"),
+  ]
+
+  /// Every family, each with its units in table order.
+  public static let kinds: [Kind] = kindInfo.map { info in
+    var seen: Set<String> = []
+    let units = Self.units.filter { kind(of: $0.unit) == info.id }.map(\.symbol).filter { seen.insert($0).inserted }
+    return Kind(id: info.id, name: info.name, symbol: info.symbol, units: units, from: info.from, to: info.to)
+  }
+
+  /// `value` from one display symbol to another of the same family; nil otherwise.
+  public static func convert(_ value: Double, from: String, to: String) -> Double? {
+    guard let a = units.first(where: { $0.symbol == from }), let b = units.first(where: { $0.symbol == to }),
+      let kind = kind(of: a.unit), kind == self.kind(of: b.unit)
+    else { return nil }
+    return b.unit.converter.value(fromBaseUnitValue: a.unit.converter.baseUnitValue(fromValue: value))
+  }
+
   /// Up to four decimals, trailing zeros dropped, grouping for big numbers.
   public static func format(_ value: Double) -> String {
     let formatter = NumberFormatter()

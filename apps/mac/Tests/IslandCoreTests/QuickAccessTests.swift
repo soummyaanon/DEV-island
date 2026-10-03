@@ -335,3 +335,18 @@ import Testing
     #expect(calendar.component(.month, from: next) == 11 && calendar.component(.day, from: next) == 1)
   }
 }
+
+@Suite struct ConverterPickerTests {
+  @Test func `every family has units and its default pair`() {
+    #expect(UnitConverter.kinds.count == 11)
+    for kind in UnitConverter.kinds {
+      #expect(kind.units.contains(kind.from) && kind.units.contains(kind.to), "\(kind.id)")
+    }
+  }
+
+  @Test func `converts by symbol, refusing mixed families`() {
+    #expect(abs((UnitConverter.convert(100, from: "°C", to: "°F") ?? 0) - 212) < 0.0001)
+    #expect(abs((UnitConverter.convert(1, from: "mi", to: "km") ?? 0) - 1.609344) < 0.0001)
+    #expect(UnitConverter.convert(1, from: "kg", to: "km") == nil)
+  }
+}

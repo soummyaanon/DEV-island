@@ -84,7 +84,7 @@ final class NowPlayingService {
   func catchUp() {
     guard !queried, track == nil, !observers.isEmpty else { return }
     queried = true
-    for source in [Track.Source.music, .spotify] where Self.isRunning(source.bundleId) {
+    for source in [Track.Source.music, .spotify] where source.bundleId.flatMap(Automation.isAllowed) == true {
       let app = source == .music ? "Music" : "Spotify"
       let durationScale = source == .music ? "1" : "1000"
       Task {
@@ -210,6 +210,7 @@ final class NowPlayingService {
   }
 
   private func fetchMusicPosition() {
+    guard Automation.isAllowed("com.apple.Music") == true else { return }
     Task {
       guard let out = await Osascript.run("tell application \"Music\" to player position as string"),
         let seconds = Double(out.replacingOccurrences(of: ",", with: ".")), var current = track, current.source == .music
@@ -221,6 +222,8 @@ final class NowPlayingService {
   }
 
   private func fetchArtwork(for track: Track, key: String) {
+    // Artwork is a background read: only from players already allowed.
+    guard track.source.bundleId.flatMap(Automation.isAllowed) == true else { return }
     switch track.source {
     case .music:
       // Music writes the artwork's bytes to a temporary file, out of process,

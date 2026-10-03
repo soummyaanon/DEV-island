@@ -45,8 +45,13 @@ cp -R Resources/Sounds "$app/Contents/Resources/"
 cp Resources/AppIcon.icns "$app/Contents/Resources/"
 # A Developer ID when the release workflow has one (CODESIGN_IDENTITY), with
 # the hardened runtime notarisation needs; ad-hoc otherwise, as 1.x ships.
+dev_keychain="$HOME/Library/Keychains/agent-island-dev.keychain-db"
 if [[ -n "${CODESIGN_IDENTITY:-}" ]]; then
   codesign --force --options runtime --timestamp --entitlements Resources/entitlements.plist --sign "$CODESIGN_IDENTITY" "$app"
+elif ! $ship && [[ -f "$dev_keychain" ]] && security find-certificate -c "Agent Island Dev" "$dev_keychain" >/dev/null 2>&1; then
+  # A stable local identity (scripts/dev-signing.sh): privacy grants survive rebuilds.
+  security unlock-keychain -p "" "$dev_keychain" 2>/dev/null || true
+  codesign --force --keychain "$dev_keychain" --sign "Agent Island Dev" "$app"
 else
   codesign --force --sign - "$app"
 fi

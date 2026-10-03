@@ -76,11 +76,31 @@ final class ClipboardHistory {
     thumbnails.removeAll()
   }
 
-  private func check() {
+  /// The clipboard changed while macOS would have asked to read it.
+  private(set) var waitingForAccess = false
+
+  /// Reads the clipboard now, because you opened the Clipboard tab: a read you
+  /// asked for, so macOS's paste prompt (if any) makes sense.
+  func captureNow() {
+    guard waitingForAccess || clips.isEmpty else { return }
+    waitingForAccess = false
+    lastChange = -1
+    check(userInitiated: true)
+  }
+
+  private func check(userInitiated: Bool = false) {
     let pasteboard = NSPasteboard.general
     guard pasteboard.changeCount != lastChange else { return }
+    guard !paused else {
+      lastChange = pasteboard.changeCount
+      return
+    }
+    // Background reads only when macOS lets them through silently.
+    guard userInitiated || PasteAccess.backgroundAllowed else {
+      waitingForAccess = true
+      return
+    }
     lastChange = pasteboard.changeCount
-    guard !paused else { return }
     let types = pasteboard.types?.map(\.rawValue) ?? []
     let front = NSWorkspace.shared.frontmostApplication
     if ClipboardPrivacy.skips(types: types, sourceBundle: front?.bundleIdentifier) {

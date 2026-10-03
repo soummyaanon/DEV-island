@@ -58,6 +58,9 @@ final class BrowserService {
     reading = true
     defer { reading = false }
     if let script = front.activeTabScript {
+      // Reading the tab is a background read: only once you've allowed it
+      // (your first back/forward/reload click asks).
+      guard Automation.isAllowed(front.bundleId) == true else { return }
       guard let out = await Osascript.run(script, timeout: 2), let parsed = Browser.parseActiveTab(out) else { return }
       guard self.front == front else { return }
       let next = Tab(title: parsed.title, url: parsed.url)
