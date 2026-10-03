@@ -208,8 +208,8 @@ final class IslandController {
     model.weather.onChange = { [weak self] reading in
       self?.haptics.play(reading.condition == .thunder ? .rumble : .whisper)
     }
-    track({ [model] in TrayTitle.title(model.sessions.sessions) }) { [weak self] title in
-      self?.tray?.button?.title = title
+    track({ [model] in TrayStatus(model.sessions.sessions) }) { [weak self] status in
+      TrayIcon.apply(status, to: self?.tray?.button)
     }
   }
 
@@ -248,7 +248,7 @@ final class IslandController {
   private func syncTray(_ wanted: Bool) {
     if wanted, tray == nil {
       let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-      item.button?.title = TrayTitle.title(model.sessions.sessions)
+      TrayIcon.apply(TrayStatus(model.sessions.sessions), to: item.button)
       let menu = TrayMenu(model: model)
       item.menu = menu.menu
       trayMenu = menu

@@ -193,6 +193,22 @@ public struct ProcTotals: Equatable, Sendable {
 
 // MARK: - Tray
 
+/// What the menu-bar icon says: resting, agents at work, or one needs you,
+/// and how many.
+public struct TrayStatus: Equatable, Sendable {
+  public enum Kind: Sendable { case resting, working, attention }
+  public var kind: Kind
+  public var count: Int
+
+  public init(_ sessions: [SessionSnapshot]) {
+    let attention = sessions.filter(\.requiresAction).count
+    let active = sessions.filter { $0.state == .working || $0.state == .starting }.count
+    if attention > 0 { (kind, count) = (.attention, attention) }
+    else if active > 0 { (kind, count) = (.working, active) }
+    else { (kind, count) = (.resting, 0) }
+  }
+}
+
 public enum TrayTitle {
   /// " 🏝", " 🏝 3" while agents work, " 🏝 ⚠ 1" when one needs you.
   public static func title(_ sessions: [SessionSnapshot]) -> String {

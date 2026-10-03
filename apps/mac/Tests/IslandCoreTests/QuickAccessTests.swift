@@ -350,3 +350,16 @@ import Testing
     #expect(UnitConverter.convert(1, from: "kg", to: "km") == nil)
   }
 }
+
+@Suite struct TrayStatusTests {
+  @Test func `rests, counts working agents, and puts attention first`() {
+    let now = Date.now
+    func s(_ state: SessionState, action: Bool = false) -> SessionSnapshot {
+      SessionSnapshot(key: UUID().uuidString, agent: .codex, sessionId: "x", cwd: "/a", state: state, title: "", requiresAction: action, startedAt: now, updatedAt: now)
+    }
+    #expect(TrayStatus([]).kind == .resting && TrayStatus([]).count == 0)
+    #expect(TrayStatus([s(.working), s(.starting), s(.done)]).count == 2)
+    let attention = TrayStatus([s(.working), s(.waitingForApproval, action: true)])
+    #expect(attention.kind == .attention && attention.count == 1)
+  }
+}
