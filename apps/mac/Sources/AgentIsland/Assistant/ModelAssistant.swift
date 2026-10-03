@@ -2,6 +2,7 @@
 import AppKit
 import Foundation
 import FoundationModels
+import IslandCore
 
 /// The request a tool belongs to, so its actions carry the right id, and the
 /// user's own words, so tools the model over-uses can check they were asked.
@@ -214,6 +215,62 @@ nonisolated private struct StartTimerTool: Tool {
 }
 
 @available(macOS 26.0, *)
+nonisolated private struct StartPomodoroTool: Tool {
+  let box: RequestBox
+  let name = "startPomodoro"
+  let description = "Start a Pomodoro: 25 minutes of focus, then a break. Use when the user wants to focus, do a pomodoro, or a focus session."
+  var parameters: GenerationSchema { schema([]) }
+  func call(arguments: GeneratedContent) async throws -> String {
+    box.tool("startPomodoro", "Pomodoro · 25 min")
+    box.action(["kind": "pomodoro"])
+    return "Started a Pomodoro (25 minutes of focus)."
+  }
+}
+
+@available(macOS 26.0, *)
+nonisolated private struct AddTodoTool: Tool {
+  let box: RequestBox
+  let name = "addTodo"
+  let description = "Add an item to the user's to-do list in the island. Use when they say add a to-do, task, or 'remind me to' without a time."
+  var parameters: GenerationSchema { schema([("text", "The to-do, short", false)]) }
+  func call(arguments: GeneratedContent) async throws -> String {
+    let text = arg(arguments, "text")
+    guard !text.isEmpty else { return "Nothing to add." }
+    box.tool("addTodo", "Adding a to-do")
+    box.action(["kind": "todo", "text": text])
+    return "Added “\(text)” to the to-do list."
+  }
+}
+
+@available(macOS 26.0, *)
+nonisolated private struct ControlMediaTool: Tool {
+  let box: RequestBox
+  let name = "controlMedia"
+  let description = "Play or pause the music or video that's playing, or skip to the next or previous track."
+  var parameters: GenerationSchema { schema([("command", "toggle, next or previous", false)]) }
+  func call(arguments: GeneratedContent) async throws -> String {
+    let raw = arg(arguments, "command").lowercased()
+    let command = raw.contains("next") || raw.contains("skip") ? "next" : raw.contains("prev") || raw.contains("back") ? "previous" : "toggle"
+    box.tool("controlMedia", command == "toggle" ? "Play/pause" : command == "next" ? "Next track" : "Previous track")
+    box.action(["kind": "media", "command": command])
+    return command == "toggle" ? "Toggled play/pause." : command == "next" ? "Skipped to the next track." : "Went back a track."
+  }
+}
+
+@available(macOS 26.0, *)
+nonisolated private struct ConvertUnitsTool: Tool {
+  let box: RequestBox
+  let name = "convertUnits"
+  let description = "Convert a measurement exactly, e.g. '10 km to mi', '72 f to c', '3 cups to ml'. Use instead of doing unit maths yourself."
+  var parameters: GenerationSchema { schema([("phrase", "The conversion as '<number> <unit> to <unit>'", false)]) }
+  func call(arguments: GeneratedContent) async throws -> String {
+    let phrase = arg(arguments, "phrase")
+    box.tool("convertUnits", "Converting \(phrase)")
+    return UnitConverter.convert(phrase)?.sentence ?? "Couldn't convert “\(phrase)”; units must be the same kind."
+  }
+}
+
+@available(macOS 26.0, *)
 nonisolated private struct RunShortcutTool: Tool {
   let box: RequestBox
   let name = "runShortcut"
@@ -288,6 +345,7 @@ final class ModelAssistant {
     questions, explain, brainstorm, do quick maths, translate, and draft or rewrite text. When \
     the user asks you to DO something, use your tools rather than telling them how: openApp, \
     openWebsite, searchWeb, readClipboard, copyToClipboard, setVolume, startTimer, \
+    startPomodoro, addTodo, controlMedia, convertUnits, \
     listShortcuts and runShortcut for anything else the user has a shortcut for. You also know \
     the user's coding agents (Claude Code, Codex, Cursor) through getAgentSessions. Use openSession to jump to a \
     project and draftAgentPrompt to tell or ask an agent something. You may chain several tools \
@@ -310,7 +368,8 @@ final class ModelAssistant {
         AgentSessionsTool(box: box), DateTimeTool(box: box), OpenSessionTool(box: box), DraftAgentPromptTool(box: box),
         OpenAppTool(box: box), OpenWebsiteTool(box: box), SearchWebTool(box: box), ReadClipboardTool(box: box),
         CopyToClipboardTool(box: box), SetVolumeTool(box: box), StartTimerTool(box: box), ListShortcutsTool(box: box),
-        RunShortcutTool(box: box),
+        RunShortcutTool(box: box), StartPomodoroTool(box: box), AddTodoTool(box: box), ControlMediaTool(box: box),
+        ConvertUnitsTool(box: box),
       ],
       instructions: Self.instructions
     )

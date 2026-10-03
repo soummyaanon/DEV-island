@@ -209,8 +209,11 @@ public struct WingOrb: Equatable, Sendable {
 /// agent — except the charger going in or out, which you did and expect to
 /// see. An agent's own moment (it just finished or failed) interrupts the
 /// others' work for a few seconds: that IS the notification.
+///
+/// Things you started yourself sit between: a call you're on, then a timer
+/// you set, beat agents working; music only fills the wings when no agent does.
 public enum WingContent: Sendable {
-  case attention, moment, working, activity, lowBattery, weather, empty
+  case attention, moment, meeting, timer, working, media, activity, lowBattery, weather, empty
 
   public struct Inputs: Sendable {
     public var needsYou = 0
@@ -220,10 +223,17 @@ public enum WingContent: Sendable {
     public var powerMoment = false
     public var lowBattery = false
     public var weather = false
+    /// On a Zoom or Meet call.
+    public var meeting = false
+    /// A countdown or Pomodoro is running.
+    public var timer = false
+    /// Something is playing.
+    public var media = false
 
     public init(
       needsYou: Int = 0, active: Int = 0, moment: Bool = false, activity: Bool = false,
-      powerMoment: Bool = false, lowBattery: Bool = false, weather: Bool = false
+      powerMoment: Bool = false, lowBattery: Bool = false, weather: Bool = false,
+      meeting: Bool = false, timer: Bool = false, media: Bool = false
     ) {
       self.needsYou = needsYou
       self.active = active
@@ -232,6 +242,9 @@ public enum WingContent: Sendable {
       self.powerMoment = powerMoment
       self.lowBattery = lowBattery
       self.weather = weather
+      self.meeting = meeting
+      self.timer = timer
+      self.media = media
     }
   }
 
@@ -240,7 +253,10 @@ public enum WingContent: Sendable {
       if i.needsYou > 0 { .attention }
       else if i.moment { .moment }
       else if i.activity && i.powerMoment { .activity }
+      else if i.meeting { .meeting }
+      else if i.timer { .timer }
       else if i.active > 0 { .working }
+      else if i.media { .media }
       else if i.activity { .activity }
       else if i.lowBattery { .lowBattery }
       else if i.weather { .weather }

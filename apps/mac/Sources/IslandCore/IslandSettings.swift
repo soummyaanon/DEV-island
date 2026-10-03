@@ -81,6 +81,38 @@ public struct IslandSettings: Equatable, Sendable {
   /// Say hello at launch and after time away.
   public var greeting = true
 
+  // Quick access: each module can be switched off in Settings. Written to the
+  // file only when changed from its default, so 1.x's file stays byte-identical.
+
+  /// Claude Code and Codex activity, read from their local logs.
+  public var agentStats = true
+  /// Time, volume, brightness, Wi-Fi, Bluetooth, AirDrop, Focus, battery, displays.
+  public var quickControls = true
+  /// Drop files on the notch to park them; drag them back out or AirDrop them.
+  public var shelf = true
+  /// Recent copied text and images, in memory only; secrets are skipped.
+  public var clipboardHistory = true
+  /// Artwork, track and controls for whatever is playing.
+  public var nowPlaying = true
+  /// Zoom and Google Meet: a call timer, mute, camera and leave.
+  public var meetings = true
+  /// Back, forward and reload for the browser in front.
+  public var browserControls = true
+  /// Calendar events, reminders and the island's own to-dos.
+  public var agenda = true
+  /// Countdowns and Pomodoro.
+  public var timers = true
+  /// Weather, stocks and the unit converter.
+  public var widgets = true
+  /// Stock quotes: a network request, so off until asked for.
+  public var stocks = false
+  public var stockSymbols = "AAPL, MSFT, ^GSPC"
+  public var teleprompter = true
+  /// The time in the wings while the menu bar is hidden.
+  public var menuBarClock = true
+  /// A Shortcut the Focus control runs; blank opens Focus settings.
+  public var focusShortcut = ""
+
   /// Keys this build doesn't know, kept so saving never drops them.
   var unknown: [String: JSONValue] = [:]
 
@@ -109,6 +141,8 @@ public struct IslandSettings: Equatable, Sendable {
     "tray", "updateCheck", "haptics", "textSize", "weather", "weatherLocation", "weatherUnits", "openWith",
     "sessionView", "glass", "battery", "procStats", "respectFocus", "assistant", "assistantModel", "voice",
     "speakReplies", "edgeGlow", "greeting",
+    "agentStats", "quickControls", "shelf", "clipboardHistory", "nowPlaying", "meetings", "browserControls", "agenda", "timers",
+    "widgets", "stocks", "stockSymbols", "teleprompter", "menuBarClock", "focusShortcut",
   ]
 
   /// Merges a stored file over the defaults with 1.x's rules: bad values fall
@@ -163,6 +197,49 @@ public struct IslandSettings: Equatable, Sendable {
     bool("speakReplies", &speakReplies)
     bool("edgeGlow", &edgeGlow)
     bool("greeting", &greeting)
+    bool("agentStats", &agentStats)
+    bool("quickControls", &quickControls)
+    bool("shelf", &shelf)
+    bool("clipboardHistory", &clipboardHistory)
+    bool("nowPlaying", &nowPlaying)
+    bool("meetings", &meetings)
+    bool("browserControls", &browserControls)
+    bool("agenda", &agenda)
+    bool("timers", &timers)
+    bool("widgets", &widgets)
+    bool("stocks", &stocks)
+    if let symbols = stored["stockSymbols"]?.string { stockSymbols = symbols }
+    bool("teleprompter", &teleprompter)
+    bool("menuBarClock", &menuBarClock)
+    if let shortcut = stored["focusShortcut"]?.string { focusShortcut = shortcut }
+  }
+
+  /// The quick-access keys that differ from their defaults, in a fixed order.
+  private var quickAccessEntries: [(key: String, value: OrderedJSON)] {
+    let defaults = IslandSettings()
+    var out: [(key: String, value: OrderedJSON)] = []
+    func bool(_ key: String, _ path: KeyPath<IslandSettings, Bool>) {
+      if self[keyPath: path] != defaults[keyPath: path] { out.append((key, .bool(self[keyPath: path]))) }
+    }
+    func string(_ key: String, _ path: KeyPath<IslandSettings, String>) {
+      if self[keyPath: path] != defaults[keyPath: path] { out.append((key, .string(self[keyPath: path]))) }
+    }
+    bool("agentStats", \.agentStats)
+    bool("quickControls", \.quickControls)
+    bool("shelf", \.shelf)
+    bool("clipboardHistory", \.clipboardHistory)
+    bool("nowPlaying", \.nowPlaying)
+    bool("meetings", \.meetings)
+    bool("browserControls", \.browserControls)
+    bool("agenda", \.agenda)
+    bool("timers", \.timers)
+    bool("widgets", \.widgets)
+    bool("stocks", \.stocks)
+    string("stockSymbols", \.stockSymbols)
+    bool("teleprompter", \.teleprompter)
+    bool("menuBarClock", \.menuBarClock)
+    string("focusShortcut", \.focusShortcut)
+    return out
   }
 
   /// The file's contents, exactly as 1.x writes it: its key order
@@ -200,6 +277,7 @@ public struct IslandSettings: Equatable, Sendable {
       ("edgeGlow", .bool(edgeGlow)),
       ("greeting", .bool(greeting)),
     ]
+    entries += quickAccessEntries
     for (key, value) in unknown.sorted(by: { $0.key < $1.key }) {
       entries.append((key, OrderedJSON(value)))
     }

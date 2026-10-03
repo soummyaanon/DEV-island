@@ -64,6 +64,24 @@ final class IslandActions {
     }
   }
 
+  /// Puts dropped files' paths into the agent's prompt, unsent, as a
+  /// terminal drag would.
+  func insertPaths(_ paths: [String], into session: SessionSnapshot) -> PromptResult {
+    guard !paths.isEmpty else { return .empty }
+    JumpBack.jump(to: session)
+    guard Accessibility.isTrusted else {
+      Accessibility.requestOnce()
+      return .noAccessibility
+    }
+    let text = terminalPaths(paths) + " "
+    Task {
+      // Let the terminal come forward first.
+      try? await Task.sleep(for: .milliseconds(350))
+      Script.run(TerminalInput.insertScript(text))
+    }
+    return .sent
+  }
+
   /// Types a one-line prompt into the session's terminal, or into Cursor's
   /// Composer for Cursor's own agent.
   func sendPrompt(_ text: String, to session: SessionSnapshot) -> PromptResult {

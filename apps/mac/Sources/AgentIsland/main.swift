@@ -14,6 +14,14 @@ if let flag = CommandLine.arguments.firstIndex(of: "--render-icon"), flag + 1 < 
   }
 }
 
+#if DEBUG
+if let flag = CommandLine.arguments.firstIndex(of: "--render-preview"), flag + 1 < CommandLine.arguments.count {
+  _ = NSApplication.shared
+  try? PreviewRenderer.render(to: URL(fileURLWithPath: CommandLine.arguments[flag + 1]))
+  exit(0)
+}
+#endif
+
 let app = NSApplication.shared
 let delegate = AppDelegate()
 app.delegate = delegate

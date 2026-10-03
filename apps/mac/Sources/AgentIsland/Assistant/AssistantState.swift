@@ -310,7 +310,7 @@ final class AssistantState {
       guard let name = payload["name"]?.trimmingCharacters(in: .whitespaces), !name.isEmpty else { return }
       propose(Proposal(id: "\(id)-s-\(name)", kind: .shortcut(name: name)))
     default:
-      break
+      extraAction(payload)
     }
   }
 
@@ -322,8 +322,14 @@ final class AssistantState {
 
   // MARK: Timers
 
+  /// The island's timers (wired by the controller); nil keeps the old in-place timer.
+  @ObservationIgnored var startTimerHook: ((Int, String) -> Void)?
+  /// Kinds the island's own services act on (to-dos, Pomodoro, media).
+  @ObservationIgnored var extraAction: ([String: String]) -> Void = { _ in }
+
   /// "Remind me in 10 minutes": a notification, a chime and a bloom when it ends.
   private func startTimer(minutes: Int, label: String) {
+    if let startTimerHook { return startTimerHook(minutes, label) }
     let timer = Task { [weak self] in
       do { try await Task.sleep(for: .seconds(minutes * 60)) } catch { return }
       let content = UNMutableNotificationContent()

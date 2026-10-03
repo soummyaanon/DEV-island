@@ -13,6 +13,12 @@ struct Panel: View {
       let now = timeline.date
       VStack(alignment: .leading, spacing: 0) {
         let sessions = model.sessions.sessions
+        // Files dragged at the notch, or the script rolling: that's all it shows.
+        if model.shelfDropping {
+          ShelfDropZone(model: model)
+        } else if model.prompterLive {
+          PrompterStage(model: model)
+        } else {
         if let greeting = model.greeting {
           GreetingCard(greeting: greeting.value, at: greeting.at, paused: model.isPaused) { model.dismissGreeting() }
             .id(greeting.id)
@@ -31,6 +37,11 @@ struct Panel: View {
               .modifier(Entrance(kind: .rowIn, delay: 0.06))
           }
         }
+        if let tab = model.hubTab {
+          // Only Timers ticks each second; the other tools redraw once a minute.
+          HubPage(model: model, tab: tab, now: tab == .timers ? now : Date(timeIntervalSince1970: (now.timeIntervalSince1970 / 60).rounded(.down) * 60))
+        } else {
+        ContextCards(model: model, now: now)
         if model.settings.sessionView == .compact && !sessions.isEmpty {
           FlowLayout(spacing: 4) {
             ForEach(Array(sessions.prefix(SessionList.maxBubbles).enumerated()), id: \.element.key) { index, session in
@@ -59,6 +70,7 @@ struct Panel: View {
           WeatherCard(reading: weather, paused: model.isPaused)
         }
         StatusFooter(model: model, now: now)
+        }
         if model.ask.isOpen {
           AssistantPanel(state: model.ask)
         }
@@ -82,9 +94,39 @@ struct Panel: View {
         }
         Controls(model: model)
         }
+        }
       }
       .frame(maxWidth: model.maxIslandWidth, alignment: .leading)
+      // A sideways swipe leans the page and shows where it's going.
+      .offset(x: reduceMotion ? 0 : model.sideRubber * -12)
+      .overlay(alignment: model.sideRubber > 0 ? .leading : .trailing) {
+        if model.sideRubber != 0, let target = model.page(after: model.sideRubber < 0 ? 1 : -1) {
+          SwipeTarget(tab: target, progress: abs(model.sideRubber))
+            .padding(.horizontal, 6)
+            .allowsHitTesting(false)
+        }
+      }
+      .animation(reduceMotion ? nil : model.sideRubber == 0 ? Motion.settle : .easeOut(duration: 0.08), value: model.sideRubber)
     }
+  }
+
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+}
+
+/// The page a swipe is heading for: its icon in a circle that fills as the swipe nears.
+private struct SwipeTarget: View {
+  let tab: HubTab?
+  let progress: Double
+
+  var body: some View {
+    Image(systemName: tab?.symbol ?? "person.2.fill")
+      .font(.system(size: 13, weight: .semibold))
+      .foregroundStyle(.white)
+      .frame(width: 34, height: 34)
+      .background(Circle().fill(.white.opacity(0.1 + 0.25 * progress)))
+      .overlay(Circle().trim(from: 0, to: progress).stroke(Palette.accent, style: StrokeStyle(lineWidth: 2, lineCap: .round)).rotationEffect(.degrees(-90)))
+      .scaleEffect(0.7 + 0.3 * progress)
+      .opacity(min(1, progress * 1.6))
   }
 }
 
@@ -460,6 +502,9 @@ private struct Controls: View {
         }
         .help("Download Agent Island \(version)")
       }
+      if !model.hubTabs.filter({ $0 != .ask }).isEmpty {
+        PageDots(model: model)
+      }
       HStack(spacing: 6) {
         Keycap(symbol: model.settings.sounds ? "speaker.wave.2.fill" : "speaker.slash.fill", label: model.settings.sounds ? "Sound on" : "Sound off", off: !model.settings.sounds) {
           model.changeSettings { $0.sounds.toggle() }
@@ -475,7 +520,6 @@ private struct Controls: View {
             model.togglePrompt()
           }
         }
-        Keycap(symbol: "gearshape.fill", label: "Settings") { model.openSettings() }
         Keycap(symbol: "power", label: "Quit") { NSApp.terminate(nil) }
       }
     }
@@ -614,5 +658,71 @@ private struct WeatherCard: View {
       .padding(.init(top: 4, leading: 8, bottom: 0, trailing: 8))
       .accessibilityElement(children: .ignore)
       .accessibilityLabel(reading.summary + (reading.stale ? ", offline" : ""))
+  }
+}
+
+
+/// One dot per page — sessions, then each tool. The current one shows its
+/// icon; hover any to see it; click to go straight there. For the first few
+/// opens a chevron nudges, saying the island swipes sideways.
+private struct PageDots: View {
+  let model: IslandModel
+
+  var body: some View {
+    HStack(spacing: 4) {
+      if model.swipeHintsLeft > 0 && model.hubTab == nil {
+        SwipeHint()
+      }
+      ForEach(Array(model.pages.enumerated()), id: \.offset) { _, page in
+        PageDot(page: page, current: page == model.hubTab) { model.showTab(page) }
+      }
+    }
+    .padding(.horizontal, 4)
+    .help("Swipe sideways with two fingers, or click a dot")
+  }
+}
+
+private struct PageDot: View {
+  let page: HubTab?
+  let current: Bool
+  let action: () -> Void
+
+  var body: some View {
+    Hovering { hovered in
+      Button(action: action) {
+        ZStack {
+          if current || hovered {
+            Capsule()
+              .fill(.white.opacity(current ? 0.9 : 0.25))
+              .frame(width: 22, height: 14)
+            Image(systemName: page?.symbol ?? "person.2.fill")
+              .font(.system(size: 7.5, weight: .bold))
+              .foregroundStyle(current ? .black : .white)
+          } else {
+            Circle().fill(.white.opacity(0.3)).frame(width: 5, height: 5)
+          }
+        }
+        .frame(width: current || hovered ? 22 : 9, height: 16)
+        .contentShape(Rectangle())
+      }
+      .buttonStyle(.plain)
+      .help(page?.title ?? "Sessions")
+      .accessibilityLabel(page?.title ?? "Sessions")
+      .accessibilityAddTraits(current ? .isSelected : [])
+      .animation(.interpolatingSpring(mass: 1, stiffness: 380, damping: 30), value: current || hovered)
+    }
+  }
+}
+
+/// A small chevron that drifts left and back: "swipe".
+private struct SwipeHint: View {
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  var body: some View {
+    Image(systemName: "chevron.compact.left")
+      .font(.system(size: 11, weight: .bold))
+      .foregroundStyle(Palette.accent)
+      .phaseAnimator(reduceMotion ? [0.0] : [0.0, -4.0, 0.0]) { view, x in view.offset(x: x) } animation: { _ in .easeInOut(duration: 0.6) }
+      .help("Swipe left with two fingers for tools")
   }
 }

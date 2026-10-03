@@ -15,7 +15,7 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>2.0.1</string>
+	<string>2.1.0</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -28,13 +28,19 @@
 		</dict>
 	</array>
 	<key>CFBundleVersion</key>
-	<string>2</string>
+	<string>3</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>Agent Island brings your agent's terminal tab to the front when you click its session.</string>
+	<string>Agent Island brings your agent’s terminal forward, reads the browser tab and music you see in the island, and runs their back, reload and play controls.</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Agent Island shows and switches Bluetooth from the quick controls in the island.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Agent Island shows today’s events and their call links in the island. Nothing leaves your Mac.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Agent Island shows today’s events and their call links in the island. Nothing leaves your Mac.</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSLocationUsageDescription</key>
@@ -43,6 +49,10 @@
 	<string>Agent Island shows the local weather in the island. Your location is rounded to about a kilometre and only sent to Open-Meteo.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Agent Island listens for your question when you press the mic in the Ask bar. It's transcribed on your Mac.</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>Agent Island shows today’s reminders in the island and lets you tick them off. Nothing leaves your Mac.</string>
+	<key>NSRemindersUsageDescription</key>
+	<string>Agent Island shows today’s reminders in the island and lets you tick them off. Nothing leaves your Mac.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Agent Island turns your spoken question into text on your Mac.</string>
 </dict>

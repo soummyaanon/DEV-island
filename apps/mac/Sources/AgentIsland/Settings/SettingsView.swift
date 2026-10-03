@@ -8,13 +8,14 @@ import UniformTypeIdentifiers
 @Observable
 final class SettingsWindowState {
   enum Section: String, CaseIterable, Identifiable {
-    case integrations, intelligence, appearance, sounds, weather, live, accessibility, general, updates
+    case integrations, quickAccess, intelligence, appearance, sounds, weather, live, accessibility, general, updates
 
     var id: String { rawValue }
 
     var label: String {
       switch self {
       case .integrations: "Integrations"
+      case .quickAccess: "Quick access"
       case .intelligence: "Intelligence"
       case .appearance: "Appearance"
       case .sounds: "Sounds"
@@ -29,6 +30,7 @@ final class SettingsWindowState {
     var symbol: String {
       switch self {
       case .integrations: "square.stack.3d.up.fill"
+      case .quickAccess: "rectangle.topthird.inset.filled"
       case .intelligence: "sparkles"
       case .appearance: "paintpalette.fill"
       case .sounds: "music.note"
@@ -43,6 +45,7 @@ final class SettingsWindowState {
     var tile: UInt32 {
       switch self {
       case .integrations: 0xFF8C42
+      case .quickAccess: 0x30B0C7
       case .intelligence: 0xA77BFF
       case .appearance: 0x3D8BFF
       case .sounds: 0xFF5A7A
@@ -58,6 +61,7 @@ final class SettingsWindowState {
     var blurb: String {
       switch self {
       case .integrations: "Which agents the island watches."
+      case .quickAccess: "What the notch shows when it matters, and the tools a swipe away."
       case .intelligence: "The on-device assistant, its voice, and its glow."
       case .appearance: "How the island looks and opens."
       case .sounds: "What you hear when agents finish, ask, or need you."
@@ -75,6 +79,8 @@ final class SettingsWindowState {
   var installing = false
   var copied: String?
   var weatherLocation = ""
+  var stockSymbols = ""
+  var focusShortcut = ""
 }
 
 /// Everything the Settings window can change, persisted to the shared
@@ -163,6 +169,7 @@ struct SettingsView: View {
   @ViewBuilder private var detail: some View {
     switch state.section {
     case .integrations: integrations
+    case .quickAccess: quickAccess
     case .intelligence: intelligence
     case .appearance: appearance
     case .sounds: soundsSection
@@ -206,6 +213,65 @@ struct SettingsView: View {
     case .claudeCode: "Lifecycle hooks in ~/.claude/settings.json — removed cleanly when off."
     case .codex: "Read-only tail of local session logs. Nothing to install."
     case .cursor: "Bridge in ~/.cursor/hooks.json — removed cleanly when off."
+    }
+  }
+
+  private var quickAccess: some View {
+    VStack(alignment: .leading, spacing: 14) {
+      Note("The notch stays clean: these appear only when they're happening — a call, a timer, music, the browser in front, files dragged to the notch. Everything else is one sideways swipe away in the open island (or click the dots).")
+      SubHeading("When it's happening")
+      Group_ {
+        SettingRow(title: "Now Playing", detail: "Artwork and the track in the wings while music plays; play, pause and skip in the island. Music and Spotify are asked once (Automation).", isOn: binding(\.nowPlaying))
+        SettingRow(title: "Meetings", detail: "Zoom and Google Meet: a call timer, mute, camera and leave. Zoom is driven through its own menu (needs Accessibility); Meet tabs are looked for only while the microphone is in use.", isOn: binding(\.meetings))
+        SettingRow(title: "Timers", detail: "Countdowns and Pomodoro, with the time left in the wings.", isOn: binding(\.timers))
+        SettingRow(title: "Browser controls", detail: "The current tab, back, forward and reload when Safari, Chrome, Arc, Brave, Edge or Firefox is in front.", isOn: binding(\.browserControls))
+        SettingRow(title: "File Shelf", detail: "Drag files onto the notch to park them; drag them back out or AirDrop them. Files stay where they are; only images and text you drop are saved, in the app's own folder.", isOn: binding(\.shelf))
+        SettingRow(title: "Clock when the menu bar hides", detail: "With the menu bar set to hide, the resting island shows the time.", isOn: binding(\.menuBarClock))
+      }
+      SubHeading("Tools")
+      Group_ {
+        SettingRow(title: "Agents", detail: "Today's tokens, sessions, limits and a 7-day chart for Claude Code and Codex, read from their own logs on this Mac.", isOn: binding(\.agentStats))
+        SettingRow(title: "Quick controls", detail: "Time, volume, brightness, Wi-Fi, Bluetooth, AirDrop, Focus, battery and displays.", isOn: binding(\.quickControls))
+        SettingRow(title: "Clipboard history", detail: "The last 30 texts and images you copied, in memory only. Password managers, concealed items and anything that looks like a key, token, card number or one-time code are skipped.", isOn: binding(\.clipboardHistory))
+        SettingRow(title: "Today", detail: "Calendar events with join links, reminders, and a to-do list of your own. Calendar access is asked for only when you press Allow.", isOn: binding(\.agenda))
+        SettingRow(title: "Widgets", detail: "Weather, stocks and a unit converter.", isOn: binding(\.widgets))
+        SettingRow(title: "Teleprompter", detail: "A script that scrolls right under the camera, with speed and size controls.", isOn: binding(\.teleprompter))
+      }
+      SubHeading("Stocks")
+      Group_ {
+        SettingRow(title: "Stock quotes", detail: "Off by default: quotes come from Yahoo Finance, and only the symbols below are sent, at most every five minutes while Widgets is open.", isOn: binding(\.stocks))
+        ChoiceRow(title: "Symbols", detail: "Up to eight, separated by commas.") {
+          TextField("AAPL, MSFT, ^GSPC", text: Binding(get: { state.stockSymbols }, set: { state.stockSymbols = $0 }))
+            .frame(width: 180)
+            .onSubmit { model.changeSettings { $0.stockSymbols = state.stockSymbols } }
+            .onAppear { state.stockSymbols = model.settings.stockSymbols }
+            .disabled(!model.settings.stocks)
+        }
+      }
+      SubHeading("Focus control")
+      Group_ {
+        ChoiceRow(title: "Shortcut to run", detail: "macOS has no public way to switch Focus, so the Focus control runs a Shortcut you name (for example one with “Set Focus”). Blank opens Focus settings.") {
+          TextField("Toggle Focus", text: Binding(get: { state.focusShortcut }, set: { state.focusShortcut = $0 }))
+            .frame(width: 180)
+            .onSubmit { model.changeSettings { $0.focusShortcut = state.focusShortcut } }
+            .onAppear { state.focusShortcut = model.settings.focusShortcut }
+        }
+      }
+      SubHeading("Permissions")
+      Group_ {
+        ChoiceRow(title: "Accessibility", detail: Accessibility.isTrusted ? "Granted: meeting controls, Safari and Firefox navigation, and media keys work." : "Needed for meeting mute/camera, Safari and Firefox back/forward, and media keys for other players.") {
+          Button(Accessibility.isTrusted ? "Open" : "Grant…") { Accessibility.request() }
+        }
+        ChoiceRow(title: "Calendar & Reminders", detail: model.agenda.eventAccess == .granted ? "Granted." : "For Today's events and reminders.") {
+          Button(model.agenda.eventAccess == .notAsked ? "Allow…" : "Open") {
+            if model.agenda.eventAccess == .notAsked { model.agenda.requestAccess() } else { model.agenda.openPrivacySettings() }
+          }
+        }
+        ChoiceRow(title: "Automation", detail: "Music, Spotify and browsers ask once the first time the island reads them. Review the choices here.") {
+          Button("Open") { SettingsPane.open(SettingsPane.automation) }
+        }
+      }
+      Note("Links for Shortcuts or launchers: agent-island://tools/clipboard (any tool), agent-island://timer?minutes=10&label=Tea, agent-island://pomodoro.")
     }
   }
 

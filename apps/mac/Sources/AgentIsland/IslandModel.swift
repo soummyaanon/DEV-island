@@ -50,6 +50,19 @@ final class IslandModel {
   let weather = WeatherService()
   let assistant = AssistantEngine()
   let updates = UpdateChecker()
+
+  // Quick access: each a service the controller starts and stops with its setting.
+  let media = NowPlayingService()
+  let timers = TimerService()
+  let shelf = FileShelf()
+  let clipboard = ClipboardHistory()
+  let meeting = MeetingService()
+  let browser = BrowserService()
+  let agenda = AgendaService()
+  let stocks = StocksService()
+  let system = SystemControls()
+  let prompter = TeleprompterState()
+  let agentStats = AgentStatsService()
   @ObservationIgnored private(set) lazy var ask = AssistantState(engine: assistant)
 
   init(notch: NotchMetrics, settings: IslandSettings, power: PowerMonitor, sessions: SessionStore, actions: IslandActions) {
@@ -165,7 +178,7 @@ final class IslandModel {
   }
 
   /// The island takes keystrokes only while you're typing or VoiceOver is in.
-  var wantsKey: Bool { promptFocused || promptOpen || a11yFocused || ask.focused }
+  var wantsKey: Bool { promptFocused || promptOpen || a11yFocused || ask.focused || hubTyping }
 
   /// The Ask bar is on (Settings) and can open here.
   var crewAvailable: Bool { settings.assistant }
@@ -239,7 +252,78 @@ final class IslandModel {
 
   var isExpanded: Bool {
     hoverExpands || pinned || promptFocused || a11yFocused || ask.focused || greeting != nil || isForcedOpen
+      || shelfDropping || prompterLive || hubTyping
   }
+
+  // MARK: Quick access
+
+  /// The open island's page: nil is the sessions page, else a tool.
+  var hubTab: HubTab?
+  /// The Tools page remembers its tab across a close.
+  var lastHubTab: HubTab?
+  /// A text field in a tool has the keyboard: the island stays open.
+  var hubTyping = false
+  /// −1…1 while a sideways swipe builds: the page leans and the next one's icon shows.
+  var sideRubber: Double = 0
+  /// Opens so far that showed the swipe hint; it stops after a few, or after a swipe.
+  var swipeHintsLeft = max(0, 6 - UserDefaults.standard.integer(forKey: "swipeHintsShown"))
+
+  func swiped() {
+    guard swipeHintsLeft > 0 else { return }
+    swipeHintsLeft = 0
+    UserDefaults.standard.set(99, forKey: "swipeHintsShown")
+  }
+
+  /// The pages a swipe walks through: sessions first (nil), then each tool.
+  var pages: [HubTab?] { [nil] + hubTabs.filter { $0 != .ask } }
+
+  /// Where a swipe in `direction` (+1 next, −1 back) would land.
+  func page(after delta: Int) -> HubTab?? {
+    let pages = pages
+    guard let index = pages.firstIndex(of: hubTab) else { return nil }
+    let next = index + delta
+    return pages.indices.contains(next) ? .some(pages[next]) : nil
+  }
+
+  /// The menu bar hides itself, so the wings carry the time.
+  var menuBarHidden = false
+
+  var hubTabs: [HubTab] { HubTab.enabled(settings) }
+
+  /// Files are being dragged at the notch: the island opens as the shelf's drop zone.
+  var shelfDropping: Bool { settings.shelf && shelf.dragActive }
+
+  /// The teleprompter rolling: it holds the island open under the camera.
+  var prompterLive: Bool { settings.teleprompter && prompter.playing }
+
+  func showTab(_ tab: HubTab?) {
+    if tab == .ask {
+      // The assistant lives on the main page, in the Ask bar.
+      hubTab = nil
+      if !ask.isOpen { toggleAsk() }
+      return
+    }
+    hubTab = tab
+    if let tab { lastHubTab = tab }
+  }
+
+  /// A sideways swipe: sessions ⇄ tools.
+  func stepPage(_ delta: Int) {
+    let tabs = hubTabs.filter { $0 != .ask }
+    if hubTab == nil, delta > 0, let last = lastHubTab, tabs.contains(last) {
+      showTab(last)
+    } else {
+      showTab(HubTab.step(from: hubTab, by: delta, in: tabs))
+    }
+  }
+
+  /// The call, timer and track the wings may show.
+  var liveCall: MeetingService.Call? { settings.meetings ? meeting.call : nil }
+  var liveTimer: IslandTimer? { settings.timers ? timers.featured : nil }
+  var liveTrack: NowPlayingService.Track? { settings.nowPlaying ? media.track : nil }
+
+  /// The time in the right wing at rest, when the menu bar that shows it is hidden.
+  var showsClock: Bool { settings.menuBarClock && menuBarHidden }
 
   func swipe(_ direction: WheelGesture.Direction) {
     switch direction {
@@ -252,6 +336,12 @@ final class IslandModel {
     default:
       break
     }
+  }
+
+  /// A sideways swipe on the closed island opens it (onto the tools).
+  func openFromGesture() {
+    gestureOpen = true
+    dismissed = false
   }
 
   /// Swipe mode only: a click on the wings toggles, mirroring the gesture.
@@ -283,7 +373,10 @@ final class IslandModel {
       activity: (power.activity != nil && reading != nil) || focusMoment != nil,
       powerMoment: power.activity?.isCharger == true,
       lowBattery: reading?.isLow == true,
-      weather: weather.reading != nil
+      weather: weather.reading != nil,
+      meeting: liveCall != nil,
+      timer: liveTimer != nil,
+      media: liveTrack?.playing == true
     ))
   }
 
@@ -316,9 +409,10 @@ final class IslandModel {
   var collapsedWidth: CGFloat {
     let w = notch.width
     if isResting { return w }
-    if isSleeping || isIdleBot { return w + 84 }
+    if isSleeping || isIdleBot { return w + (showsClock ? 124 : 84) }
     switch wing {
-    case .moment, .activity, .lowBattery, .weather: return w + 104
+    case .moment, .activity, .lowBattery, .weather, .media: return w + 104
+    case .meeting, .timer: return w + 124
     case .working where WorkCrew(active).more > 0: return w + 100
     default:
       return switch orbs.count {

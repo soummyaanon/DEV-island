@@ -169,6 +169,16 @@ public enum TerminalInput {
   }
 
   /// Types `text` and Enter into whatever just came to the front.
+  /// Types `text` into the front terminal without pressing Return, so you
+  /// can keep writing around it (dropped file paths).
+  public static func insertScript(_ text: String) -> String {
+    """
+    tell application "System Events"
+      keystroke "\(appleScriptEscaped(text))"
+    end tell
+    """
+  }
+
   public static func typeScript(_ text: String) -> String {
     """
     delay 0.4

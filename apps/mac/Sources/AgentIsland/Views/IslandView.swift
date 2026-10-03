@@ -84,6 +84,9 @@ struct IslandView: View {
       model.sessions.sessions.count, model.pending.count, model.asking.count, model.greeting == nil ? 0 : 1,
       model.greetingOnly ? 1 : 0, model.ask.isOpen ? 1 : 0, model.ask.turns.count, model.ask.proposals.count,
       model.weather.reading == nil ? 0 : 1,
+      model.hubTab.map { HubTab.allCases.firstIndex(of: $0)! + 1 } ?? 0, model.timers.timers.count,
+      model.liveTrack == nil ? 0 : 1, model.liveCall == nil ? 0 : 1, model.browser.front == nil ? 0 : 1,
+      model.shelf.items.count, model.shelfDropping ? 1 : 0, model.prompterLive ? 1 : 0,
     ]
   }
 
@@ -150,7 +153,7 @@ struct IslandView: View {
     .onGeometryChange(for: CGSize.self) { $0.size } action: { size in
       model.bodySize = CGSize(width: size.width - 2 * IslandOutline.earRadius, height: size.height)
     }
-    .contextMenu { IslandMenu(power: model.power) }
+    .contextMenu { IslandMenu(power: model.power, openSettings: model.openSettings) }
     .accessibilityElement(children: .contain)
     .accessibilityLabel("Agent Island")
   }
@@ -209,6 +212,18 @@ private struct Band: View {
         .padding(.vertical, -4)
         .pop()
         .id(model.sessions.moment?.id)
+      } else if model.wing == .meeting, model.liveCall != nil {
+        CallBadge(muted: model.meeting.muted).pop()
+      } else if model.wing == .timer, let timer = model.liveTimer {
+        TimelineView(.periodic(from: .now, by: 1)) { timeline in
+          TimerRing(timer: timer, now: timeline.date)
+        }
+        .pop()
+        .id(timer.id)
+      } else if model.wing == .media, model.liveTrack != nil {
+        ArtworkView(image: model.media.artwork)
+          .padding(.vertical, -2)
+          .pop()
       } else if model.isSleeping || model.isIdleBot {
         if let reading {
           BatteryRing(
@@ -252,8 +267,25 @@ private struct Band: View {
   }
 
   @ViewBuilder private var right: some View {
-    if model.isSleeping || model.isIdleBot {
-      IdleCrewView(paused: model.isPaused, awake: model.greeting != nil)
+    if (model.isSleeping || model.isIdleBot) && model.showsClock {
+      WingClock().pop()
+    } else if model.isSleeping || model.isIdleBot {
+      // At rest, one mascot keeps the island company.
+      BotAvatar(
+        look: BotLook.crew[0].look, state: .idle, size: 16, seed: 0.12, paused: model.isPaused,
+        style: BotPose.Style(jumpEvery: 0), interactive: false
+      )
+      .pop()
+    } else if model.wing == .meeting, let call = model.liveCall {
+      WingTicker(text: { Clock.elapsed($0.timeIntervalSince(call.since)) }, tint: QuickPalette.meeting)
+        .modifier(Entrance(kind: .countRoll))
+    } else if model.wing == .timer, let timer = model.liveTimer {
+      WingTicker(text: { Clock.countdown(timer.remaining(at: $0)) }, tint: QuickPalette.timer(timer))
+        .modifier(Entrance(kind: .countRoll))
+        .id(timer.id)
+    } else if model.wing == .media, let track = model.liveTrack {
+      EqualizerBars(playing: track.playing, tint: model.media.accent.map(Color.init(nsColor:)) ?? Palette.done, paused: model.isPaused)
+        .pop()
     } else if model.showsWorkCrew {
       WorkCrewView(active: model.active, paused: model.isPaused)
     } else {
@@ -311,6 +343,13 @@ enum WingText {
     }
     if model.wing == .lowBattery, let reading { return "Low battery, \(reading.percent)%" }
     if model.wing == .weather, let weather = model.weather.reading { return weather.summary }
+    if model.wing == .meeting, let call = model.liveCall {
+      return "On a \(call.source.name) call for \(Clock.elapsed(Date.now.timeIntervalSince(call.since)))" + (model.meeting.muted == true ? ", muted" : "")
+    }
+    if model.wing == .timer, let timer = model.liveTimer {
+      return "\(timer.title), \(Clock.countdown(timer.remaining(at: .now))) left" + (timer.isPaused ? ", paused" : "")
+    }
+    if model.wing == .media, let track = model.liveTrack { return "Playing \(track.title) by \(track.artist)" }
     let battery = reading.map { ", battery \($0.percent)%" } ?? ""
     if model.isSleeping { return "\(model.sessions.sessions.count) sessions, all resting\(battery)" }
     if model.isIdleBot { return "No agents running\(battery)" }
@@ -435,12 +474,14 @@ private struct EdgeGlow: View {
 /// Right-click on the island. The Settings window replaces most of this in phase 6.
 private struct IslandMenu: View {
   let power: PowerMonitor
+  let openSettings: () -> Void
 
   var body: some View {
     if LoginItem.isAvailable {
       // Read fresh each time the menu opens: System Settings can change it too.
       Toggle("Open at Login", isOn: Binding(get: { LoginItem.isEnabled }, set: { LoginItem.isEnabled = $0 }))
     }
+    Button("Settings…") { openSettings() }
     #if DEBUG
     Button("Play Charger Moment") { power.simulateMoment() }
     #endif

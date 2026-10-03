@@ -9,5 +9,11 @@
     <!-- Jump back: bringing the agent's terminal tab forward over Apple Events. -->
     <key>com.apple.security.automation.apple-events</key>
     <true/>
+    <!-- Quick controls: the Bluetooth radio and paired devices. -->
+    <key>com.apple.security.device.bluetooth</key>
+    <true/>
+    <!-- Today: calendar events and reminders, read on this Mac once allowed. -->
+    <key>com.apple.security.personal-information.calendars</key>
+    <true/>
   </dict>
 </plist>

@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import IslandCore
 
 #if canImport(FoundationModels)
 import FoundationModels
@@ -68,7 +69,7 @@ final class AssistantEngine {
     #endif
     let emitter = Emitter(id: id, send: onEvent)
     if CommandReader.run(prompt: prompt, context: context, emit: emitter) { return }
-    emitter.reply("I can open apps, sites and sessions, search the web, set timers and the volume, and run your Shortcuts here. Answering questions needs Apple Intelligence (macOS 26 on a supported Mac).")
+    emitter.reply("I can open apps, sites and sessions, search the web, set timers and Pomodoros, add to-dos, control music, convert units, set the volume, and run your Shortcuts here. Answering questions needs Apple Intelligence (macOS 26 on a supported Mac).")
   }
 
   func cancel(_ id: String) {
@@ -286,6 +287,39 @@ enum CommandReader {
       emit.tool("startTimer", "Timer · \(minutes) min")
       emit.action(["kind": "timer", "minutes": String(minutes), "label": m[3]])
       emit.reply("Started a \(minutes)-minute timer\(m[3].isEmpty ? "" : " for \(m[3])").")
+      return true
+    }
+    if match(#"^(?:start (?:a )?)?(?:pomodoro|focus session)$"#) != nil {
+      emit.tool("startPomodoro", "Pomodoro · 25 min")
+      emit.action(["kind": "pomodoro"])
+      emit.reply("Started a Pomodoro: 25 minutes of focus.")
+      return true
+    }
+    if let m = match(#"^(?:add (?:a )?)?(?:to-?do|task)[: ] ?(.+)$"#) ?? match(#"^add (.+) to (?:my )?(?:to-?dos?|list|tasks)$"#) {
+      emit.tool("addTodo", "Adding a to-do")
+      emit.action(["kind": "todo", "text": m[1]])
+      emit.reply("Added “\(m[1])” to your to-dos.")
+      return true
+    }
+    if let m = match(#"^(play|pause|resume|next|skip|previous)(?: (?:the )?(?:song|track|music))?$"#) {
+      let command = m[1] == "next" || m[1] == "skip" ? "next" : m[1] == "previous" ? "previous" : "toggle"
+      emit.tool("controlMedia", command == "toggle" ? "Play/pause" : command == "next" ? "Next track" : "Previous track")
+      emit.action(["kind": "media", "command": command])
+      emit.reply(command == "toggle" ? "Done." : command == "next" ? "Skipped." : "Went back a track.")
+      return true
+    }
+    if let result = UnitConverter.convert(q) {
+      emit.reply(result.sentence)
+      return true
+    }
+    if let m = match(#"^(?:open|show) (?:the )?(clipboard|shelf|controls|timers|widgets|prompter|teleprompter|calendar|today)(?: history)?$"#) {
+      let tab = switch m[1] {
+      case "teleprompter": "prompter"
+      case "calendar", "today": "agenda"
+      default: m[1]
+      }
+      emit.action(["kind": "tool", "tab": tab])
+      emit.reply("Here it is.")
       return true
     }
     if let m = match(#"^(?:set (?:the )?)?volume (?:to )?(\d+)%?$"#) {

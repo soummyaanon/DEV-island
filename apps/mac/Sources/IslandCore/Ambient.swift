@@ -74,6 +74,12 @@ public enum DeepLink: Equatable, Sendable {
   case focus(active: Bool, name: String?)
   case toggle
   case settings
+  /// agent-island://tools/clipboard: open the island on a tool (or the tools page).
+  case tools(String?)
+  /// agent-island://timer?minutes=5&label=Tea
+  case timer(minutes: Double, label: String)
+  /// agent-island://pomodoro
+  case pomodoro
 
   public static let scheme = "agent-island"
 
@@ -94,6 +100,17 @@ public enum DeepLink: Equatable, Sendable {
       self = .toggle
     case ("settings", ""):
       self = .settings
+    case ("tools", _):
+      let tab = path.split(separator: "/").first.map(String.init)
+      self = .tools(tab)
+    case ("timer", ""):
+      let query = components.queryItems ?? []
+      let minutes = query.first { $0.name == "minutes" }?.value.flatMap(Double.init) ?? 5
+      guard minutes > 0, minutes <= 24 * 60 else { return nil }
+      let label = query.first { $0.name == "label" }?.value ?? ""
+      self = .timer(minutes: minutes, label: String(label.prefix(40)))
+    case ("pomodoro", ""):
+      self = .pomodoro
     default:
       return nil
     }

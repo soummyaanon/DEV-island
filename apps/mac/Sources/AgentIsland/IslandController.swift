@@ -27,6 +27,16 @@ final class IslandController {
   private var awaySince: Date?
   /// The app that was frontmost before the island took keys, to hand them back to.
   private var previousApp: NSRunningApplication?
+  // Quick access (see the extension below).
+  fileprivate var browserPoll: Task<Void, Never>?
+  fileprivate var pageReset: Task<Void, Never>?
+  fileprivate var dragBaseline = 0
+  fileprivate var dragCarriesFiles = false
+  fileprivate var sidewaysSum = 0.0
+  fileprivate var sidewaysLast: TimeInterval = 0
+  fileprivate var sidewaysLockedUntil: TimeInterval = 0
+  fileprivate var sideReset: Task<Void, Never>?
+  fileprivate var hintCounted = false
 
   init(settings: IslandSettings) {
     let screen = Self.targetScreen
@@ -70,6 +80,7 @@ final class IslandController {
     wireAssistant()
     watchSettings()
     watchMeter()
+    wireQuickAccess()
     Task { await greet(.launch) }
   }
 
@@ -97,6 +108,21 @@ final class IslandController {
     ask.sendPrompt = { [model] text, session in _ = model.actions.sendPrompt(text, to: session) }
     ask.haptic = { [haptics] in haptics.play($0) }
     ask.speakReplies = { [model] in model.settings.speakReplies }
+    ask.startTimerHook = { [model] minutes, label in model.timers.startCountdown(minutes: Double(minutes), label: label) }
+    ask.extraAction = { [model] payload in
+      switch payload["kind"] {
+      case "pomodoro": model.timers.startPomodoro()
+      case "todo": if let text = payload["text"] { model.agenda.addTodo(text) }
+      case "media":
+        switch payload["command"] {
+        case "next": model.media.next()
+        case "previous": model.media.previous()
+        default: model.media.playPause()
+        }
+      case "tool": if let tab = payload["tab"].flatMap(HubTab.init(rawValue:)) { model.showTab(tab) }
+      default: break
+      }
+    }
     ask.onTimer = { [weak self] label in
       guard let self else { return }
       sounds.play(.success, settings: model.settings)
@@ -200,6 +226,11 @@ final class IslandController {
     case let .focus(active, name): model.setFocus(MacFocus(active: active, name: name))
     case .toggle: model.pinned.toggle()
     case .settings: openSettings()
+    case let .tools(name):
+      model.pinned = true
+      model.showTab(name.flatMap(HubTab.init(rawValue:)) ?? model.lastHubTab ?? model.hubTabs.first)
+    case let .timer(minutes, label): model.timers.startCountdown(minutes: minutes, label: label)
+    case .pomodoro: model.timers.startPomodoro()
     }
   }
 
@@ -304,7 +335,7 @@ final class IslandController {
   /// your terminal. It takes them only while you type a prompt or VoiceOver
   /// reaches in, then hands them straight back.
   private func watchKeys() {
-    track({ [model] in (model.wantsKey, model.showsPrompt || model.ask.isOpen) }) { [weak self] (wants: Bool, fields: Bool) in
+    track({ [model] in (model.wantsKey, model.showsPrompt || model.ask.isOpen || model.hubTab != nil) }) { [weak self] (wants: Bool, fields: Bool) in
       guard let self else { return }
       // A visible field may take keys when clicked; typing and VoiceOver take them at once.
       panel.keyAllowed = wants || fields
@@ -362,8 +393,19 @@ final class IslandController {
   // MARK: Pointer
 
   private func watchPointer() {
-    let global = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged]) { [weak self] _ in
-      MainActor.assumeIsolated { self?.pointerMoved() }
+    let global = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged, .leftMouseDown, .leftMouseUp]) { [weak self] event in
+      let type = event.type
+      MainActor.assumeIsolated {
+        guard let self else { return }
+        switch type {
+        case .leftMouseDown: self.dragStarted()
+        case .leftMouseUp: self.dragEnded()
+        case .leftMouseDragged:
+          self.dragMoved()
+          self.pointerMoved()
+        default: self.pointerMoved()
+        }
+      }
     }
     let local = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged, .scrollWheel]) { [weak self] event in
       MainActor.assumeIsolated {
@@ -400,6 +442,12 @@ final class IslandController {
   private func scrolled(_ event: NSEvent) {
     // Momentum is the tail of a swipe already decided, not a new one.
     guard event.window === panel, event.momentumPhase.isEmpty else { return }
+    // Sideways: through the sessions page and every tool. On the closed
+    // island it opens straight onto the tools.
+    if abs(event.scrollingDeltaX) > abs(event.scrollingDeltaY) || sidewaysActive(at: event.timestamp) {
+      sideways(event)
+      return
+    }
     let finger = WheelGesture.fingerDelta(
       scrollingDeltaY: event.scrollingDeltaY,
       invertedFromDevice: event.isDirectionInvertedFromDevice
@@ -488,4 +536,176 @@ final class IslandController {
 /// generic: Swift 6.3's optimiser crashes inlining a generic one's deinit.
 final class IslandHostingView: NSHostingView<IslandView> {
   override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+}
+
+// MARK: - Quick access
+
+extension IslandController {
+  /// Starts each quick-access service while its setting is on, and feeds the
+  /// open island what it shows (the browser's tab, a catch-up on music).
+  fileprivate func wireQuickAccess() {
+    track({ [model] in model.settings }) { [weak self] (settings: IslandSettings) in
+      guard let self else { return }
+      if settings.nowPlaying { model.media.start() } else { model.media.stop() }
+      if settings.clipboardHistory { model.clipboard.start() } else { model.clipboard.stop() }
+      if settings.meetings { model.meeting.start() } else { model.meeting.stop() }
+      if settings.browserControls || settings.meetings { model.browser.start() } else { model.browser.stop() }
+      if settings.agenda { model.agenda.start() } else { model.agenda.stop() }
+      if !settings.teleprompter { model.prompter.stop() }
+      if !settings.shelf { model.shelf.dragActive = false }
+      if let tab = model.hubTab, !model.hubTabs.contains(tab) { model.hubTab = nil }
+    }
+    model.meeting.frontMeetTab = { [model] in model.browser.meetTab }
+
+    // A rung timer: chime, bloom, tap, and a spoken line.
+    model.timers.onFinish = { [weak self] timer in
+      guard let self else { return }
+      sounds.play(.success, settings: model.settings)
+      model.sessions.firePulse(.done)
+      haptics.play(.success)
+      let line = switch (timer.kind, timer.phase) {
+      case (.countdown, _): timer.label.isEmpty ? "Timer done" : "Timer done: \(timer.label)"
+      case (.pomodoro, .focus): "Focus round done. Take a break."
+      case (.pomodoro, _): "Break's over."
+      }
+      NSAccessibility.post(element: NSApp as Any, notification: .announcementRequested, userInfo: [
+        .announcement: line, .priority: NSAccessibilityPriorityLevel.high.rawValue,
+      ])
+    }
+
+    // Opening: read the browser tab (and keep reading while open), and ask the
+    // music apps once what they're already playing. Closing: back to sessions.
+    track({ [model] in model.isExpanded && !model.isPaused }) { [weak self] open in
+      guard let self else { return }
+      browserPoll?.cancel()
+      browserPoll = nil
+      if open {
+        pageReset?.cancel()
+        // Each open spends one of the swipe hints.
+        if model.swipeHintsLeft > 0, !hintCounted {
+          hintCounted = true
+          UserDefaults.standard.set(UserDefaults.standard.integer(forKey: "swipeHintsShown") + 1, forKey: "swipeHintsShown")
+        }
+        if model.settings.nowPlaying { model.media.catchUp() }
+        if model.settings.agenda { model.agenda.refresh() }
+        browserPoll = Task { [weak self] in
+          while !Task.isCancelled {
+            guard let model = self?.model else { return }
+            // The tab shows only on the sessions page: read it only then.
+            if model.settings.browserControls, model.browser.front != nil, model.hubTab == nil { await model.browser.refresh() }
+            try? await Task.sleep(for: .seconds(3))
+          }
+        }
+      } else {
+        if hintCounted {
+          hintCounted = false
+          model.swipeHintsLeft = max(0, 6 - UserDefaults.standard.integer(forKey: "swipeHintsShown"))
+        }
+        // After the close has played out, so nothing swaps mid-animation.
+        pageReset = Task { [weak self] in
+          try? await Task.sleep(for: .milliseconds(500))
+          guard !Task.isCancelled, let model = self?.model, !model.isExpanded else { return }
+          model.hubTab = nil
+        }
+      }
+    }
+
+    readMenuBarHiding()
+    let token = DistributedNotificationCenter.default().addObserver(
+      forName: .init("AppleInterfaceMenuBarHidingChangedNotification"), object: nil, queue: .main
+    ) { [weak self] _ in
+      MainActor.assumeIsolated { self?.readMenuBarHiding() }
+    }
+    observers.append(token)
+  }
+
+  fileprivate func readMenuBarHiding() {
+    let global = UserDefaults.standard.persistentDomain(forName: UserDefaults.globalDomain) ?? [:]
+    let hidden = MenuBarHiding.isHidden(globalDefaults: global)
+    if hidden != model.menuBarHidden { model.menuBarHidden = hidden }
+  }
+
+  // MARK: File drags
+
+  /// A press starts what may become a drag: remember the drag pasteboard.
+  fileprivate func dragStarted() {
+    dragBaseline = NSPasteboard(name: .drag).changeCount
+    dragCarriesFiles = false
+  }
+
+  /// A drag carrying files (or images, or text) that reaches the notch opens
+  /// the shelf's drop zone; moving well away closes it again.
+  fileprivate func dragMoved() {
+    guard model.settings.shelf else { return }
+    let pasteboard = NSPasteboard(name: .drag)
+    if !dragCarriesFiles, pasteboard.changeCount != dragBaseline {
+      let types = pasteboard.types ?? []
+      dragCarriesFiles = types.contains(.fileURL) || types.contains(.tiff) || types.contains(.png)
+        || types.contains(.string) || types.contains(NSPasteboard.PasteboardType("com.apple.NSFilePromiseItemMetaData"))
+        || types.contains(NSPasteboard.PasteboardType("com.apple.pasteboard.promised-file-url"))
+    }
+    guard dragCarriesFiles else { return }
+    let point = NSEvent.mouseLocation
+    let frame = panel.frame
+    let reach: CGFloat = model.shelf.dragActive ? 260 : 46
+    let halfWidth = (model.shelf.dragActive ? 260 : max(model.collapsedWidth / 2 + 40, 140))
+    let near = abs(point.x - frame.midX) <= halfWidth && frame.maxY - point.y <= model.bandHeight + reach
+    if near != model.shelf.dragActive { model.shelf.dragActive = near }
+  }
+
+  fileprivate func dragEnded() {
+    dragCarriesFiles = false
+    guard model.shelf.dragActive else { return }
+    // Let a drop land before the zone goes.
+    Task { [weak self] in
+      try? await Task.sleep(for: .milliseconds(350))
+      self?.model.shelf.dragActive = false
+      self?.model.shelf.targeted = nil
+    }
+  }
+
+  // MARK: Sideways
+
+  /// A sideways swipe holds the gesture until the fingers rest, so its
+  /// vertical wobble never reads as a swipe up or down.
+  fileprivate func sidewaysActive(at now: TimeInterval) -> Bool {
+    now - sidewaysLast < 0.12 && sidewaysSum != 0
+  }
+
+  fileprivate func sideways(_ event: NSEvent) {
+    let now = event.timestamp
+    if now - sidewaysLast > 0.3 { sidewaysSum = 0 }
+    sidewaysLast = now
+    guard now >= sidewaysLockedUntil else { return }
+    // Finger motion, whatever the scroll direction setting; a mouse wheel's
+    // lines are scaled up to points.
+    let raw = event.hasPreciseScrollingDeltas ? event.scrollingDeltaX : event.scrollingDeltaX * 12
+    let finger = event.isDirectionInvertedFromDevice ? raw : -raw
+    sidewaysSum += finger
+    // The page follows the fingers, then springs home once they stop.
+    model.sideRubber = max(-1, min(1, -sidewaysSum / 26))
+    sideReset?.cancel()
+    sideReset = Task { [weak self] in
+      do { try await Task.sleep(for: .milliseconds(180)) } catch { return }
+      self?.model.sideRubber = 0
+    }
+    guard abs(sidewaysSum) >= 26 else { return }
+    // Fingers moving left bring in the page on the right, as on iPhone.
+    let step = sidewaysSum < 0 ? 1 : -1
+    if !model.isExpanded {
+      guard step > 0 else { return reset() }
+      model.openFromGesture()
+    }
+    model.stepPage(step)
+    model.sideRubber = 0
+    model.swiped()
+    Log.app.notice("sideways swipe \(step) → \(self.model.hubTab?.rawValue ?? "sessions", privacy: .public)")
+    haptics.play(.tick)
+    reset()
+
+    func reset() {
+      sidewaysSum = 0.0001
+      sidewaysLockedUntil = now + 0.4
+    }
+  }
 }
