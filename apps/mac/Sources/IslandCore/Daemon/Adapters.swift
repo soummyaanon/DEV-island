@@ -60,7 +60,9 @@ public enum ClaudeAdapter {
     case "Notification":
       let type = payload["notification_type"]?.string
       let message = payload["message"]?.string
-      let needs = type.map { $0 == "permission_prompt" } ?? (message?.contains(/(?i)\bpermission\b/) ?? false)
+      // A permission prompt or an MCP elicitation (a tool asking you for input)
+      // waits on you; an idle prompt doesn't.
+      let needs = type.map { $0 == "permission_prompt" || $0 == "elicitation_dialog" } ?? (message?.contains(/(?i)\bpermission\b/) ?? false)
       return make(.notification, message ?? "notification", ["notification_type": type.map(JSONValue.string)], action: needs)
     case "Stop":
       return make(.sessionEnded, "finished responding", ["stop_reason": payload["stop_reason"]])

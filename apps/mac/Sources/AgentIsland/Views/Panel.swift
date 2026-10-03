@@ -66,9 +66,6 @@ struct Panel: View {
           }
           .padding(.init(top: 3, leading: 6, bottom: 7, trailing: 6))
         }
-        if let weather = model.weather.reading {
-          WeatherCard(reading: weather, paused: model.isPaused)
-        }
         StatusFooter(model: model, now: now)
         }
         if model.ask.isOpen {
@@ -515,11 +512,6 @@ private struct Controls: View {
             model.toggleAsk()
           }
         }
-        if model.promptTarget != nil {
-          Keycap(symbol: "square.and.pencil", label: model.promptOpen ? "Close the prompt" : "Send a prompt to the agent", on: model.promptOpen) {
-            model.togglePrompt()
-          }
-        }
         Keycap(symbol: "power", label: "Quit") { NSApp.terminate(nil) }
       }
     }
@@ -631,35 +623,6 @@ private struct PromptBar: View {
   }
 }
 
-/// The panel's weather: the scene, with the temperature and summary over a scrim.
-private struct WeatherCard: View {
-  let reading: WeatherReading
-  let paused: Bool
-
-  var body: some View {
-    WeatherScene(condition: reading.condition, variant: .card, paused: paused)
-      .frame(maxWidth: .infinity)
-      .overlay(alignment: .leading) {
-        HStack(spacing: 8) {
-          Text(reading.temperature)
-            .islandFont(13.5, weight: .semibold)
-            .monospacedDigit()
-            .foregroundStyle(.white)
-          Text(reading.summary + (reading.stale ? " · offline" : ""))
-            .islandFont(10)
-            .foregroundStyle(.white.opacity(0.86))
-            .lineLimit(1)
-        }
-        .padding(.horizontal, 11)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-        .background(LinearGradient(colors: [.black.opacity(0.55), .black.opacity(0.18)], startPoint: .leading, endPoint: .trailing))
-      }
-      .clipShape(RoundedRectangle(cornerRadius: 9))
-      .padding(.init(top: 4, leading: 8, bottom: 0, trailing: 8))
-      .accessibilityElement(children: .ignore)
-      .accessibilityLabel(reading.summary + (reading.stale ? ", offline" : ""))
-  }
-}
 
 
 /// A compact swiper: back, the current page's icon, next. The icon steps

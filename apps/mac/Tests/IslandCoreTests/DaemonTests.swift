@@ -95,6 +95,7 @@ private func event(_ session: String = "s1", agent: AgentKind = .claudeCode, typ
     #expect(ClaudeAdapter.map("Notification", payload: json(#"{"session_id":"s","notification_type":"idle_prompt","message":"x"}"#), fallbackCwd: "/p")?.requiresAction == false)
     #expect(ClaudeAdapter.map("Notification", payload: json(#"{"session_id":"s","message":"Claude needs your permission to use Bash"}"#), fallbackCwd: "/p")?.requiresAction == true)
     #expect(ClaudeAdapter.map("Notification", payload: json(#"{"session_id":"s","notification_type":"permission_prompt","message":"x"}"#), fallbackCwd: "/p")?.requiresAction == true)
+    #expect(ClaudeAdapter.map("Notification", payload: json(#"{"session_id":"s","notification_type":"elicitation_dialog","message":"x"}"#), fallbackCwd: "/p")?.requiresAction == true)
   }
 
   @Test func `persists the SessionStart model and permission mode as metadata`() throws {
