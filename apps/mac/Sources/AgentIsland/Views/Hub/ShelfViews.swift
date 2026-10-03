@@ -22,7 +22,7 @@ struct ShelfDropZone: View {
         shelf.add(urls: urls)
       }
       DropSplit(id: "airdrop", title: "AirDrop", targeted: shelf.targeted == "airdrop", model: model) {
-        Image(systemName: "dot.radiowaves.up.forward").font(.system(size: 20, weight: .medium))
+        Glyph(Glyph.airdrop, size: 20, weight: .medium)
       } drop: { urls in
         shelf.airDrop(urls: urls)
       }
@@ -94,7 +94,7 @@ struct ShelfTab: View {
         if !shelf.items.isEmpty {
           Grid(horizontalSpacing: 8, verticalSpacing: 8) {
             GridRow {
-              CircleKey(symbol: "dot.radiowaves.up.forward", size: 28, label: "AirDrop") { shelf.airDrop(shelf.chosen.map(\.id)) }
+              CircleKey(symbol: Glyph.airdrop, size: 28, label: "AirDrop") { shelf.airDrop(shelf.chosen.map(\.id)) }
               CircleKey(symbol: "doc.on.doc", size: 28, label: "Copy paths") { shelf.copyPaths(shelf.chosen) }
             }
             GridRow {
@@ -167,7 +167,7 @@ private struct ShelfTile: View {
       .overlay(alignment: .topTrailing) {
         if hovered {
           HStack(spacing: 0) {
-            MiniKey(symbol: "dot.radiowaves.left.and.right", label: "AirDrop") { shelf.airDrop([item.id]) }
+            MiniKey(symbol: Glyph.airdrop, label: "AirDrop") { shelf.airDrop([item.id]) }
             MiniKey(symbol: "xmark", label: "Remove from the shelf") { shelf.remove(item.id) }
           }
           .padding(2)
@@ -197,8 +197,7 @@ struct MiniKey: View {
 
   var body: some View {
     Button(action: action) {
-      Image(systemName: symbol)
-        .font(.system(size: 8, weight: .bold))
+      Glyph(symbol, size: 8, weight: .bold)
         .foregroundStyle(.white)
         .frame(width: 16, height: 16)
         .background(Circle().fill(.black.opacity(0.75)))

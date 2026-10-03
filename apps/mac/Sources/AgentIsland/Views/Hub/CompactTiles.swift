@@ -145,7 +145,7 @@ struct FilesTile: View {
         }
         Spacer(minLength: 2)
         DragAllHandle(urls: shelf.items.map(\.url)).frame(width: 22, height: 22).help("Drag all out")
-        QuickButton(symbol: "dot.radiowaves.up.forward", label: "AirDrop") { shelf.airDrop() }
+        QuickButton(symbol: Glyph.airdrop, label: "AirDrop") { shelf.airDrop() }
         QuickButton(symbol: "chevron.right", label: "Files") { model.showTab(.shelf) }
       }
     }

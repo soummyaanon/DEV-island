@@ -110,11 +110,11 @@ private struct ControlsTab: View {
           GridRow {
             CircleKey(symbol: "wifi", caption: "Wi-Fi", on: system.wifiOn == true, label: system.wifiName ?? "Wi-Fi") { system.toggleWiFi() }
               .contextMenu { Button("Details") { toggle(.wifi) } }
-            CircleKey(symbol: "dot.radiowaves.left.and.right", caption: "Bluetooth", on: system.bluetoothOn == true) {
+            CircleKey(symbol: Glyph.bluetooth, caption: "Bluetooth", on: system.bluetoothOn == true) {
               system.toggleBluetooth()
             }
             .contextMenu { Button("Devices") { toggle(.bluetooth); system.refreshRadios() } }
-            CircleKey(symbol: "dot.radiowaves.up.forward", caption: "AirDrop") {
+            CircleKey(symbol: Glyph.airdrop, caption: "AirDrop") {
               if model.shelf.items.isEmpty { system.openAirDrop() } else { model.shelf.airDrop() }
             }
           }
@@ -237,7 +237,7 @@ private struct ChoiceLine: View {
     Hovering { hovered in
       Button(action: action) {
         HStack(spacing: 7) {
-          Image(systemName: symbol).font(.system(size: 10, weight: .semibold)).frame(width: 16).foregroundStyle(on ? Palette.accent : Palette.textDim)
+          Glyph(symbol, size: 10).frame(width: 16).foregroundStyle(on ? Palette.accent : Palette.textDim)
           Text(title).islandFont(10.5, weight: on ? .semibold : .regular).foregroundStyle(Palette.text).lineLimit(1)
           Spacer(minLength: 4)
           if let detail { Text(detail).islandFont(9).foregroundStyle(Palette.textDim) }
@@ -275,7 +275,7 @@ struct DisplaysDetail: View {
     HStack(alignment: .center, spacing: 12) {
       // Left: the displays as they're arranged; click one to pick it.
       DisplayArrangement(system: system)
-        .frame(width: 170, height: 76)
+        .frame(width: 180, height: 92)
       // Right: the picked display's few controls.
       if let picked {
         VStack(alignment: .leading, spacing: 6) {
@@ -328,7 +328,7 @@ private struct DisplayArrangement: View {
             width: display.frame.width * scale, height: display.frame.height * scale
           )
           DeviceGlyph(display: display, picked: display.id == system.picked?.id, size: rect.size)
-            .frame(width: rect.width, height: rect.height + 10, alignment: .top)
+            .frame(width: rect.width, height: rect.height + 8, alignment: .top)
             .offset(x: rect.minX, y: rect.minY)
             .onTapGesture { system.pickedDisplay = display.id }
             .help("\(display.name) · \(Int(display.frame.width)) × \(Int(display.frame.height))")
@@ -338,29 +338,32 @@ private struct DisplayArrangement: View {
   }
 }
 
+/// One display as System Settings shows it: Apple's own artwork for it (this
+/// Mac's model, Apple's displays by name, a generic monitor), the picked one
+/// ringed, the main one marked with a menu bar.
 private struct DeviceGlyph: View {
   let display: SystemControls.Display
   let picked: Bool
   let size: CGSize
 
   var body: some View {
-    VStack(spacing: 0) {
-      RoundedRectangle(cornerRadius: 3, style: .continuous)
-        .fill(LinearGradient(colors: [Color(hex: 0x2B3550), Color(hex: 0x141824)], startPoint: .top, endPoint: .bottom))
-        .overlay(alignment: .top) {
-          // The menu bar sits on the main display.
-          if display.main { Rectangle().fill(.white.opacity(0.7)).frame(height: 2).padding(.horizontal, 2).padding(.top, 2) }
-        }
-        .overlay(RoundedRectangle(cornerRadius: 3, style: .continuous).strokeBorder(picked ? Palette.accent : .white.opacity(0.35), lineWidth: picked ? 1.6 : 1))
-        .frame(width: size.width - 2, height: max(8, size.height - 2))
-      if display.builtIn {
-        // The laptop's base.
-        Capsule().fill(.white.opacity(0.45)).frame(width: size.width + 4, height: 3)
+    VStack(spacing: 2) {
+      if let art = SystemControls.artwork(for: display) {
+        Image(nsImage: art)
+          .resizable()
+          .interpolation(.high)
+          .aspectRatio(contentMode: .fit)
+          // The artwork carries a margin and a base: draw it a size up.
+          .frame(width: size.width * 1.35, height: size.height * 1.35)
+          .frame(width: size.width, height: size.height)
       } else {
-        // The monitor's stand.
-        Rectangle().fill(.white.opacity(0.35)).frame(width: 2, height: 4)
-        Capsule().fill(.white.opacity(0.35)).frame(width: min(18, size.width / 3), height: 2)
+        RoundedRectangle(cornerRadius: 3).fill(Color(hex: 0x2B3550)).frame(width: size.width, height: size.height)
       }
+      HStack(spacing: 3) {
+        if display.main { Image(systemName: "menubar.rectangle").font(.system(size: 7)).foregroundStyle(Palette.textDim) }
+        Capsule().fill(picked ? Palette.accent : .clear).frame(width: 14, height: 2.5)
+      }
+      .frame(height: 6)
     }
     .contentShape(Rectangle())
   }

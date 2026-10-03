@@ -16,8 +16,7 @@ struct CircleKey: View {
     VStack(spacing: 3) {
       Hovering { hovered in
         Button(action: action) {
-          Image(systemName: symbol)
-            .font(.system(size: size * 0.36, weight: .semibold))
+          Glyph(symbol, size: size * 0.36)
             .foregroundStyle(on ? .white : hovered ? Palette.text : .white.opacity(0.78))
             .frame(width: size, height: size)
             .background(Circle().fill(on ? AnyShapeStyle(tint) : AnyShapeStyle(Color.white.opacity(hovered ? 0.15 : 0.08))))
@@ -60,5 +59,57 @@ struct SplitPane<Left: View, Right: View>: View {
       right.frame(maxWidth: .infinity, alignment: .topLeading)
     }
     .fixedSize(horizontal: false, vertical: true)
+  }
+}
+
+/// An SF Symbol, or one of macOS's own glyphs that SF Symbols doesn't offer:
+/// "system:bluetooth" (AppKit's Bluetooth rune) and "system:airdrop" (Finder's
+/// sidebar AirDrop glyph). Both are templates, so they tint like symbols.
+struct Glyph: View {
+  let name: String
+  let size: CGFloat
+  var weight: Font.Weight = .semibold
+
+  init(_ name: String, size: CGFloat, weight: Font.Weight = .semibold) {
+    self.name = name
+    self.size = size
+    self.weight = weight
+  }
+
+  static let bluetooth = "system:bluetooth"
+  static let airdrop = "system:airdrop"
+
+  private static let images: [String: NSImage] = {
+    var out: [String: NSImage] = [:]
+    if let rune = NSImage(named: NSImage.bluetoothTemplateName) { out[bluetooth] = rune }
+    let sidebar = URL(filePath: "/System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/SidebarAirDrop.icns")
+    if let icon = NSImage(contentsOf: sidebar) {
+      icon.isTemplate = true
+      out[airdrop] = icon
+    }
+    return out
+  }()
+
+  /// Where the system glyph is missing, a close SF Symbol.
+  private var fallback: String {
+    name == Self.bluetooth ? "dot.radiowaves.left.and.right" : "dot.radiowaves.up.forward"
+  }
+
+  var body: some View {
+    if name.hasPrefix("system:") {
+      if let image = Self.images[name] {
+        Image(nsImage: image)
+          .renderingMode(.template)
+          .resizable()
+          .interpolation(.high)
+          .aspectRatio(contentMode: .fit)
+          // The rune is tall and narrow; the AirDrop rings fill their square.
+          .frame(width: size * (name == Self.bluetooth ? 1.45 : 1.25), height: size * (name == Self.bluetooth ? 1.45 : 1.25))
+      } else {
+        Image(systemName: fallback).font(.system(size: size, weight: weight))
+      }
+    } else {
+      Image(systemName: name).font(.system(size: size, weight: weight))
+    }
   }
 }

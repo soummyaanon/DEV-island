@@ -100,8 +100,7 @@ struct QuickButton: View {
 
   var body: some View {
     Button(action: action) {
-      Image(systemName: symbol)
-        .font(.system(size: size, weight: .semibold))
+      Glyph(symbol, size: size)
         .frame(width: prominent ? 30 : 24, height: prominent ? 30 : 24)
     }
     .buttonStyle(QuickButtonStyle(tint: tint, prominent: prominent))

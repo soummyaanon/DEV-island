@@ -21,6 +21,23 @@ final class SystemControls {
     var frame: CGRect
   }
 
+  /// The artwork macOS itself uses for a display: this Mac's own model for
+  /// the built-in panel, Apple's displays by name, a generic monitor otherwise.
+  static func artwork(for display: Display) -> NSImage? {
+    if display.builtIn { return NSImage(named: NSImage.computerName) }
+    let name = display.name.lowercased()
+    let file = name.contains("studio display") ? "com.apple.studio-display"
+      : name.contains("pro display") ? "com.apple.pro-display-xdr"
+      : name.contains("cinema") ? "com.apple.led-cinema-display-27"
+      : "public.generic-lcd"
+    if let cached = artworkCache[file] { return cached }
+    let image = NSImage(contentsOf: URL(filePath: "/System/Library/CoreServices/CoreTypes.bundle/Contents/Resources/\(file).icns"))
+    artworkCache[file] = image
+    return image
+  }
+
+  private static var artworkCache: [String: NSImage] = [:]
+
   /// The display picked in the Displays preview; nil is the main one.
   var pickedDisplay: CGDirectDisplayID?
 
@@ -284,7 +301,7 @@ nonisolated enum Bluetooth {
       case 0x05: "keyboard"  // peripheral
       case 0x02: "iphone"
       case 0x01: "laptopcomputer"
-      default: "dot.radiowaves.left.and.right"
+      default: Glyph.bluetooth
       }
       return BluetoothDevice(id: address, name: device.name ?? address, connected: device.isConnected(), kind: kind)
     }
@@ -478,3 +495,4 @@ nonisolated enum OffMain {
     }
   }
 }
+
