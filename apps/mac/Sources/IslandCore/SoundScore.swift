@@ -27,6 +27,7 @@ public struct SoundScore: Equatable, Sendable {
     case .attention: ("anime-wow", 0.55)
     case .question: ("anime-shine", 0.5)
     case .approve: ("fahhhhh", 0.55)
+    case .timer: ("anime-shine", 0.55)
     }
   }
 
@@ -60,6 +61,22 @@ public struct SoundScore: Equatable, Sendable {
 
   private static func bowl(_ f: Double, _ at: Double, _ v: Double = 0.06) -> [Voice] {
     strike(f, at, 2.2, v, [(2.71, 0.35), (5.1, 0.12)], detune: 4)
+  }
+
+  /// A struck bell: inharmonic partials, a long ring.
+  private static func bell(_ f: Double, _ at: Double, _ v: Double = 0.06) -> [Voice] {
+    strike(f, at, 1.6, v, [(2.0, 0.5), (3.01, 0.28), (4.2, 0.12)], detune: 3)
+  }
+
+  /// A bubble: a quick sine falling into its note.
+  private static func bubble(_ f: Double, _ at: Double, _ v: Double = 0.08) -> [Voice] {
+    [Voice(from: f * 1.7, to: f, at: at, duration: 0.09, volume: v, wave: .sine, attack: 0.004)]
+  }
+
+  /// A water drop: a sine flicking upward, with a faint echo.
+  private static func drop(_ f: Double, _ at: Double, _ v: Double = 0.08) -> [Voice] {
+    [Voice(from: f, to: f * 1.9, at: at, duration: 0.11, volume: v, wave: .sine, attack: 0.003),
+     Voice(from: f * 1.1, to: f * 2, at: at + 0.13, duration: 0.08, volume: v * 0.3, wave: .sine, attack: 0.003)]
   }
 
   /// The score for `event` in `theme`; nil for the anime theme (a file).
@@ -119,6 +136,65 @@ public struct SoundScore: Equatable, Sendable {
       voices = bowl(440, 0, 0.08)
     case (.zen, .approve):
       voices = bowl(329.63, 0, 0.05)
+
+    case (.eightBit, .timer):
+      voices = (0..<2).flatMap { r in
+        note(783.99, Double(r) * 0.42, 0.08, 0.07) + note(1046.5, Double(r) * 0.42 + 0.09, 0.08, 0.07) + note(1318.5, Double(r) * 0.42 + 0.18, 0.14, 0.08)
+      }
+    case (.arcade, .timer):
+      voices = note(1046.5, 0, 0.08, 0.08) + note(1046.5, 0.1, 0.08, 0.08) + note(1046.5, 0.2, 0.08, 0.08) + slide(1318.5, 2093, 0.32, 0.22, 0.08)
+    case (.soft, .timer):
+      voices = note(659.25, 0, 0.5, 0.05, .sine, 0.05) + note(783.99, 0.22, 0.5, 0.05, .sine, 0.05) + note(1046.5, 0.44, 0.8, 0.05, .sine, 0.05)
+    case (.glass, .timer):
+      voices = [1567.98, 1975.5, 2349.3, 3135.96].enumerated().flatMap { glass($0.element, Double($0.offset) * 0.11, 0.06) }
+    case (.marimba, .timer):
+      voices = [523.25, 659.25, 783.99, 1046.5, 783.99].enumerated().flatMap { wood($0.element, Double($0.offset) * 0.1) }
+    case (.zen, .timer):
+      voices = bowl(261.63, 0) + bowl(329.63, 0.5, 0.05) + bowl(392, 1.0, 0.05)
+
+    case (.bell, .success):
+      voices = bell(783.99, 0) + bell(1046.5, 0.18, 0.05)
+    case (.bell, .attention):
+      voices = bell(1318.5, 0, 0.08) + bell(1318.5, 0.22, 0.08) + bell(1318.5, 0.44, 0.09)
+    case (.bell, .question):
+      voices = bell(987.77, 0, 0.06) + bell(1318.5, 0.16, 0.06)
+    case (.bell, .approve):
+      voices = bell(1046.5, 0, 0.05)
+    case (.bell, .timer):
+      voices = bell(659.25, 0) + bell(783.99, 0.3) + bell(1046.5, 0.6, 0.07)
+
+    case (.pop, .success):
+      voices = bubble(523.25, 0) + bubble(659.25, 0.08) + bubble(783.99, 0.16)
+    case (.pop, .attention):
+      voices = (0..<4).flatMap { bubble(987.77, Double($0) * 0.1, 0.12) }
+    case (.pop, .question):
+      voices = bubble(659.25, 0, 0.1) + bubble(987.77, 0.12, 0.1)
+    case (.pop, .approve):
+      voices = bubble(783.99, 0, 0.09)
+    case (.pop, .timer):
+      voices = [523.25, 659.25, 783.99, 1046.5, 1318.5].enumerated().flatMap { bubble($0.element, Double($0.offset) * 0.07, 0.1) }
+
+    case (.chime, .success):
+      voices = [1174.7, 1318.5, 1568].enumerated().flatMap { glass($0.element, Double($0.offset) * 0.09, 0.045) }
+    case (.chime, .attention):
+      voices = [1760, 1568, 1760, 1568].enumerated().flatMap { glass($0.element, Double($0.offset) * 0.12, 0.08) }
+    case (.chime, .question):
+      voices = glass(1318.5, 0, 0.05) + glass(1760, 0.1, 0.05)
+    case (.chime, .approve):
+      voices = glass(1568, 0, 0.045)
+    case (.chime, .timer):
+      voices = [1046.5, 1174.7, 1318.5, 1568, 1760, 2093].enumerated().flatMap { glass($0.element, Double($0.offset) * 0.08, 0.05) }
+
+    case (.droplet, .success):
+      voices = drop(880, 0) + drop(1174.7, 0.15)
+    case (.droplet, .attention):
+      voices = drop(1318.5, 0, 0.12) + drop(1318.5, 0.2, 0.12) + drop(1318.5, 0.4, 0.13)
+    case (.droplet, .question):
+      voices = drop(987.77, 0, 0.1)
+    case (.droplet, .approve):
+      voices = drop(783.99, 0, 0.08)
+    case (.droplet, .timer):
+      voices = drop(659.25, 0) + drop(880, 0.18) + drop(1174.7, 0.36, 0.1)
 
     case (.anime, _):
       return nil

@@ -560,7 +560,7 @@ extension IslandController {
     // A rung timer: chime, bloom, tap, and a spoken line.
     model.timers.onFinish = { [weak self] timer in
       guard let self else { return }
-      sounds.play(.success, settings: model.settings)
+      sounds.play(.timer, settings: model.settings)
       model.sessions.firePulse(.done)
       haptics.play(.success)
       let line = switch (timer.kind, timer.phase) {

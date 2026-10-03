@@ -14,7 +14,7 @@ enum PreviewRenderer {
       sessions: sessions, actions: IslandActions(daemon: DaemonClient(store: sessions), store: sessions)
     )
     model.timers.startPomodoro()
-    model.timers.startCountdown(minutes: 3, label: "Tea")
+    model.timers.startCountdown(minutes: 30, label: "Tea")
     model.agenda.addTodo("Ship the quick-access layer")
     model.shelf.add(urls: [URL(filePath: "/Applications/Safari.app"), URL(filePath: "/System/Applications/Notes.app")])
     var pages: [(String, AnyView)] = [("now", AnyView(Panel(model: model)))]

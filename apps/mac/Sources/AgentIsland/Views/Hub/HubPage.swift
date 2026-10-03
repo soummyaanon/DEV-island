@@ -786,17 +786,7 @@ private struct TimersTab: View {
       // Left: the running timer, big and round.
       if let timer = timers.featured {
         VStack(spacing: 8) {
-          ZStack {
-            TimerRing(timer: timer, now: now, size: 96, lineWidth: 5)
-            VStack(spacing: 0) {
-              Text(Clock.countdown(timer.remaining(at: now)))
-                .islandFont(19, weight: .semibold).monospacedDigit()
-                .foregroundStyle(timer.isPaused ? Palette.textDim : QuickPalette.timer(timer))
-                .contentTransition(.numericText(countsDown: true))
-              Text(timer.title).islandFont(9).foregroundStyle(Palette.textDim).lineLimit(1)
-            }
-            .frame(width: 80)
-          }
+          BigTimer(timer: timer, now: now, plan: timers.plan)
           HStack(spacing: 8) {
             CircleKey(symbol: "plus", size: 26, label: "Add a minute") { timers.extend(timer.id, minutes: 1) }
             CircleKey(symbol: timer.isPaused ? "play.fill" : "pause.fill", on: true, tint: QuickPalette.timer(timer), size: 30, label: timer.isPaused ? "Resume" : "Pause") {
@@ -1127,5 +1117,58 @@ private struct ConverterView: View {
     .fixedSize()
     .padding(.init(top: 3, leading: 8, bottom: 3, trailing: 8))
     .background(Capsule().fill(.white.opacity(0.08)))
+  }
+}
+
+/// The Timers page's big round clock: a glowing ring that empties as it runs,
+/// nothing drawn over the numbers, and the Pomodoro rounds as dots beneath.
+private struct BigTimer: View {
+  let timer: IslandTimer
+  let now: Date
+  let plan: PomodoroPlan
+
+  var body: some View {
+    let tint = QuickPalette.timer(timer)
+    let left = 1 - timer.progress(at: now)
+    VStack(spacing: 6) {
+      ZStack {
+        Circle().stroke(.white.opacity(0.07), lineWidth: 6)
+        Circle()
+          .trim(from: 0, to: left)
+          .stroke(
+            AngularGradient(colors: [tint.opacity(0.55), tint], center: .center, startAngle: .degrees(0), endAngle: .degrees(360 * left)),
+            style: StrokeStyle(lineWidth: 6, lineCap: .round)
+          )
+          .rotationEffect(.degrees(-90))
+          .shadow(color: tint.opacity(timer.isPaused ? 0 : 0.45), radius: 6)
+          .animation(.linear(duration: 1), value: left)
+        VStack(spacing: 1) {
+          Text(Clock.countdown(timer.remaining(at: now)))
+            .islandFont(20, weight: .semibold)
+            .monospacedDigit()
+            .foregroundStyle(timer.isPaused ? Palette.textDim : .white)
+            .contentTransition(.numericText(countsDown: true))
+          Text(timer.isPaused ? "Paused" : timer.kind == .pomodoro ? timer.phase.label : (timer.label.isEmpty ? "Timer" : timer.label))
+            .islandFont(9, weight: .medium)
+            .foregroundStyle(timer.isPaused ? Palette.textDim : tint)
+            .lineLimit(1)
+        }
+        .frame(width: 76)
+      }
+      .frame(width: 96, height: 96)
+      if timer.kind == .pomodoro {
+        // Where you are in the cycle: done rounds filled, this one ringed.
+        let done = (timer.round - 1) % plan.roundsBeforeLongBreak + (timer.phase == .focus ? 0 : 1)
+        HStack(spacing: 5) {
+          ForEach(0..<plan.roundsBeforeLongBreak, id: \.self) { index in
+            Circle()
+              .fill(index < done ? QuickPalette.focus : .clear)
+              .overlay(Circle().strokeBorder(QuickPalette.focus.opacity(index < done ? 0 : 0.5), lineWidth: 1))
+              .frame(width: 6, height: 6)
+          }
+        }
+        .help("Round \(timer.round)")
+      }
+    }
   }
 }

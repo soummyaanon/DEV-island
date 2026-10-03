@@ -317,7 +317,7 @@ extension JSONValue {
 // MARK: - Sounds
 
 public enum SoundTheme: String, Sendable, CaseIterable {
-  case eightBit = "8bit", arcade, soft, glass, marimba, zen, anime
+  case eightBit = "8bit", arcade, soft, glass, marimba, zen, bell, pop, chime, droplet, anime
 
   public var label: String {
     switch self {
@@ -327,6 +327,10 @@ public enum SoundTheme: String, Sendable, CaseIterable {
     case .glass: "Glass"
     case .marimba: "Marimba"
     case .zen: "Zen"
+    case .bell: "Bell"
+    case .pop: "Pop"
+    case .chime: "Chime"
+    case .droplet: "Droplet"
     case .anime: "Anime"
     }
   }
@@ -339,13 +343,17 @@ public enum SoundTheme: String, Sendable, CaseIterable {
     case .glass: "Bright crystal pings with a shimmer."
     case .marimba: "Warm wooden taps."
     case .zen: "Low singing bowls that ring out."
+    case .bell: "Clear struck bells, like a desk bell."
+    case .pop: "Soft bubbles popping."
+    case .chime: "Wind chimes on a pentatonic scale."
+    case .droplet: "Water drops, light and quick."
     case .anime: "The bundled voice pack."
     }
   }
 }
 
 public enum SoundEvent: String, Sendable, CaseIterable {
-  case success, attention, question, approve
+  case success, attention, question, approve, timer
 
   public var label: String {
     switch self {
@@ -353,6 +361,7 @@ public enum SoundEvent: String, Sendable, CaseIterable {
     case .attention: "Needs you"
     case .question: "Question"
     case .approve: "You allow"
+    case .timer: "Timer"
     }
   }
 }
