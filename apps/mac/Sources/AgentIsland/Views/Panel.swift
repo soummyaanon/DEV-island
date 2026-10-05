@@ -24,19 +24,34 @@ struct Panel: View {
             .id(greeting.id)
         }
         if !model.greetingOnly {
-        ForEach(model.pending, id: \.key) { session in
-          if let approval = session.pendingApproval {
-            ApprovalCard(session: session, approval: approval, model: model)
-              .modifier(Entrance(kind: .rowIn, delay: 0.06))
+        // Everything waiting on you, in one place: past a few cards it scrolls
+        // rather than pushing the island off the screen.
+        if !model.pending.isEmpty || !model.asking.isEmpty {
+          ScrollView(.vertical) {
+            VStack(spacing: 0) {
+              ForEach(model.pending, id: \.key) { session in
+                if let approval = session.pendingApproval {
+                  ApprovalCard(session: session, approval: approval, model: model)
+                    .modifier(Entrance(kind: .rowIn, delay: 0.06))
+                }
+              }
+              ForEach(model.asking, id: \.key) { session in
+                if let question = session.pendingQuestion {
+                  QuestionCard(session: session, question: question, model: model)
+                    .id(question.id)
+                    .modifier(Entrance(kind: .rowIn, delay: 0.06))
+                }
+              }
+            }
           }
+          .scrollIndicators(.automatic)
+          .frame(maxHeight: Panel.cardsHeight)
+          .fixedSize(horizontal: false, vertical: true)
         }
-        ForEach(model.asking, id: \.key) { session in
-          if let question = session.pendingQuestion {
-            QuestionCard(session: session, question: question, model: model)
-              .id(question.id)
-              .modifier(Entrance(kind: .rowIn, delay: 0.06))
-          }
-        }
+        // Pages overlap as they swap: the old one blurs out one way while the
+        // new one comes into focus from the other.
+        ZStack(alignment: .top) {
+        VStack(alignment: .leading, spacing: 0) {
         if let tab = model.hubTab {
           // Only Timers ticks each second; the other tools redraw once a minute.
           HubPage(model: model, tab: tab, now: tab == .timers ? now : Date(timeIntervalSince1970: (now.timeIntervalSince1970 / 60).rounded(.down) * 60))
@@ -68,6 +83,22 @@ struct Panel: View {
         }
         StatusFooter(model: model, now: now)
         }
+        }
+        .id(model.hubTab)
+        .transition(reduceMotion ? AnyTransition.opacity : PageTurn.transition(model))
+        }
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { size in
+          // Only once paging starts: the sessions page alone keeps its own size.
+          guard model.hubTab != nil || model.pageFloor != .zero else { return }
+          let floor = CGSize(
+            width: max(model.pageFloor.width, size.width.rounded(.up)),
+            height: max(model.pageFloor.height, size.height.rounded(.up), PageTurn.minHeight)
+          )
+          guard floor != model.pageFloor else { return }
+          withAnimation(reduceMotion ? nil : Motion.settle) { model.pageFloor = floor }
+        }
+        .frame(minWidth: model.pageFloor.width, minHeight: model.pageFloor.height, alignment: .top)
+        .animation(reduceMotion ? .easeOut(duration: 0.15) : Motion.settle, value: model.hubTab)
         if model.ask.isOpen {
           AssistantPanel(state: model.ask)
         }
@@ -96,6 +127,8 @@ struct Panel: View {
       .frame(maxWidth: model.maxIslandWidth, alignment: .leading)
       // A sideways swipe leans the page and shows where it's going.
       .offset(x: reduceMotion ? 0 : model.sideRubber * -12)
+      // …and starts to lose focus under the fingers, so the turn has already begun.
+      .blur(radius: reduceMotion ? 0 : abs(model.sideRubber) * 8)
       .overlay(alignment: model.sideRubber > 0 ? .leading : .trailing) {
         if model.sideRubber != 0, let target = model.page(after: model.sideRubber < 0 ? 1 : -1) {
           SwipeTarget(tab: target, progress: abs(model.sideRubber))
@@ -105,9 +138,55 @@ struct Panel: View {
       }
       .animation(reduceMotion ? nil : model.sideRubber == 0 ? Motion.settle : .easeOut(duration: 0.08), value: model.sideRubber)
     }
+    .onDisappear { model.pageFloor = .zero }
   }
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  /// The tallest the approval and question cards get together before they
+  /// scroll; the island's canvas is 560 pt and the band and controls need room.
+  static let cardsHeight: CGFloat = 320
+}
+
+/// Changing pages, like a camera pulling focus: the old page drops out of
+/// focus fast, then the new one resolves from a deep blur to fully sharp,
+/// drifting in a touch from the side you're heading. They don't overlap, so
+/// there's never a double image; the blur hides the swap itself.
+private struct PageTurn: Transition {
+  /// Read when the transition runs, so a page leaving knows the latest direction.
+  let model: IslandModel
+  let leaving: Bool
+
+  /// The page area is never shorter than this once paging starts.
+  static let minHeight: CGFloat = 150
+
+  static func transition(_ model: IslandModel) -> AnyTransition {
+    .asymmetric(
+      // A long, gentle settle: most of the focus pull happens early, the last
+      // of the blur melts away slowly.
+      insertion: AnyTransition(PageTurn(model: model, leaving: false))
+        .animation(.timingCurve(0.2, 0.85, 0.25, 1, duration: 0.55).delay(0.05)),
+      removal: AnyTransition(PageTurn(model: model, leaving: true))
+        .animation(.timingCurve(0.4, 0, 0.9, 0.6, duration: 0.16))
+    )
+  }
+
+  func body(content: Content, phase: TransitionPhase) -> some View {
+    // Both halves of the pair stay applied at rest: only act in our own phase.
+    let off = leaving ? phase == .didDisappear : phase == .willAppear
+    let gone = leaving && off
+    // Arrivals come from ahead, departures go behind.
+    let side = Double(model.pageStep) * (leaving ? -1 : 1)
+    content
+      // The leaving page stops taking room, so the panel settles on the new one at once.
+      .fixedSize(horizontal: false, vertical: gone)
+      .frame(height: gone ? 0 : nil, alignment: .top)
+      .blur(radius: off ? (leaving ? 16 : 30) : 0)
+      .scaleEffect(off ? (leaving ? 0.96 : 1.04) : 1, anchor: .top)
+      .offset(x: off ? side * (leaving ? 14 : 24) : 0)
+      .opacity(off ? 0 : 1)
+      .allowsHitTesting(!gone)
+  }
 }
 
 /// The page a swipe is heading for: its icon in a circle that fills as the swipe nears.
@@ -291,6 +370,8 @@ private struct HoverRow: ButtonStyle {
 /// Wraps its children onto new lines at the proposed width.
 struct FlowLayout: Layout {
   var spacing: CGFloat
+  /// Each row centred in the width, not packed to the left.
+  var centered = false
 
   func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
     let rows = arrange(width: proposal.width ?? .infinity, subviews: subviews)
@@ -300,7 +381,7 @@ struct FlowLayout: Layout {
   func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
     var y = bounds.minY
     for row in arrange(width: bounds.width, subviews: subviews) {
-      var x = bounds.minX
+      var x = bounds.minX + (centered ? (bounds.width - row.width) / 2 : 0)
       for index in row.indices {
         let size = subviews[index].sizeThatFits(.unspecified)
         subviews[index].place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))

@@ -3,100 +3,104 @@ import SwiftUI
 
 /// "Permission Request": what the agent wants to do (a diff, a command, a
 /// plan to review) with Deny ⌘N and Allow ⌘Y. The daemon holds the agent's
-/// hook open until one is pressed.
+/// hook open until one is pressed. Just who, what, and two pills; the
+/// shortcuts live in Settings.
 struct ApprovalCard: View {
   let session: SessionSnapshot
   let approval: PendingApproval
   let model: IslandModel
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 0) {
-      CardTop(session: session, kicker: "Permission Request")
+    VStack(spacing: 10) {
+      CardTop(session: session)
       Text(approval.title)
-        .islandFont(13.5, weight: .semibold)
+        .islandFont(15, weight: .semibold)
         .foregroundStyle(Palette.text)
-        .padding(.bottom, 9)
+        .multilineTextAlignment(.center)
       ApprovalBody(request: approval.body)
-        .padding(.bottom, 11)
       HStack(spacing: 8) {
-        Button { model.actions.decide(approval.id, allow: false) } label: {
-          KeyLabel(title: "Deny", key: "⌘N")
-        }
-        .buttonStyle(CardButton(kind: .deny))
-        .accessibilityLabel("Deny")
-        Button { model.actions.decide(approval.id, allow: true) } label: {
-          KeyLabel(title: "Allow", key: "⌘Y")
-        }
-        .buttonStyle(CardButton(kind: .allow))
-        .accessibilityLabel("Allow")
+        Button { model.actions.decide(approval.id, allow: false) } label: { Text("Deny") }
+          .buttonStyle(Pill(kind: .quiet))
+          .accessibilityLabel("Deny")
+        Button { model.actions.decide(approval.id, allow: true) } label: { Text("Allow") }
+          .buttonStyle(Pill(kind: .bright))
+          .accessibilityLabel("Allow")
       }
+      .padding(.top, 2)
     }
-    .padding(.init(top: 11, leading: 13, bottom: 12, trailing: 13))
-    .background(RoundedRectangle(cornerRadius: 14).fill(.white.opacity(0.03)))
-    .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(.white.opacity(0.08)))
-    .padding(.init(top: 2, leading: 9, bottom: 8, trailing: 9))
+    .frame(maxWidth: .infinity)
+    .padding(.init(top: 10, leading: 18, bottom: 14, trailing: 18))
     .accessibilityElement(children: .contain)
     .accessibilityLabel("Permission request from \(session.projectName): \(approval.title)")
   }
 }
 
-/// The robot, the kicker, and the project.
+/// One quiet line: the agent's robot, its name, the project.
 private struct CardTop: View {
   let session: SessionSnapshot
-  let kicker: String
 
   var body: some View {
-    HStack(spacing: 8) {
-      HStack(spacing: 7) {
-        AgentAvatar(session: session, now: .now, size: 26, badge: false)
-          .padding(.init(top: -6, leading: -4, bottom: -6, trailing: 0))
-        Text(kicker.uppercased())
-          .islandFont(10, weight: .semibold)
-          .tracking(0.6)
-          .foregroundStyle(Palette.textDim)
-      }
-      Spacer(minLength: 8)
-      Text(session.projectName)
-        .islandFont(10.5)
-        .foregroundStyle(Palette.textDim)
-        .lineLimit(1)
+    HStack(spacing: 6) {
+      AgentAvatar(session: session, now: .now, size: 18, badge: false)
+      Text(session.agent.name).foregroundStyle(Palette.text.opacity(0.7))
+      Text(session.projectName).foregroundStyle(Palette.textDim)
     }
-    .padding(.bottom, 8)
+    .islandFont(11, weight: .medium)
+    .lineLimit(1)
   }
 }
 
-private struct KeyLabel: View {
-  let title: String
-  let key: String
-
-  var body: some View {
-    HStack(spacing: 7) {
-      Text(title)
-      Text(key).islandFont(10).monospacedDigit().opacity(0.55)
-    }
-  }
-}
-
-private struct CardButton: ButtonStyle {
-  enum Kind { case allow, deny }
+/// A small capsule: bright for the answer you'll most often give, quiet otherwise.
+private struct Pill: ButtonStyle {
+  enum Kind { case bright, quiet, picked }
   let kind: Kind
+  /// A long answer: a full-width rounded row that wraps, not a chip.
+  var wide = false
 
   func makeBody(configuration: Configuration) -> some View {
     Hovering { hovered in
       let lit = hovered || configuration.isPressed
+      let shape = RoundedRectangle(cornerRadius: wide ? 14 : 100, style: .continuous)
       configuration.label
-        .islandFont(12.5, weight: .semibold)
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 8)
-        .foregroundStyle(kind == .allow ? Color(hex: 0x111214) : Palette.text)
-        .background(
-          RoundedRectangle(cornerRadius: 10)
-            .fill(kind == .allow ? Color(hex: lit ? 0xFFFFFF : 0xECECEC) : .white.opacity(lit ? 0.1 : 0.06))
-        )
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(kind == .deny ? .white.opacity(0.1) : .clear))
-        .scaleEffect(configuration.isPressed ? 0.98 : 1)
+        .islandFont(12, weight: .medium)
+        .lineLimit(wide ? nil : 1)
+        .multilineTextAlignment(.center)
+        .fixedSize(horizontal: false, vertical: wide)
+        .padding(.init(top: wide ? 8 : 6, leading: 16, bottom: wide ? 8 : 6, trailing: 16))
+        .frame(minWidth: 84, maxWidth: wide ? .infinity : nil)
+        .foregroundStyle(foreground(lit))
+        .background(shape.fill(fill(lit)))
+        .contentShape(shape)
+        .scaleEffect(configuration.isPressed ? 0.96 : 1)
         .animation(.easeInOut(duration: 0.08), value: configuration.isPressed)
         .animation(.easeInOut(duration: 0.15), value: lit)
+    }
+  }
+
+  private func foreground(_ lit: Bool) -> Color {
+    switch kind {
+    case .bright: Color(hex: 0x111214)
+    case .quiet: Palette.text.opacity(lit ? 1 : 0.78)
+    case .picked: Palette.done
+    }
+  }
+
+  private func fill(_ lit: Bool) -> Color {
+    switch kind {
+    case .bright: Color(hex: lit ? 0xFFFFFF : 0xEDEDED)
+    case .quiet: .white.opacity(lit ? 0.13 : 0.07)
+    case .picked: Palette.done.opacity(lit ? 0.24 : 0.18)
+    }
+  }
+}
+
+extension AgentKind {
+  /// "Claude", on a card's header.
+  fileprivate var name: String {
+    switch self {
+    case .claudeCode: "Claude"
+    case .codex: "Codex"
+    case .cursor: "Cursor"
     }
   }
 }
@@ -142,13 +146,13 @@ private struct ApprovalBody: View {
       }
     case let .command(text), let .raw(text):
       Text(text)
-        .islandFont(11, design: .monospaced)
-        .foregroundStyle(Palette.text)
+        .islandFont(11.5, design: .monospaced)
+        .foregroundStyle(Palette.textDim)
+        .multilineTextAlignment(.center)
         .lineSpacing(3)
         .textSelection(.enabled)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.init(top: 8, leading: 10, bottom: 8, trailing: 10))
-        .codeBox()
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity)
     }
   }
 }
@@ -173,8 +177,7 @@ private struct DiffLine: View {
 
 extension View {
   fileprivate func codeBox(_ shade: Double = 0.4) -> some View {
-    background(RoundedRectangle(cornerRadius: 8).fill(.black.opacity(shade)))
-      .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(.white.opacity(0.06)))
+    background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(.black.opacity(shade)))
   }
 }
 
@@ -244,134 +247,96 @@ struct QuestionCard: View {
   let question: PendingQuestion
   let model: IslandModel
 
+  /// The answer under the pointer: its description shows beneath the chips.
+  private let peek = State<(question: Int, option: Int)?>(initialValue: nil)
+
   var body: some View {
     let picks = model.picks(for: question)
-    ScrollView(.vertical) {
-      VStack(alignment: .leading, spacing: 0) {
-        CardTop(session: session, kicker: session.agent.asks)
-        ForEach(Array(question.questions.enumerated()), id: \.offset) { index, item in
-          block(item, index: index, picks: picks)
-            .padding(.top, index == 0 ? 0 : 10)
-        }
-        HStack(spacing: 8) {
-          Spacer(minLength: 0)
-          Text(picks.hint)
-            .islandFont(10)
-            .foregroundStyle(Palette.textDim)
-            .multilineTextAlignment(.trailing)
-          if picks.anyMulti {
-            Button("Send") {
-              if picks.isComplete { model.actions.answer(session, selections: picks.picked) }
-            }
-            .buttonStyle(SendPill())
-            .disabled(!picks.isComplete)
-          }
-        }
-        // `.q-options { margin-bottom: 8px }`
-        .padding(.top, 8)
+    VStack(spacing: 16) {
+      CardTop(session: session)
+      ForEach(Array(question.questions.enumerated()), id: \.offset) { index, item in
+        block(item, index: index, picks: picks)
       }
-      .padding(.init(top: 11, leading: 13, bottom: 10, trailing: 13))
+      if picks.anyMulti {
+        Button("Send") {
+          if picks.isComplete { model.actions.answer(session, selections: picks.picked) }
+        }
+        .buttonStyle(Pill(kind: picks.isComplete ? .bright : .quiet))
+        .disabled(!picks.isComplete)
+        .opacity(picks.isComplete ? 1 : 0.4)
+        .animation(.easeInOut(duration: 0.15), value: picks.isComplete)
+      }
     }
-    .frame(maxHeight: 285)
-    .fixedSize(horizontal: false, vertical: true)
-    .background(RoundedRectangle(cornerRadius: 14).fill(Palette.working.opacity(model.hovered == question.id ? 0.1 : 0.06)))
-    .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Palette.working.opacity(0.22)))
-    .contentShape(RoundedRectangle(cornerRadius: 14))
+    .frame(maxWidth: .infinity)
+    .padding(.init(top: 10, leading: 18, bottom: 14, trailing: 18))
+    .contentShape(Rectangle())
     .onTapGesture { JumpBack.jump(to: session) }
-    .onHover { inside in model.hovered = inside ? question.id : (model.hovered == question.id ? nil : model.hovered) }
-    .padding(.init(top: 2, leading: 9, bottom: 8, trailing: 9))
     .accessibilityElement(children: .contain)
   }
 
   @ViewBuilder
   private func block(_ item: PendingQuestion.Item, index: Int, picks: QuestionPicks) -> some View {
     let multi = item.multiSelect == true
-    VStack(alignment: .leading, spacing: 8) {
-      HStack(alignment: .firstTextBaseline, spacing: 6) {
-        Text(item.question)
-          .islandFont(13, weight: .semibold)
-          .foregroundStyle(Palette.text)
-          .lineSpacing(3)
-          .fixedSize(horizontal: false, vertical: true)
-        if multi {
-          Text("choose any")
-            .islandFont(10, weight: .semibold)
-            .foregroundStyle(Palette.working)
-            .padding(.horizontal, 5)
-            .background(RoundedRectangle(cornerRadius: 5).fill(Palette.working.opacity(0.14)))
-        }
-      }
-      VStack(spacing: 4) {
-        ForEach(Array(item.options.prefix(9).enumerated()), id: \.offset) { option, label in
-          let on = picks.picked.indices.contains(index) && picks.picked[index].contains(option)
-          Button {
-            model.choose(session, question: index, option: option)
-          } label: {
-            HStack(spacing: 8) {
-              if picks.isInstant {
-                Text("⌘\(option + 1)")
-                  .islandFont(10, weight: .bold)
-                  .foregroundStyle(Palette.working)
-                  .padding(.horizontal, 5)
-                  .background(RoundedRectangle(cornerRadius: 5).fill(Palette.working.opacity(0.14)))
-              } else if multi {
-                RoundedRectangle(cornerRadius: 2.5)
-                  .strokeBorder(on ? Palette.done : Palette.textDim, lineWidth: 1.5)
-                  .background(RoundedRectangle(cornerRadius: 2.5).fill(on ? Palette.done : .clear))
-                  .overlay { if on { Image(systemName: "checkmark").islandFont(6, weight: .heavy).foregroundStyle(.black) } }
-                  .frame(width: 9, height: 9)
-              } else {
-                Circle()
-                  .strokeBorder(on ? Palette.done : Palette.textDim, lineWidth: 1.5)
-                  .background(Circle().fill(on ? Palette.done : .clear))
-                  .frame(width: 8, height: 8)
-              }
-              Text(label)
-                .islandFont(12)
-                .foregroundStyle(Palette.text)
-                .frame(maxWidth: .infinity, alignment: .leading)
+    // "Redis — fast, in-memory": the name on the chip, the rest underneath.
+    let options = item.options.prefix(9).map { label in
+      let parts = label.components(separatedBy: " — ")
+      return (title: parts[0], detail: parts.dropFirst().joined(separator: " — "), label: label)
+    }
+    // Long answers read as rows; short ones sit side by side as chips.
+    let wide = options.contains { $0.title.count > 30 }
+    let described = !wide && options.contains { !$0.detail.isEmpty }
+    VStack(spacing: 10) {
+      Text(item.question)
+        .islandFont(15, weight: .semibold)
+        .foregroundStyle(Palette.text)
+        // A long question reads better ragged-left than centred.
+        .multilineTextAlignment(item.question.count > 110 ? .leading : .center)
+        .lineSpacing(2)
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: 400)
+      let chips = ForEach(Array(options.enumerated()), id: \.offset) { option, entry in
+        let on = picks.picked.indices.contains(index) && picks.picked[index].contains(option)
+        Button {
+          model.choose(session, question: index, option: option)
+        } label: {
+          HStack(spacing: 6) {
+            // Pick-any shows its ticks: the only hint that more than one goes.
+            if multi {
+              Image(systemName: on ? "checkmark.circle.fill" : "circle")
+                .islandFont(11, weight: .medium)
+                .opacity(on ? 1 : 0.55)
             }
-            .padding(.init(top: 5, leading: 9, bottom: 5, trailing: 9))
-            .contentShape(Rectangle())
+            if wide && !entry.detail.isEmpty {
+              VStack(spacing: 2) {
+                Text(entry.title)
+                Text(entry.detail).islandFont(10.5).foregroundStyle(Palette.textDim)
+              }
+            } else {
+              Text(entry.title)
+            }
           }
-          .buttonStyle(OptionButton(picked: on))
-          .accessibilityAddTraits(on ? .isSelected : [])
         }
+        .buttonStyle(Pill(kind: on ? .picked : .quiet, wide: wide))
+        .onHover { inside in
+          if inside { peek.wrappedValue = (index, option) } else if peek.wrappedValue?.question == index && peek.wrappedValue?.option == option { peek.wrappedValue = nil }
+        }
+        .accessibilityLabel(entry.label)
+        .accessibilityAddTraits(on ? .isSelected : [])
+      }
+      if wide {
+        VStack(spacing: 6) { chips }.frame(maxWidth: 380)
+      } else {
+        FlowLayout(spacing: 6, centered: true) { chips }
+      }
+      if described {
+        // One quiet line, the hovered answer's description; room kept so nothing jumps.
+        let shown = peek.wrappedValue.flatMap { $0.question == index ? options[$0.option].detail : nil } ?? ""
+        Text(shown.isEmpty ? " " : shown)
+          .islandFont(10.5)
+          .foregroundStyle(Palette.textDim)
+          .lineLimit(1)
+          .animation(.easeOut(duration: 0.12), value: shown)
       }
     }
-  }
-}
-
-private struct OptionButton: ButtonStyle {
-  let picked: Bool
-
-  func makeBody(configuration: Configuration) -> some View {
-    Hovering { hovered in
-      let lit = hovered || configuration.isPressed
-      configuration.label
-        .background(
-          RoundedRectangle(cornerRadius: 8).fill(
-            picked ? Palette.done.opacity(0.16) : lit ? Palette.working.opacity(0.16) : .white.opacity(0.05)
-          )
-        )
-        .overlay(
-          RoundedRectangle(cornerRadius: 8)
-            .strokeBorder(picked ? Palette.done.opacity(0.55) : lit ? Palette.accent.opacity(0.55) : .clear)
-        )
-        .animation(.easeInOut(duration: 0.1), value: lit)
-    }
-  }
-}
-
-private struct SendPill: ButtonStyle {
-  @Environment(\.isEnabled) private var enabled
-
-  func makeBody(configuration: Configuration) -> some View {
-    configuration.label
-      .islandFont(10.5, weight: .semibold)
-      .foregroundStyle(.black)
-      .padding(.init(top: 2, leading: 11, bottom: 2, trailing: 11))
-      .background(Capsule().fill(Palette.done))
-      .opacity(enabled ? 1 : 0.35)
   }
 }

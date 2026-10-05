@@ -276,6 +276,11 @@ final class IslandModel {
   var lastHubTab: HubTab?
   /// A text field in a tool has the keyboard: the island stays open.
   var hubTyping = false
+  /// Which way the last page change went (+1 forward, −1 back): pages slide that way.
+  var pageStep = 1
+  /// The page area's size while open: it grows to the biggest page shown and
+  /// never shrinks back, so paging doesn't resize the island. Cleared on close.
+  var pageFloor = CGSize.zero
   /// −1…1 while a sideways swipe builds: the page leans and the next one's icon shows.
   var sideRubber: Double = 0
   /// Opens so far that showed the swipe hint; it stops after a few, or after a swipe.
@@ -315,6 +320,10 @@ final class IslandModel {
       hubTab = nil
       if !ask.isOpen { toggleAsk() }
       return
+    }
+    let pages = pages
+    if let from = pages.firstIndex(of: hubTab), let to = pages.firstIndex(of: tab), from != to {
+      pageStep = to > from ? 1 : -1
     }
     hubTab = tab
     if let tab { lastHubTab = tab }

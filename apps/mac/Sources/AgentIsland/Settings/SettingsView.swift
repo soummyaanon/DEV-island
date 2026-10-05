@@ -488,10 +488,14 @@ struct SettingsView: View {
         .labelsHidden().fixedSize()
       }
       ChoiceRow(title: "Focus the island", detail: "The island never takes focus on its own, so VoiceOver can't reach it. This hands it focus; Escape gives it back.") {
-        Text("⌃⌥⌘I")
-          .font(.system(size: 12, weight: .medium, design: .rounded))
-          .padding(.init(top: 3, leading: 8, bottom: 3, trailing: 8))
-          .background(RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.08)))
+        KeyChip(keys: "⌃⌥⌘I")
+      }
+      ChoiceRow(title: "Answer agents from the keyboard", detail: "When Claude, Codex, or Cursor asks: allow or deny a request, or pick an answer by its place in the list. Clicking a question card opens the agent's terminal.") {
+        HStack(spacing: 6) {
+          KeyChip(keys: "⌘Y")
+          KeyChip(keys: "⌘N")
+          KeyChip(keys: "⌘1–9")
+        }
       }
       Note("Reduce motion, Increase contrast, and Reduce transparency are followed automatically from System Settings → Accessibility → Display.")
     }
@@ -642,6 +646,18 @@ private struct ChoiceRow<Control: View>: View {
       control
     }
     .padding(.vertical, 9)
+  }
+}
+
+/// A shortcut, set like a key.
+private struct KeyChip: View {
+  let keys: String
+
+  var body: some View {
+    Text(keys)
+      .font(.system(size: 12, weight: .medium, design: .rounded))
+      .padding(.init(top: 3, leading: 8, bottom: 3, trailing: 8))
+      .background(RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.08)))
   }
 }
 

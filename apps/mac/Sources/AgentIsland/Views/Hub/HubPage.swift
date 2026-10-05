@@ -23,8 +23,6 @@ struct HubPage: View {
         case .ask: EmptyView()
         }
       }
-      .id(tab)
-      .modifier(Entrance(kind: .rowIn, delay: 0.02))
     }
     .frame(width: 440, alignment: .leading)
     .padding(.init(top: 6, leading: 10, bottom: 4, trailing: 10))
