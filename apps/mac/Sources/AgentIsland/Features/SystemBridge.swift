@@ -137,7 +137,7 @@ enum MenuReader {
 
 /// Core Audio, for the volume control and for noticing a call holds the mic.
 enum AudioDevices {
-  static func defaultDevice(input: Bool) -> AudioObjectID? {
+  nonisolated static func defaultDevice(input: Bool) -> AudioObjectID? {
     var address = AudioObjectPropertyAddress(
       mSelector: input ? kAudioHardwarePropertyDefaultInputDevice : kAudioHardwarePropertyDefaultOutputDevice,
       mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain
@@ -148,13 +148,18 @@ enum AudioDevices {
     return status == noErr && device != 0 ? device : nil
   }
 
-  /// Some app has the default microphone open right now.
-  static var micInUse: Bool {
+  /// Some app has the default microphone open right now. Off the main actor:
+  /// the first Core Audio call in the process brings up the whole HAL (and
+  /// its preferences over XPC), which must not stall the island. Anything
+  /// missing or failing reads as "not in use".
+  @concurrent
+  nonisolated static func micInUse() async -> Bool {
     guard let device = defaultDevice(input: true) else { return false }
     var address = AudioObjectPropertyAddress(
       mSelector: kAudioDevicePropertyDeviceIsRunningSomewhere, mScope: kAudioObjectPropertyScopeGlobal,
       mElement: kAudioObjectPropertyElementMain
     )
+    guard AudioObjectHasProperty(device, &address) else { return false }
     var running: UInt32 = 0
     var size = UInt32(MemoryLayout<UInt32>.size)
     return AudioObjectGetPropertyData(device, &address, 0, nil, &size, &running) == noErr && running != 0

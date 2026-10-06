@@ -69,7 +69,9 @@ final class MeetingService {
   /// running browser, checked at most every ten seconds.
   private func meetTab() async -> (bundle: String, url: String)? {
     if let front = frontMeetTab() { return front }
-    guard AudioDevices.micInUse else {
+    // Core Audio only once there's a browser a Meet tab could be in.
+    let browsers = NSWorkspace.shared.runningApplications.filter { Browser.named(bundleId: $0.bundleIdentifier)?.allTabsScript != nil }
+    guard !browsers.isEmpty, await AudioDevices.micInUse() else {
       cachedMeetTab = nil
       return nil
     }
@@ -78,7 +80,7 @@ final class MeetingService {
     defer { checkingTabs = false }
     lastTabCheck = .now
     cachedMeetTab = nil
-    for app in NSWorkspace.shared.runningApplications {
+    for app in browsers {
       // Only browsers already allowed: detection must never prompt.
       guard let browser = Browser.named(bundleId: app.bundleIdentifier), let script = browser.allTabsScript,
         Automation.isAllowed(browser.bundleId) == true, let out = await Osascript.run(script)

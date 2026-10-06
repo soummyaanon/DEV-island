@@ -24,7 +24,8 @@ final class AgendaService {
     func isOngoing(at now: Date) -> Bool { start <= now && end > now }
   }
 
-  struct Reminder: Identifiable, Equatable {
+  /// Nonisolated: built on EventKit's own queue (see `remindersFetched`).
+  nonisolated struct Reminder: Identifiable, Equatable, Sendable {
     let id: String
     var title: String
     var due: Date?
@@ -176,7 +177,15 @@ final class AgendaService {
   private func loadReminders() {
     let endOfToday = Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: .now))
     let predicate = store.predicateForIncompleteReminders(withDueDateStarting: nil, ending: endOfToday, calendars: nil)
-    store.fetchReminders(matching: predicate) { [weak self] found in
+    store.fetchReminders(matching: predicate, completion: Self.remindersFetched { [weak self] in self?.reminders = $0 })
+  }
+
+  /// EventKit answers on its own queue (com.apple.eventkit.reminders.search).
+  /// A closure written inside this main-actor class would be main-actor too,
+  /// and Swift traps the moment it runs anywhere else; so the callback is made
+  /// here, nonisolated, and only the finished list goes to the main actor.
+  nonisolated private static func remindersFetched(_ deliver: @escaping @MainActor @Sendable ([Reminder]) -> Void) -> @Sendable ([EKReminder]?) -> Void {
+    { found in
       let values = (found ?? []).prefix(12).map { reminder in
         Reminder(
           id: reminder.calendarItemIdentifier, title: reminder.title ?? "", due: reminder.dueDateComponents?.date,
@@ -184,7 +193,7 @@ final class AgendaService {
         )
       }
       let sorted = values.sorted { ($0.due ?? .distantFuture) < ($1.due ?? .distantFuture) }
-      Task { @MainActor in self?.reminders = sorted }
+      Task { @MainActor in deliver(sorted) }
     }
   }
 
