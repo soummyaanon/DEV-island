@@ -77,13 +77,15 @@ final class IslandController {
     announceTransitions()
     model.openSettings = { [weak self] in self?.openSettings() }
     ZeroConfigPolicy.setUp(settings)
-    windows.maybeShowOnboarding()
+    // First run: the intro speaks first, and the island says hello once it's done.
+    let introducing = windows.maybeShowOnboarding()
+    windows.onArrive = { [weak self] in self?.welcome() }
     wireFeedback()
     wireAssistant()
     watchSettings()
     watchMeter()
     wireQuickAccess()
-    Task { await greet(.launch) }
+    if !introducing { Task { await greet(.launch) } }
   }
 
   // MARK: Assistant
@@ -157,6 +159,18 @@ final class IslandController {
     }
     model.showGreeting(greeting)
     haptics.play(.success)
+  }
+
+  /// Straight after the intro: the island opens where the card landed.
+  private func welcome() {
+    let name = Greeting.firstName(fullName: NSFullUserName(), login: NSUserName())
+    model.showGreeting(Greeting(
+      title: name.isEmpty ? "Welcome to the island" : "Welcome aboard, \(name)",
+      line: "This is home. Start Claude Code, Codex or Cursor and they'll show up right here. Hover me anytime.",
+      ai: false
+    ))
+    haptics.play(.success)
+    sounds.play(.success, settings: model.settings)
   }
 
   /// Back after a while away: a lock, or a sleep without one.
@@ -238,6 +252,11 @@ final class IslandController {
 
   func openSettings() {
     windows.showSettings()
+  }
+
+  /// Launched again from Finder: the intro until it's been seen, Settings after.
+  func reopen() {
+    if !windows.maybeShowOnboarding() { windows.showSettings() }
   }
 
   /// A clicked notification: the update one opens the download.

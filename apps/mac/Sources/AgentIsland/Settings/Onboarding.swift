@@ -10,6 +10,15 @@ final class OnboardingState {
 
   var accessibilityTrusted = Accessibility.isTrusted
   var openAtLogin = LoginItem.isEnabled
+  /// The hardware notch the card flies into.
+  var notch = CGSize(width: NotchMetrics.fallbackWidth, height: 32)
+  /// Flying to the island: the card turns into it and glides up.
+  var leaving = false
+  /// At the notch: the card folds into it and goes.
+  var docked = false
+
+  static let glide: Double = 0.6
+  static let dock: Double = 0.32
 
   func refresh() {
     if accessibilityTrusted != Accessibility.isTrusted { accessibilityTrusted = Accessibility.isTrusted }
@@ -30,6 +39,28 @@ final class OnboardingWindow: NSWindow {
     isMovableByWindowBackground = true
     isReleasedWhenClosed = false
     title = "Welcome to Agent Island"
+    // A first launch isn't always let in front, and a background app's window
+    // is hidden by Stage Manager or sits behind a full-screen app: float above
+    // them on whichever Space is showing, then settle once the app is in front
+    // (so System Settings, opened from a step, can come over it).
+    level = .floating
+    collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
+    activeObserver = NotificationCenter.default.addObserver(
+      forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
+    ) { [weak self] _ in
+      MainActor.assumeIsolated {
+        guard let self, self.isVisible, self.level == .floating else { return }
+        self.level = .normal
+      }
+    }
+  }
+
+  private var activeObserver: NSObjectProtocol?
+
+  override func close() {
+    if let activeObserver { NotificationCenter.default.removeObserver(activeObserver) }
+    activeObserver = nil
+    super.close()
   }
 
   override var canBecomeKey: Bool { true }
@@ -94,7 +125,10 @@ private func nsFont(_ size: CGFloat, _ weight: Double) -> NSFont {
 /// The first-run window: a live mock of the island, two optional steps, and a way out.
 struct OnboardingView: View {
   let state: OnboardingState
+  /// "Take me to the island".
   let finish: () -> Void
+  /// The close light.
+  let close: () -> Void
 
   @Environment(\.colorScheme) private var scheme
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -102,9 +136,49 @@ struct OnboardingView: View {
 
   var body: some View {
     let t = Tokens.of(scheme)
+    let size = OnboardingWindow.size
+    let leaving = state.leaving
+    let docked = state.docked
+    let on = shown.wrappedValue || reduceMotion
+    // The card becomes the island: a little wider than the notch on the way
+    // up, then folded into it.
+    let scale = docked
+      ? CGSize(width: state.notch.width / size.width, height: state.notch.height / size.height)
+      : leaving ? CGSize(width: state.notch.width * 1.3 / size.width, height: 0.22) : CGSize(width: 1, height: 1)
+    let shape = UnevenRoundedRectangle(
+      topLeadingRadius: leaving ? 0 : 22, bottomLeadingRadius: leaving ? 64 : 22,
+      bottomTrailingRadius: leaving ? 64 : 22, topTrailingRadius: leaving ? 0 : 22, style: .continuous
+    )
+    card(t)
+      .opacity(leaving ? 0 : 1)
+      .animation(Curves.ease(0.18), value: leaving)
+      .frame(width: size.width, height: size.height)
+      .background {
+        ZStack {
+          t.window
+          Aurora(scheme: scheme, still: reduceMotion)
+          Color.black.opacity(leaving ? 1 : 0)
+        }
+        .animation(Curves.ease(0.25), value: leaving)
+      }
+      .clipShape(shape)
+      .overlay(shape.strokeBorder(leaving ? .white.opacity(0.1) : t.edge, lineWidth: 1))
+      .scaleEffect(x: scale.width, y: scale.height, anchor: .top)
+      .opacity(docked ? 0 : 1)
+      .animation(.timingCurve(0.45, 0, 0.15, 1, duration: OnboardingState.glide), value: leaving)
+      .animation(.timingCurve(0.6, 0, 0.9, 0.6, duration: OnboardingState.dock), value: docked)
+      // card-in
+      .opacity(on ? 1 : 0)
+      .scaleEffect(on ? 1 : 0.96)
+      .offset(y: on ? 0 : 10)
+      .animation(reduceMotion ? nil : Curves.spring(0.5), value: on)
+      .onAppear { shown.wrappedValue = true }
+  }
+
+  private func card(_ t: Tokens) -> some View {
     let still = reduceMotion
     let on = shown.wrappedValue || still
-    VStack(spacing: 0) {
+    return VStack(spacing: 0) {
       IslandDemo(working: t.working, done: t.done, still: still)
         .padding(.top, 6)
         .rise(on, delay: 0.08, still: still)
@@ -129,8 +203,13 @@ struct OnboardingView: View {
       .frame(maxWidth: 480)
       .padding(.top, 18)
       .rise(on, delay: 0.32, still: still)
-      Button("Take me to the island", action: finish)
-        .buttonStyle(StartButton(accent: t.accent))
+      Button(action: finish) {
+        HStack(spacing: 8) {
+          Text("Take me to the island")
+          UpArrow(still: still)
+        }
+      }
+        .buttonStyle(StartButton(accent: t.accent, still: still))
         .padding(.top, 20)
         .rise(on, delay: 0.40, still: still)
       Text("Hover the notch anytime for sessions, sounds, and quit.")
@@ -142,17 +221,8 @@ struct OnboardingView: View {
     }
     .padding(.init(top: 26, leading: 44, bottom: 26, trailing: 44))
     .frame(width: OnboardingWindow.size.width, height: OnboardingWindow.size.height)
-    .background(t.window)
     .overlay(alignment: .top) { DragStrip().frame(height: 40) }
-    .overlay(alignment: .topLeading) { TrafficLights(close: finish).padding(14) }
-    .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-    .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(t.edge, lineWidth: 1))
-    // card-in
-    .opacity(on ? 1 : 0)
-    .scaleEffect(on ? 1 : 0.96)
-    .offset(y: on ? 0 : 10)
-    .animation(still ? nil : Curves.spring(0.5), value: on)
-    .onAppear { shown.wrappedValue = true }
+    .overlay(alignment: .topLeading) { TrafficLights(close: close).padding(14) }
   }
 
   private func subtitle(_ t: Tokens) -> some View {
@@ -202,10 +272,13 @@ struct OnboardingView: View {
         Spacer(minLength: 0)
         if done {
           Text("✓ enabled").font(cssFont(11.5, 650)).foregroundStyle(tokens.done)
+            .transition(.scale(scale: 0.6).combined(with: .opacity))
         } else {
           Button("Enable", action: enable).buttonStyle(StepButton(tokens: tokens))
+            .transition(.opacity)
         }
       }
+      .animation(Curves.spring(0.45), value: done)
       .padding(.init(top: 11, leading: 14, bottom: 11, trailing: 14))
       .background(RoundedRectangle(cornerRadius: 13).fill(tokens.surface))
       .overlay(
@@ -260,36 +333,117 @@ private struct StepButton: ButtonStyle {
   }
 }
 
-/// `.ob-start`.
+/// `.ob-start`, with a light sweeping across it now and then.
 private struct StartButton: ButtonStyle {
   let accent: Color
+  let still: Bool
 
   func makeBody(configuration: Configuration) -> some View {
-    Face(configuration: configuration, accent: accent)
+    Face(configuration: configuration, accent: accent, still: still)
   }
 
   private struct Face: View {
     let configuration: Configuration
     let accent: Color
+    let still: Bool
     private let hovering = State(initialValue: false)
+    private let start = State(initialValue: Date.now)
 
     var body: some View {
       // :active's transform replaces :hover's, as in CSS.
       let pressed = configuration.isPressed
-      configuration.label
-        .font(cssFont(13.5, 680))
-        .foregroundStyle(Color(hex: 0xF8FBFF))
-        .padding(.init(top: 11, leading: 26, bottom: 11, trailing: 26))
-        .background(RoundedRectangle(cornerRadius: 12).fill(accent))
-        .shadow(color: accent.opacity(0.3), radius: 9, y: 4)
-        .contentShape(RoundedRectangle(cornerRadius: 12))
-        .scaleEffect(pressed ? 0.98 : 1)
-        .offset(y: !pressed && hovering.wrappedValue ? -1 : 0)
-        .animation(Curves.spring(0.1), value: pressed)
-        .animation(Curves.spring(0.1), value: hovering.wrappedValue)
-        .onHover { hovering.wrappedValue = $0 }
+      TimelineView(.animation(paused: still)) { timeline in
+        let time = still ? 0 : timeline.date.timeIntervalSince(start.wrappedValue)
+        configuration.label
+          .font(cssFont(13.5, 680))
+          .foregroundStyle(Color(hex: 0xF8FBFF))
+          .padding(.init(top: 11, leading: 26, bottom: 11, trailing: 26))
+          .background(RoundedRectangle(cornerRadius: 12).fill(accent))
+          .overlay { shine(time).clipShape(RoundedRectangle(cornerRadius: 12)).allowsHitTesting(false) }
+          .shadow(color: accent.opacity(0.3 + 0.2 * Self.glow(time)), radius: 9 + 5 * Self.glow(time), y: 4)
+      }
+      .contentShape(RoundedRectangle(cornerRadius: 12))
+      .scaleEffect(pressed ? 0.98 : 1)
+      .offset(y: !pressed && hovering.wrappedValue ? -1 : 0)
+      .animation(Curves.spring(0.1), value: pressed)
+      .animation(Curves.spring(0.1), value: hovering.wrappedValue)
+      .onHover { hovering.wrappedValue = $0 }
+    }
+
+    /// A soft band of light crossing the button once every 3.2s.
+    private func shine(_ time: TimeInterval) -> some View {
+      GeometryReader { geo in
+        let progress = time.truncatingRemainder(dividingBy: 3.2) / 1.1
+        LinearGradient(colors: [.white.opacity(0), .white.opacity(0.35), .white.opacity(0)], startPoint: .leading, endPoint: .trailing)
+          .frame(width: geo.size.width * 0.35)
+          .rotationEffect(.degrees(18))
+          .offset(x: -geo.size.width * 0.4 + geo.size.width * 1.5 * min(progress, 1.2))
+          .opacity(still || progress > 1 ? 0 : 1)
+      }
+    }
+
+    /// 0…1…0 over 2.4s: the glow under the button breathing.
+    private static func glow(_ time: TimeInterval) -> Double {
+      0.5 - 0.5 * cos(time / 2.4 * 2 * .pi)
     }
   }
+}
+
+/// The way to the island: up. Hops twice, rests, hops again.
+private struct UpArrow: View {
+  let still: Bool
+  private let start = State(initialValue: Date.now)
+
+  var body: some View {
+    TimelineView(.animation(paused: still)) { timeline in
+      let time = still ? 0 : timeline.date.timeIntervalSince(start.wrappedValue)
+      Image(systemName: "arrow.up")
+        .font(.system(size: 12, weight: .bold))
+        .offset(y: -3.5 * Self.hop(time))
+    }
+  }
+
+  /// Two quick hops (0.32s each) every 2.2s.
+  private static func hop(_ time: TimeInterval) -> Double {
+    let t = time.truncatingRemainder(dividingBy: 2.2)
+    guard t < 0.64 else { return 0 }
+    return sin(t.truncatingRemainder(dividingBy: 0.32) / 0.32 * .pi)
+  }
+}
+
+/// Slow coloured light drifting behind the card: the agents' blue, green and violet.
+private struct Aurora: View {
+  let scheme: ColorScheme
+  let still: Bool
+  private let start = State(initialValue: Date.now)
+
+  var body: some View {
+    TimelineView(.animation(minimumInterval: 1 / 30, paused: still)) { timeline in
+      let time = still ? 0 : timeline.date.timeIntervalSince(start.wrappedValue)
+      let strength = scheme == .light ? 0.22 : 0.3
+      Canvas { context, size in
+        context.addFilter(.blur(radius: 70))
+        for (index, blob) in Self.blobs.enumerated() {
+          let phase = time / blob.period * 2 * .pi + Double(index) * 2.1
+          let center = CGPoint(
+            x: size.width * (blob.x + 0.16 * sin(phase)),
+            y: size.height * (blob.y + 0.1 * cos(phase * 0.8))
+          )
+          let radius = size.width * blob.radius * (1 + 0.08 * sin(phase * 1.3))
+          let rect = CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2)
+          context.fill(Path(ellipseIn: rect), with: .color(blob.color.opacity(strength)))
+        }
+      }
+    }
+    .allowsHitTesting(false)
+    .accessibilityHidden(true)
+  }
+
+  private static let blobs: [(x: Double, y: Double, radius: Double, period: Double, color: Color)] = [
+    (0.22, 0.12, 0.26, 11, Color(hex: 0x74B7FF)),
+    (0.8, 0.2, 0.22, 14, Color(hex: 0xB18CFF)),
+    (0.55, 0.95, 0.24, 17, Color(hex: 0x4ECB8D)),
+  ]
 }
 
 // MARK: Window chrome

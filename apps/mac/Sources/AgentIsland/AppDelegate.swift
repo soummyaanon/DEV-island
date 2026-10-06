@@ -27,9 +27,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     ZeroConfigPolicy.tearDown()
   }
 
-  /// Settings reopens when the app is launched again from Finder.
+  /// Launched again from Finder: the intro if it hasn't been seen, else Settings.
   func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-    island?.openSettings()
+    island?.reopen()
     return false
   }
 
