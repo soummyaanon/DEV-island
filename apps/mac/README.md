@@ -26,6 +26,17 @@ DistributedNotificationCenter.default().postNotificationName(
 EOF
 ```
 
+Each time today's Claude Code and Codex tokens pass another million, confetti
+bursts out of the notch (Settings → Quick access). A debug build plays one on demand:
+
+```sh
+swift - <<'EOF'
+import Foundation
+DistributedNotificationCenter.default().postNotificationName(
+  .init("com.agentisland.app.next.simulateMilestone"), object: nil, userInfo: nil, deliverImmediately: true)
+EOF
+```
+
 1.x draws above this app, so quit 1.x to see this one.
 
 ## Quick access

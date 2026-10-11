@@ -320,6 +320,47 @@ import Testing
   }
 }
 
+@Suite struct TokenMilestoneTests {
+  let now = ISO8601DateFormatter().date(from: "2026-10-03T12:00:00Z")!
+
+  @Test func `tallies claude once across chunks, and codex by its latest count`() {
+    let claude = #"{"timestamp":"2026-10-03T11:00:00.000Z","message":{"id":"m1","usage":{"input_tokens":10,"output_tokens":90}}}"#
+    let codex = { (input: Int) in
+      #"{"timestamp":"2026-10-03T11:00:00.000Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":\#(input),"output_tokens":0}}}}"#
+    }
+    var tally = TokenTally()
+    tally.addClaude(claude, since: .distantPast, now: now)
+    tally.addClaude(claude, since: .distantPast, now: now)
+    tally.addCodex(codex(500), file: "a", since: .distantPast, now: now)
+    tally.addCodex(codex(800), file: "a", since: .distantPast, now: now)
+    tally.addCodex("{}", file: "a", since: .distantPast, now: now)
+    #expect(tally.total == 100 + 800)
+  }
+
+  @Test func `celebrates each new million, never the launch's own`() {
+    var marks = TokenMilestones()
+    #expect(marks.observe(total: 2_400_000, day: "d1") == nil)
+    #expect(marks.observe(total: 2_900_000, day: "d1") == nil)
+    #expect(marks.observe(total: 3_000_001, day: "d1") == 3_000_000)
+    #expect(marks.observe(total: 3_500_000, day: "d1") == nil)
+    // Two at once is one celebration, of the higher mark.
+    #expect(marks.observe(total: 5_100_000, day: "d1") == 5_000_000)
+  }
+
+  @Test func `a new day counts from zero`() {
+    var marks = TokenMilestones()
+    _ = marks.observe(total: 4_200_000, day: "d1")
+    #expect(marks.observe(total: 300_000, day: "d2") == nil)
+    #expect(marks.observe(total: 1_000_000, day: "d2") == 1_000_000)
+  }
+
+  @Test func `keeps a partial last line for later`() {
+    #expect(completeLines(Data("{\"a\":1}\n{\"b\"".utf8))?.text == "{\"a\":1}")
+    #expect(completeLines(Data("{\"a\":1}\n{\"b\"".utf8))?.used == 8)
+    #expect(completeLines(Data("{\"b\"".utf8)) == nil)
+  }
+}
+
 @Suite struct MonthGridTests {
   @Test func `lays out October 2026 from a Monday-first calendar`() {
     var calendar = Calendar(identifier: .gregorian)

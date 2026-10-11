@@ -38,6 +38,7 @@ final class IslandController {
   fileprivate var sidewaysLockedUntil: TimeInterval = 0
   fileprivate var sideReset: Task<Void, Never>?
   fileprivate var hintCounted = false
+  fileprivate let tokenMilestones = TokenMilestoneWatcher()
 
   init(settings: IslandSettings) {
     let screen = Self.targetScreen
@@ -614,10 +615,31 @@ extension IslandController {
       if settings.browserControls || settings.meetings { model.browser.start() } else { model.browser.stop() }
       if settings.agenda { model.agenda.start() } else { model.agenda.stop() }
       if !settings.teleprompter { model.prompter.stop() }
+      if settings.tokenConfetti { tokenMilestones.start() } else { tokenMilestones.stop() }
       if !settings.shelf { model.shelf.dragActive = false }
       if let tab = model.hubTab, !model.hubTabs.contains(tab) { model.hubTab = nil }
     }
     model.meeting.frontMeetTab = { [model] in model.browser.meetTab }
+
+    // Another million tokens today: confetti out of the notch (a bloom with
+    // Reduce Motion), a tap, and a spoken line.
+    tokenMilestones.onMilestone = { [weak self] mark in
+      guard let self, !model.isPaused else { return }
+      if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion { model.sessions.firePulse(.done) } else { model.celebrate() }
+      haptics.play(.success)
+      NSAccessibility.post(element: NSApp as Any, notification: .announcementRequested, userInfo: [
+        .announcement: "\(mark / TokenMilestones.step) million tokens today", .priority: NSAccessibilityPriorityLevel.medium.rawValue,
+      ])
+    }
+    #if DEBUG
+    // From a terminal: play a million-token burst (see README).
+    let celebrate = DistributedNotificationCenter.default().addObserver(
+      forName: Notification.Name(Log.subsystem + ".simulateMilestone"), object: nil, queue: .main
+    ) { [weak self] _ in
+      MainActor.assumeIsolated { self?.tokenMilestones.onMilestone(TokenMilestones.step) }
+    }
+    observers.append(celebrate)
+    #endif
 
     // A rung timer: chime, bloom, tap, and a spoken line.
     model.timers.onFinish = { [weak self] timer in

@@ -122,6 +122,20 @@ final class IslandModel {
     }
   }
 
+  // MARK: Token milestones
+
+  /// A confetti burst out of the notch, for as long as it's falling.
+  private(set) var confetti: UUID?
+
+  func celebrate() {
+    let burst = UUID()
+    confetti = burst
+    Task { [weak self] in
+      try? await Task.sleep(for: ConfettiView.duration)
+      if self?.confetti == burst { self?.confetti = nil }
+    }
+  }
+
   // MARK: Resource meter
 
   /// CPU and memory per session's process tree, while the panel is open.

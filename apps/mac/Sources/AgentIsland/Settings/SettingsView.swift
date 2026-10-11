@@ -226,6 +226,7 @@ struct SettingsView: View {
         SettingRow(title: "Timers", detail: "Countdowns and Pomodoro, with the time left in the wings.", isOn: binding(\.timers))
         SettingRow(title: "Browser controls", detail: "The current tab, back, forward and reload when Safari, Chrome, Arc, Brave, Edge or Firefox is in front.", isOn: binding(\.browserControls))
         SettingRow(title: "File Shelf", detail: "Drag files onto the notch to park them; drag them back out or AirDrop them. Files stay where they are; only images and text you drop are saved, in the app's own folder.", isOn: binding(\.shelf))
+        SettingRow(title: "Confetti every million tokens", detail: "A burst out of the notch each time Claude Code and Codex pass another million tokens today, counted from their own logs on this Mac.", isOn: binding(\.tokenConfetti))
         SettingRow(title: "Clock when the menu bar hides", detail: "With the menu bar set to hide, the resting island shows the time.", isOn: binding(\.menuBarClock))
       }
       SubHeading("Tools")

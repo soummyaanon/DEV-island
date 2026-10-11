@@ -86,6 +86,8 @@ public struct IslandSettings: Equatable, Sendable {
 
   /// Claude Code and Codex activity, read from their local logs.
   public var agentStats = true
+  /// Confetti out of the notch each time today's tokens pass another million.
+  public var tokenConfetti = true
   /// Time, volume, brightness, Wi-Fi, Bluetooth, AirDrop, Focus, battery, displays.
   public var quickControls = true
   /// Drop files on the notch to park them; drag them back out or AirDrop them.
@@ -141,7 +143,7 @@ public struct IslandSettings: Equatable, Sendable {
     "tray", "updateCheck", "haptics", "textSize", "weather", "weatherLocation", "weatherUnits", "openWith",
     "sessionView", "glass", "battery", "procStats", "respectFocus", "assistant", "assistantModel", "voice",
     "speakReplies", "edgeGlow", "greeting",
-    "agentStats", "quickControls", "shelf", "clipboardHistory", "nowPlaying", "meetings", "browserControls", "agenda", "timers",
+    "agentStats", "tokenConfetti", "quickControls", "shelf", "clipboardHistory", "nowPlaying", "meetings", "browserControls", "agenda", "timers",
     "widgets", "stocks", "stockSymbols", "teleprompter", "menuBarClock", "focusShortcut",
   ]
 
@@ -198,6 +200,7 @@ public struct IslandSettings: Equatable, Sendable {
     bool("edgeGlow", &edgeGlow)
     bool("greeting", &greeting)
     bool("agentStats", &agentStats)
+    bool("tokenConfetti", &tokenConfetti)
     bool("quickControls", &quickControls)
     bool("shelf", &shelf)
     bool("clipboardHistory", &clipboardHistory)
@@ -225,6 +228,7 @@ public struct IslandSettings: Equatable, Sendable {
       if self[keyPath: path] != defaults[keyPath: path] { out.append((key, .string(self[keyPath: path]))) }
     }
     bool("agentStats", \.agentStats)
+    bool("tokenConfetti", \.tokenConfetti)
     bool("quickControls", \.quickControls)
     bool("shelf", \.shelf)
     bool("clipboardHistory", \.clipboardHistory)

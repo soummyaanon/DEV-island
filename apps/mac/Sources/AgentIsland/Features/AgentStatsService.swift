@@ -33,7 +33,6 @@ final class AgentStatsService {
       guard let text = try? String(contentsOf: file, encoding: .utf8) else { continue }
       stats.addClaude(text, since: since, now: now, seen: &seen)
     }
-    let codexHome = ProcessInfo.processInfo.environment["CODEX_HOME"].map { URL(filePath: $0) } ?? home.appending(path: ".codex")
     for file in recentFiles(under: codexHome.appending(path: "sessions"), since: since) {
       guard let text = try? String(contentsOf: file, encoding: .utf8) else { continue }
       stats.addCodex(text, since: since, now: now)
@@ -41,8 +40,13 @@ final class AgentStatsService {
     return stats
   }
 
+  nonisolated static var codexHome: URL {
+    ProcessInfo.processInfo.environment["CODEX_HOME"].map { URL(filePath: $0) }
+      ?? FileManager.default.homeDirectoryForCurrentUser.appending(path: ".codex")
+  }
+
   /// `.jsonl` files touched since `since`, at any depth.
-  private nonisolated static func recentFiles(under root: URL, since: Date) -> [URL] {
+  nonisolated static func recentFiles(under root: URL, since: Date) -> [URL] {
     guard let walker = FileManager.default.enumerator(
       at: root, includingPropertiesForKeys: [.contentModificationDateKey, .isRegularFileKey], options: [.skipsHiddenFiles]
     ) else { return [] }

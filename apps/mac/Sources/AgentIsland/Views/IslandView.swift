@@ -66,6 +66,14 @@ struct IslandView: View {
     island
       .environment(\.uiScale, model.settings.textSize.scale)
       .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+      // Over the whole canvas, not clipped to the island: it rains past it.
+      .overlay {
+        if let burst = model.confetti, !reduceMotion, !model.isPaused {
+          Confetti(notchWidth: model.notch.width, bandHeight: model.bandHeight)
+            .allowsHitTesting(false)
+            .id(burst)
+        }
+      }
       .animation(reduceMotion ? nil : (model.isExpanded ? Motion.open : Motion.close), value: model.isExpanded)
       // Collapsed, a width change eases like a close; open, content growing
       // or shrinking settles the width on the firmer spring.
