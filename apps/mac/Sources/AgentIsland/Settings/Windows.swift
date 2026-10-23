@@ -200,8 +200,8 @@ enum ZeroConfigPolicy {
     if settings.agents.contains(.cursor) { report(config.setupCursor(), claude: false) }
   }
 
-  /// At quit: the HTTP hooks point at the daemon we're about to stop, and
-  /// left behind they'd error every tool call. They come back next launch.
+  /// At quit: the approval hook is HTTP, pointed at the daemon we're about to
+  /// stop, and left behind it'd error on every ask. They come back next launch.
   static func tearDown() {
     guard owns else { return }
     let config = ZeroConfig.standard

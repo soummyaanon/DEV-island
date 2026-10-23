@@ -103,10 +103,36 @@ private func json(_ url: URL) throws -> OrderedJSON {
     try Data(#"{"hooks":{"PreToolUse":[{"matcher":"*","hooks":[{"type":"command","command":"echo mine"}]}]}}"#.utf8).write(to: config.claudeSettings)
     #expect(config.setupClaude() == .updated)
     let installed = try json(config.claudeSettings)["hooks"]!.serialized()
-    #expect(installed.contains("/events/claude/pre-tool") && installed.contains("echo mine"))
+    #expect(installed.contains("claude-hook.sh") && installed.contains("echo mine"))
     #expect(config.removeClaude() == .updated)
     let after = try json(config.claudeSettings)["hooks"]?.serialized() ?? ""
-    #expect(!after.contains("/events/claude/") && after.contains("echo mine"))
+    #expect(!after.contains("claude-hook.sh") && after.contains("echo mine"))
+  }
+
+  @Test func `observes through the bridge, so a closed app shows no hook errors`() throws {
+    let (config, root) = try sandbox()
+    defer { try? FileManager.default.removeItem(at: root) }
+    _ = config.setupClaude()
+    let hooks = try json(config.claudeSettings)["hooks"]
+    for spec in HookInstaller.claudeEvents {
+      let handler = hooks?[spec.event]?.array?.first?["hooks"]?.array?.first
+      if spec.event == "PermissionRequest" {
+        // Approvals still answer in the HTTP response.
+        #expect(handler?["type"]?.string == "http")
+      } else {
+        #expect(handler?["type"]?.string == "command")
+        #expect(handler?["args"] == .array([.string(spec.slug)]))
+      }
+    }
+  }
+
+  @Test func `replaces an older install's HTTP hooks`() throws {
+    let (config, root) = try sandbox()
+    defer { try? FileManager.default.removeItem(at: root) }
+    try Data(#"{"hooks":{"PreToolUse":[{"matcher":"*","hooks":[{"type":"http","url":"http://localhost:7433/events/claude/pre-tool"}]},{"matcher":"*","hooks":[{"type":"command","command":"echo mine"}]}]}}"#.utf8).write(to: config.claudeSettings)
+    #expect(config.setupClaude() == .updated)
+    let installed = try json(config.claudeSettings)["hooks"]?["PreToolUse"]?.serialized() ?? ""
+    #expect(!installed.contains(#""http""#) && installed.contains("claude-hook.sh") && installed.contains("echo mine"))
   }
 
   @Test func `never overwrites settings it can't read, and backs up before writing`() throws {

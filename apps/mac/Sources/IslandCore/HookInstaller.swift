@@ -32,9 +32,6 @@ public enum HookInstaller {
     .init(event: "SessionEnd", slug: "session-end", matcher: false, timeout: 5),
   ]
 
-  /// Claude runs these only as commands, not HTTP: they go through the bridge.
-  static let commandOnly: Set<String> = ["SessionStart", "SessionEnd"]
-
   /// Where our scripts live, under `~/.agent-island/bin`.
   public struct Paths: Sendable {
     public var home: String
@@ -47,6 +44,12 @@ public enum HookInstaller {
     public var savedStatusCommand: String { home + "/statusline-original.cmd" }
     public var cursorBridge: String { home + "/bin/cursor-hook.sh" }
   }
+
+  /// Only approvals are HTTP: the notch's answer comes back in the response.
+  /// Everything else goes through the bridge, whose curl fails quietly with
+  /// the app closed, where Claude reports a failed HTTP hook as an error on
+  /// every tool call.
+  static let httpOnly: Set<String> = ["PermissionRequest"]
 
   static func httpHandler(slug: String, timeout: Int, token: String) -> OrderedJSON {
     .object([
@@ -63,6 +66,11 @@ public enum HookInstaller {
     ])
   }
 
+  static func bridgeHandler(slug: String, timeout: Int, paths: Paths) -> OrderedJSON {
+    .object([("type", .string("command")), ("command", .string(paths.claudeBridge)), ("args", .array([.string(slug)])), ("timeout", .number(String(timeout)))])
+  }
+
+  /// Older installs' HTTP observers are ours too, swapped for the bridge on the next setup.
   static func isOurs(_ handler: OrderedJSON, paths: Paths) -> Bool {
     let type = handler["type"]?.string
     return (type == "http" && handler["url"]?.string?.contains(claudeMarker) == true)
@@ -86,9 +94,9 @@ public enum HookInstaller {
     var hooks = settings["hooks"].flatMap { $0.isObject ? $0 : nil } ?? .object([])
     for spec in claudeEvents {
       var groups = stripOurs(hooks[spec.event], paths: paths)
-      let handler: OrderedJSON = commandOnly.contains(spec.event)
-        ? .object([("type", .string("command")), ("command", .string(paths.claudeBridge)), ("args", .array([.string(spec.slug)])), ("timeout", .number(String(spec.timeout)))])
-        : httpHandler(slug: spec.slug, timeout: spec.timeout, token: token)
+      let handler = httpOnly.contains(spec.event)
+        ? httpHandler(slug: spec.slug, timeout: spec.timeout, token: token)
+        : bridgeHandler(slug: spec.slug, timeout: spec.timeout, paths: paths)
       var group = OrderedJSON.object([("hooks", .array([handler]))])
       if spec.matcher { group["matcher"] = .string("*") }
       groups.append(group)
