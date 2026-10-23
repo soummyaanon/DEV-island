@@ -74,14 +74,15 @@ public struct ZeroConfig: Sendable {
 
   public func setupClaude() -> HookInstaller.Result {
     do {
-      let token = try ensureToken()
+      // The bridge reads the token from its file.
+      _ = try ensureToken()
       try writeScript(paths.claudeBridge, HookInstaller.claudeBridgeScript)
       try writeScript(paths.statusScript, HookInstaller.statusLineScript)
       let existing: OrderedJSON?
       do { existing = try read(claudeSettings) } catch { return .error }
       let before = existing ?? .object([])
       var saved: OrderedJSON?
-      let after = HookInstaller.mergeClaude(before, token: token, paths: paths, savedStatusLine: &saved)
+      let after = HookInstaller.mergeClaude(before, paths: paths, savedStatusLine: &saved)
       // The user's own status line: kept for removal, and run by our script.
       if !HookInstaller.isOurStatusLine(before["statusLine"], paths: paths) {
         let savedURL = URL(filePath: paths.savedStatusLine), commandURL = URL(filePath: paths.savedStatusCommand)

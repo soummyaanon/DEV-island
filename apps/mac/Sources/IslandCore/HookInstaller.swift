@@ -45,32 +45,14 @@ public enum HookInstaller {
     public var cursorBridge: String { home + "/bin/cursor-hook.sh" }
   }
 
-  /// Only approvals are HTTP: the notch's answer comes back in the response.
-  /// Everything else goes through the bridge, whose curl fails quietly with
-  /// the app closed, where Claude reports a failed HTTP hook as an error on
-  /// every tool call.
-  static let httpOnly: Set<String> = ["PermissionRequest"]
-
-  static func httpHandler(slug: String, timeout: Int, token: String) -> OrderedJSON {
-    .object([
-      ("type", .string("http")),
-      ("url", .string("http://localhost:7433/events/claude/\(slug)")),
-      ("headers", .object([
-        ("X-Agent-Island-Token", .string(token)),
-        ("X-Term-Program", .string("$TERM_PROGRAM")),
-        ("X-Iterm-Session-Id", .string("$ITERM_SESSION_ID")),
-        ("X-Term-Session-Id", .string("$TERM_SESSION_ID")),
-      ])),
-      ("allowedEnvVars", .array([.string("TERM_PROGRAM"), .string("ITERM_SESSION_ID"), .string("TERM_SESSION_ID")])),
-      ("timeout", .number(String(timeout))),
-    ])
-  }
-
+  /// Every event goes through the bridge, never an HTTP hook: with the app
+  /// closed or crashed, Claude reports a failed HTTP hook as an error on every
+  /// call, while the bridge's curl fails quietly.
   static func bridgeHandler(slug: String, timeout: Int, paths: Paths) -> OrderedJSON {
     .object([("type", .string("command")), ("command", .string(paths.claudeBridge)), ("args", .array([.string(slug)])), ("timeout", .number(String(timeout)))])
   }
 
-  /// Older installs' HTTP observers are ours too, swapped for the bridge on the next setup.
+  /// HTTP handlers are an older install's, swapped for the bridge on the next setup.
   static func isOurs(_ handler: OrderedJSON, paths: Paths) -> Bool {
     let type = handler["type"]?.string
     return (type == "http" && handler["url"]?.string?.contains(claudeMarker) == true)
@@ -89,14 +71,12 @@ public enum HookInstaller {
   }
 
   /// Merges our hooks and status line into Claude's settings.
-  public static func mergeClaude(_ settings: OrderedJSON, token: String, paths: Paths, savedStatusLine: inout OrderedJSON?) -> OrderedJSON {
+  public static func mergeClaude(_ settings: OrderedJSON, paths: Paths, savedStatusLine: inout OrderedJSON?) -> OrderedJSON {
     var settings = settings
     var hooks = settings["hooks"].flatMap { $0.isObject ? $0 : nil } ?? .object([])
     for spec in claudeEvents {
       var groups = stripOurs(hooks[spec.event], paths: paths)
-      let handler = httpOnly.contains(spec.event)
-        ? httpHandler(slug: spec.slug, timeout: spec.timeout, token: token)
-        : bridgeHandler(slug: spec.slug, timeout: spec.timeout, paths: paths)
+      let handler = bridgeHandler(slug: spec.slug, timeout: spec.timeout, paths: paths)
       var group = OrderedJSON.object([("hooks", .array([handler]))])
       if spec.matcher { group["matcher"] = .string("*") }
       groups.append(group)
@@ -200,13 +180,17 @@ public enum HookInstaller {
 
   // MARK: Scripts
 
-  /// SessionStart and SessionEnd can't be HTTP hooks, so their stdin goes by curl.
+  /// Every Claude hook's stdin goes by curl. With the app closed curl fails
+  /// quietly and the hook exits 0, so Claude carries on as if we weren't there.
   public static let claudeBridgeScript = #"""
     #!/bin/zsh
     # Agent Island Claude bridge (auto-generated; safe to delete).
     EVENT="${1:-session-start}"
     TOKEN="$(cat "$HOME/.agent-island/token" 2>/dev/null)"
-    /usr/bin/curl -s -m 4 -X POST "http://127.0.0.1:7433/events/claude/${EVENT}" \
+    # Approvals are held open in the notch and answered on stdout.
+    MAX=4 OUT=/dev/null
+    if [[ "$EVENT" == permission-request ]]; then MAX=118 OUT=/dev/stdout; fi
+    /usr/bin/curl -sf -m "$MAX" -X POST "http://127.0.0.1:7433/events/claude/${EVENT}" \
       -H "content-type: application/json" \
       -H "x-agent-island-token: ${TOKEN}" \
       -H "X-Term-Program: ${TERM_PROGRAM:-}" \
@@ -214,7 +198,7 @@ public enum HookInstaller {
       -H "X-Term-Session-Id: ${TERM_SESSION_ID:-}" \
       -H "X-App-Bundle-Id: ${__CFBundleIdentifier:-}" \
       -H "X-Agent-Pid: ${PPID:-}" \
-      --data-binary @- >/dev/null 2>&1
+      --data-binary @- >"$OUT" 2>/dev/null
     exit 0
 
     """#

@@ -109,21 +109,29 @@ private func json(_ url: URL) throws -> OrderedJSON {
     #expect(!after.contains("claude-hook.sh") && after.contains("echo mine"))
   }
 
-  @Test func `observes through the bridge, so a closed app shows no hook errors`() throws {
+  @Test func `sends every event through the bridge, so a closed app shows no hook errors`() throws {
     let (config, root) = try sandbox()
     defer { try? FileManager.default.removeItem(at: root) }
     _ = config.setupClaude()
     let hooks = try json(config.claudeSettings)["hooks"]
     for spec in HookInstaller.claudeEvents {
       let handler = hooks?[spec.event]?.array?.first?["hooks"]?.array?.first
-      if spec.event == "PermissionRequest" {
-        // Approvals still answer in the HTTP response.
-        #expect(handler?["type"]?.string == "http")
-      } else {
-        #expect(handler?["type"]?.string == "command")
-        #expect(handler?["args"] == .array([.string(spec.slug)]))
-      }
+      #expect(handler?["type"]?.string == "command")
+      #expect(handler?["args"] == .array([.string(spec.slug)]))
     }
+    #expect(hooks?["PermissionRequest"]?.array?.first?["hooks"]?.array?.first?["timeout"] == .number("120"))
+  }
+
+  @Test func `the bridge answers approvals on stdout, inside the hook's timeout`() throws {
+    let (config, root) = try sandbox()
+    defer { try? FileManager.default.removeItem(at: root) }
+    _ = config.setupClaude()
+    let bridge = try String(contentsOf: config.home.appending(components: "bin", "claude-hook.sh"), encoding: .utf8)
+    #expect(bridge.contains(#"if [[ "$EVENT" == permission-request ]]; then MAX=118 OUT=/dev/stdout; fi"#))
+    // Quiet on any failure: -f drops error bodies, and it always exits 0.
+    #expect(bridge.contains("curl -sf -m \"$MAX\""))
+    #expect(bridge.contains(#">"$OUT" 2>/dev/null"#))
+    #expect(bridge.hasSuffix("exit 0\n"))
   }
 
   @Test func `replaces an older install's HTTP hooks`() throws {
