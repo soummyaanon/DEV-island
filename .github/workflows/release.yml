@@ -30,7 +30,7 @@ jobs:
     # and on-device voice (SpeechAnalyzer) need the macOS 26 SDK.
     runs-on: macos-26
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - run: swift --version
 
@@ -92,7 +92,7 @@ jobs:
 
       - name: Publish DMG to public downloads repo
         if: env.HAS_TOKEN == 'true'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           repository: ${{ env.RELEASES_REPO }}
           token: ${{ secrets.RELEASES_TOKEN }}
@@ -105,7 +105,7 @@ jobs:
       # the DMG downloadable from the run, without leaking source to a release.
       - name: Upload DMG as artifact (RELEASES_TOKEN not set)
         if: env.HAS_TOKEN != 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Agent-Island-dmg
           path: apps/mac/build/Agent-Island.dmg
