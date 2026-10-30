@@ -338,6 +338,8 @@ private struct CrewStyle: ButtonStyle {
 /// follows the edge only: nothing glows along the bezel at the top.
 struct IslandGlow: View {
   let corner: CGFloat
+  var placement: IslandPlacement = .top
+  var ear: CGFloat = IslandOutline.earRadius
   let bright: Bool
   let paused: Bool
 
@@ -353,10 +355,10 @@ struct IslandGlow: View {
       startPoint: .leading, endPoint: .trailing
     )
     ZStack {
-      IslandEdge(corner: corner).stroke(beam, lineWidth: 56).blur(radius: 14).opacity(bright ? 0.2 : 0.13)
-      IslandEdge(corner: corner).stroke(beam, lineWidth: 1.5).opacity(bright ? 0.26 : 0.18)
+      IslandEdge(corner: corner, placement: placement, ear: ear).stroke(beam, lineWidth: 56).blur(radius: 14).opacity(bright ? 0.2 : 0.13)
+      IslandEdge(corner: corner, placement: placement, ear: ear).stroke(beam, lineWidth: 1.5).opacity(bright ? 0.26 : 0.18)
     }
-    .clipShape(IslandShape(corner: corner))
+    .clipShape(IslandShape(corner: corner, placement: placement, ear: ear))
     .modifier(GlowPulse(active: !paused && !reduceMotion))
     .allowsHitTesting(false)
   }

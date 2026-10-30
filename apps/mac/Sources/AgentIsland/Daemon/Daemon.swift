@@ -61,6 +61,11 @@ final class EventHub {
     if changed { broadcast(WireMessage.usage(all).encoded()) }
   }
 
+  /// Context, cost or a check's outcome, merged into the session's meta.
+  func mergeMeta(_ agent: AgentKind, _ sessionId: String, _ values: [String: JSONValue]) {
+    if registry.mergeMeta(agent, sessionId, values) != nil { broadcastSnapshot() }
+  }
+
   func endSession(_ agent: AgentKind, _ sessionId: String) {
     if registry.remove(SessionRegistry.key(agent, sessionId)) { broadcastSnapshot() }
   }
@@ -88,9 +93,9 @@ final class EventHub {
   // MARK: Holds
 
   /// Holds a tool call for the notch until allow, deny or the timeout.
-  func requestApproval(_ agent: AgentKind, _ sessionId: String, tool: String, input: [String: JSONValue], plan: String?) async -> String {
+  func requestApproval(_ agent: AgentKind, _ sessionId: String, tool: String, input: [String: JSONValue], plan: String?, remember: String? = nil) async -> String {
     let id = UUID().uuidString.lowercased()
-    let approval = PendingApproval(id: id, toolName: tool, toolInput: input, plan: plan, createdAt: .now)
+    let approval = PendingApproval(id: id, toolName: tool, toolInput: input, plan: plan, remember: remember, createdAt: .now)
     if registry.setPendingApproval(agent, sessionId, approval, at: .now) != nil { broadcastSnapshot() }
     let outcome = await withCheckedContinuation { continuation in
       approvals[id] = continuation
@@ -98,6 +103,16 @@ final class EventHub {
     }
     if registry.setPendingApproval(agent, sessionId, nil, at: .now) != nil { broadcastSnapshot() }
     return outcome
+  }
+
+  /// The agent got past a held approval without us (you answered in the
+  /// terminal, or the turn ended): the card goes instead of lingering until
+  /// the hold times out. Only that same call finishing (same tool, same
+  /// input) or the turn ending counts, never a parallel tool's activity.
+  func releaseApproval(_ agent: AgentKind, _ sessionId: String, finished tool: String?, input: JSONValue?) {
+    guard let held = registry.get(agent, sessionId)?.pendingApproval else { return }
+    if let tool, held.toolName != tool || held.toolInput != (input?.object ?? [:]) { return }
+    _ = resolveApproval(held.id, "timeout")
   }
 
   func resolveApproval(_ id: String, _ decision: String) -> Bool {
@@ -264,7 +279,15 @@ final class Daemon {
     return true
   }
 
+  /// Browsers always say where a request comes from; the island, the hook
+  /// bridges and curl never do. A page in a browser could otherwise read every
+  /// tool call over /stream and approve one with a POST.
+  private static func fromBrowser(_ request: HTTPRequest) -> Bool {
+    request.header("origin")?.isEmpty == false
+  }
+
   private func handle(_ request: HTTPRequest) async -> HTTPResponse {
+    if Self.fromBrowser(request) { return .json(403, ["error": "browsers may not use the island's daemon"]) }
     let parts = request.path.split(separator: "/").map(String.init)
     let body = JSONValue(json: request.body)
     switch (request.method, parts.first, parts.count) {
@@ -290,10 +313,12 @@ final class Daemon {
     case ("POST", "usage", 2) where parts[1] == "claude":
       guard authorized(request) else { return .json(401, ["error": "invalid or missing token"]) }
       if let body, let usage = ClaudeAdapter.usage(from: body) { hub.setUsage(.claudeCode, usage) }
+      // The same JSON carries each session's context and cost.
+      if let body, let stats = SessionStats.meta(from: body) { hub.mergeMeta(.claudeCode, stats.sessionId, stats.meta) }
       return .empty
     case ("POST", "approvals", 2):
-      guard let decision = body?["decision"]?.string, decision == "allow" || decision == "deny" else {
-        return .json(400, ["error": "decision must be 'allow' or 'deny'"])
+      guard let decision = body?["decision"]?.string, ["allow", "deny", "always"].contains(decision) else {
+        return .json(400, ["error": "decision must be 'allow', 'deny' or 'always'"])
       }
       let resolved = hub.resolveApproval(parts[1], decision)
       return .json(resolved ? 200 : 404, ["ok": resolved])
@@ -317,6 +342,18 @@ final class Daemon {
   private func claudeHook(_ slug: String, _ body: JSONValue?, _ request: HTTPRequest) async -> HTTPResponse {
     guard let payload = body, let session = payload["session_id"]?.string else { return .empty }
     let event = ClaudeAdapter.eventName(slug: slug, payload: payload)
+    // A test, build or lint run finished: its outcome is the session's check
+    // chip. A failure is its own event, which nothing else maps.
+    if event == "PostToolUse" || event == "PostToolUseFailure", payload["tool_name"]?.string == "Bash",
+      payload["is_interrupt"] != .bool(true), let command = payload["tool_input"]?["command"]?.string,
+      let check = DevCheck.kind(of: command)
+    {
+      hub.mergeMeta(.claudeCode, session, [
+        "check": .string(check.rawValue), "check_ok": .bool(event == "PostToolUse"),
+        "check_command": .string(command), "check_at": .number(Date.now.timeIntervalSince1970.rounded()),
+      ])
+    }
+    if event == "PostToolUseFailure" { return .empty }
     // The session closed: it leaves the island now.
     if event == "SessionEnd" {
       hub.endSession(.claudeCode, session)
@@ -331,6 +368,8 @@ final class Daemon {
 
     let tool = payload["tool_name"]?.string
     let input = payload["tool_input"]
+    if event == "PostToolUse" { hub.releaseApproval(.claudeCode, session, finished: tool ?? "", input: input) }
+    if event == "Stop" { hub.releaseApproval(.claudeCode, session, finished: nil, input: nil) }
     // "Claude asks": held while a UI can answer; any later activity clears it.
     if tool == "AskUserQuestion", event == "PermissionRequest" || event == "PreToolUse" {
       let question = ClaudeAdapter.question(from: input)
@@ -354,8 +393,16 @@ final class Daemon {
     // Interactive approval, only when a UI is connected; otherwise Claude's own
     // prompt takes over at once, so the session never hangs.
     if event == "PermissionRequest", tool != "AskUserQuestion", hub.subscriberCount > 0 {
-      let outcome = await hub.requestApproval(.claudeCode, session, tool: tool ?? "tool", input: input?.object ?? [:], plan: ClaudeAdapter.plan(from: input))
+      let remember = Remember.rule(tool: tool ?? "tool", input: input, suggestions: payload["permission_suggestions"])
+      let outcome = await hub.requestApproval(
+        .claudeCode, session, tool: tool ?? "tool", input: input?.object ?? [:], plan: ClaudeAdapter.plan(from: input), remember: remember?.label
+      )
       if outcome == "allow" || outcome == "deny" { return decision(["behavior": .string(outcome)]) }
+      // Allowed, and the rule saved where Claude Code's own "don't ask again" would put it.
+      if outcome == "always" {
+        guard let remember else { return decision(["behavior": .string("allow")]) }
+        return decision(["behavior": .string("allow"), "updatedPermissions": remember.permissions])
+      }
     }
     return .empty
   }
@@ -379,7 +426,7 @@ final class Daemon {
   }
 
   private func stream(_ request: HTTPRequest, _ peer: WebSocketPeer) {
-    guard request.path == "/stream" else {
+    guard request.path == "/stream", !Self.fromBrowser(request) else {
       peer.close()
       return
     }

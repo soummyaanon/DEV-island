@@ -232,6 +232,7 @@ struct SettingsView: View {
       SubHeading("Tools")
       Group_ {
         SettingRow(title: "Agents", detail: "Today's tokens, sessions, limits and a 7-day chart for Claude Code and Codex, read from their own logs on this Mac.", isOn: binding(\.agentStats))
+        SettingRow(title: "Developer strip", detail: "Under your sessions: how full each context is and what it has cost, uncommitted changes, whether the last test or build passed, and the dev servers running (click to open). Checked only while the island is open.", isOn: binding(\.devTools))
         SettingRow(title: "Quick controls", detail: "Time, volume, brightness, Wi-Fi, Bluetooth, AirDrop, Focus, battery and displays.", isOn: binding(\.quickControls))
         SettingRow(title: "Clipboard history", detail: "The last 30 texts and images you copied, in memory only. Password managers, concealed items and anything that looks like a key, token, card number or one-time code are skipped.", isOn: binding(\.clipboardHistory))
         SettingRow(title: "Today", detail: "Calendar events with join links, reminders, and a to-do list of your own. Calendar access is asked for only when you press Allow.", isOn: binding(\.agenda))
@@ -318,6 +319,17 @@ struct SettingsView: View {
 
   private var appearance: some View {
     Group_ {
+      ChoiceRow(
+        title: "Position",
+        detail: model.settings.placement == .top
+          ? "Around the notch. Or drag the island to the left or right edge of the screen and let go."
+          : "A mini notch on the \(model.settings.placement.label.lowercased()) edge: one dot per agent, a click opens it. Drag it up or down the edge, or back to the top."
+      ) {
+        Picker("Island position", selection: pick(\.placement)) {
+          ForEach(IslandPlacement.allCases, id: \.self) { Text($0.label).tag($0) }
+        }
+        .pickerStyle(.segmented).labelsHidden().fixedSize()
+      }
       SettingRow(
         title: "Liquid Glass panel",
         detail: NSClassFromString("NSGlassEffectView") != nil

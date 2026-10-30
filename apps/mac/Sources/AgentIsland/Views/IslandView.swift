@@ -5,6 +5,9 @@ import SwiftUI
 /// side. SwiftUI draws shapes off the main actor, so it's nonisolated.
 nonisolated struct IslandShape: Shape {
   var corner: CGFloat
+  /// On a side edge the same outline turns, so the bezel runs down that edge.
+  var placement: IslandPlacement = .top
+  var ear: CGFloat = IslandOutline.earRadius
 
   var animatableData: CGFloat {
     get { corner }
@@ -12,14 +15,15 @@ nonisolated struct IslandShape: Shape {
   }
 
   func path(in rect: CGRect) -> Path {
-    let outline = IslandOutline(width: rect.width - 2 * IslandOutline.earRadius, height: rect.height, corner: corner)
-    return Path(outline.silhouette()).offsetBy(dx: rect.minX, dy: rect.minY)
+    Path(IslandOutline.silhouette(rect.size, on: placement, corner: corner, ear: ear)).offsetBy(dx: rect.minX, dy: rect.minY)
   }
 }
 
 /// The island's edge alone — ears, sides and bottom, never the bezel along the top.
 nonisolated struct IslandEdge: Shape {
   var corner: CGFloat
+  var placement: IslandPlacement = .top
+  var ear: CGFloat = IslandOutline.earRadius
 
   var animatableData: CGFloat {
     get { corner }
@@ -27,8 +31,7 @@ nonisolated struct IslandEdge: Shape {
   }
 
   func path(in rect: CGRect) -> Path {
-    let outline = IslandOutline(width: rect.width - 2 * IslandOutline.earRadius, height: rect.height, corner: corner)
-    return Path(outline.edge()).offsetBy(dx: rect.minX, dy: rect.minY)
+    Path(IslandOutline.edge(rect.size, on: placement, corner: corner, ear: ear)).offsetBy(dx: rect.minX, dy: rect.minY)
   }
 }
 
@@ -62,13 +65,28 @@ struct IslandView: View {
   @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
   @Environment(\.colorSchemeContrast) private var contrast
 
+  /// The window's coordinate space, which the side island reports its frame in.
+  nonisolated static let canvas = "island-canvas"
+
   var body: some View {
-    island
+    Group {
+      if model.placement.isSide {
+        EdgeIsland(model: model)
+      } else {
+        island
+          .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+          .transition(.arrive(.top))
+      }
+    }
       .environment(\.uiScale, model.settings.textSize.scale)
-      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+      .coordinateSpace(.named(Self.canvas))
+      // In hand, the island lives in the drag overlay; it's back the moment it lands.
+      .opacity(model.carry == nil ? 1 : 0)
+      .animation(.easeOut(duration: 0.15), value: model.carry == nil)
       // Over the whole canvas, not clipped to the island: it rains past it.
+      // Out of the notch only; a side island blooms instead.
       .overlay {
-        if let burst = model.confetti, !reduceMotion, !model.isPaused {
+        if let burst = model.confetti, !reduceMotion, !model.isPaused, !model.placement.isSide {
           Confetti(notchWidth: model.notch.width, bandHeight: model.bandHeight)
             .allowsHitTesting(false)
             .id(burst)
@@ -84,6 +102,8 @@ struct IslandView: View {
       .animation(reduceMotion ? nil : Motion.settle, value: model.notch)
       .animation(reduceMotion ? nil : Motion.settle, value: model.power.activity)
       .animation(reduceMotion ? nil : Motion.settle, value: model.sessions.moment)
+      // A new edge pops out with a little bounce.
+      .animation(reduceMotion ? nil : .spring(response: 0.42, dampingFraction: 0.66), value: model.placement)
   }
 
   /// What the open panel holds, roughly: when it changes, the width settles.
@@ -161,7 +181,7 @@ struct IslandView: View {
     .onGeometryChange(for: CGSize.self) { $0.size } action: { size in
       model.bodySize = CGSize(width: size.width - 2 * IslandOutline.earRadius, height: size.height)
     }
-    .contextMenu { IslandMenu(power: model.power, openSettings: model.openSettings) }
+    .contextMenu { IslandMenu(model: model) }
     .accessibilityElement(children: .contain)
     .accessibilityLabel("Agent Island")
   }
@@ -373,9 +393,11 @@ enum WingText {
 /// A soft coloured bloom washes the island on each event, then fades: done
 /// green, a question blue ripple, attention an amber throb, a failure three
 /// jagged red flashes. Reduce Motion keeps only a gentle fade.
-private struct EdgeGlow: View {
+struct EdgeGlow: View {
   let pulse: EdgePulse
   let corner: CGFloat
+  var placement: IslandPlacement = .top
+  var ear: CGFloat = IslandOutline.earRadius
   let reduced: Bool
   /// At high contrast the bloom becomes a 2 pt border: same signal, text stays legible.
   let highContrast: Bool
@@ -401,6 +423,17 @@ private struct EdgeGlow: View {
     case .question: Palette.working
     case .attention: Palette.waiting
     case .hello: Color(hex: 0xFF6FA8)
+    }
+  }
+
+  private var shape: IslandShape { IslandShape(corner: corner, placement: placement, ear: ear) }
+
+  /// The wash runs from the bezel toward the screen.
+  private var wash: (start: UnitPoint, end: UnitPoint) {
+    switch placement {
+    case .top: (UnitPoint(x: 0.5, y: 0.55), .bottom)
+    case .right: (UnitPoint(x: 0.45, y: 0.5), .leading)
+    case .left: (UnitPoint(x: 0.55, y: 0.5), .trailing)
     }
   }
 
@@ -431,18 +464,16 @@ private struct EdgeGlow: View {
       let t = elapsed(at: timeline.date) / duration
       ZStack {
         if highContrast {
-          IslandShape(corner: corner).stroke(color, lineWidth: 4)
+          shape.stroke(color, lineWidth: 4)
+        } else if pulse.kind == .hello {
+          // Hello is Apple Intelligence's light: a quiet pastel sheen, not a bloom.
+          IntelligenceSheen(corner: corner, placement: placement, ear: ear, paused: paused)
         } else {
-        IslandShape(corner: corner)
-          .stroke(
-            pulse.kind == .hello
-              ? AnyShapeStyle(AngularGradient(colors: [Color(hex: 0xB18CFF), Color(hex: 0xFF6FA8), Color(hex: 0xFFB36B), Color(hex: 0x6BC8FF), Color(hex: 0xB18CFF)], center: .center))
-              : AnyShapeStyle(color),
-            lineWidth: 16
-          )
+        shape
+          .stroke(color, lineWidth: 16)
           .blur(radius: 9)
-        // A heavier wash off the bottom edge.
-        LinearGradient(colors: [color.opacity(0), color.opacity(0.55)], startPoint: .init(x: 0.5, y: 0.55), endPoint: .bottom)
+        // A heavier wash off the edge facing the screen.
+        LinearGradient(colors: [color.opacity(0), color.opacity(0.55)], startPoint: wash.start, endPoint: wash.end)
           .blur(radius: 6)
         }
       }
@@ -482,19 +513,24 @@ private struct EdgeGlow: View {
   }
 }
 
-/// Right-click on the island. The Settings window replaces most of this in phase 6.
-private struct IslandMenu: View {
-  let power: PowerMonitor
-  let openSettings: () -> Void
+/// Right-click on the island.
+struct IslandMenu: View {
+  let model: IslandModel
 
   var body: some View {
     if LoginItem.isAvailable {
       // Read fresh each time the menu opens: System Settings can change it too.
       Toggle("Open at Login", isOn: Binding(get: { LoginItem.isEnabled }, set: { LoginItem.isEnabled = $0 }))
     }
-    Button("Settings…") { openSettings() }
+    Picker("Position", selection: Binding(
+      get: { model.settings.placement },
+      set: { placement in model.changeSettings { $0.placement = placement } }
+    )) {
+      ForEach(IslandPlacement.allCases, id: \.self) { Text($0.label).tag($0) }
+    }
+    Button("Settings…") { model.openSettings() }
     #if DEBUG
-    Button("Play Charger Moment") { power.simulateMoment() }
+    Button("Play Charger Moment") { model.power.simulateMoment() }
     #endif
     Divider()
     Button("Quit Agent Island") { NSApp.terminate(nil) }

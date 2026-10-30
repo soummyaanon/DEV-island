@@ -21,7 +21,9 @@ struct GreetingCard: View {
     // The line types in unless paused (then it's all there at once); only
     // Reduce Motion stops the pops, the rise, the shimmer and the caret.
     let still = reduceMotion
-    Button(action: dismiss) {
+    // Not a Button: a macOS button sizes its label to one unwrapped line, so a
+    // line that wraps drew over the badge beneath it.
+    Group {
       TimelineView(.animation(minimumInterval: 1.0 / 30)) { timeline in
         let age = timeline.date.timeIntervalSince(at)
         let pose = still ? 60 : age
@@ -44,12 +46,22 @@ struct GreetingCard: View {
               .opacity(rise)
             // The caret blinks on an 0.8 s beat while the line types.
             let caret = !still && shown < greeting.line.count && age.truncatingRemainder(dividingBy: 0.8) < 0.4
-            (Text(String(greeting.line.prefix(shown))) + Text(caret ? "▏" : "").foregroundColor(Color(hex: 0xB18CFF)))
+            // The whole line, unseen, holds its final height from the first
+            // frame: typing into it never resizes the island, and the badge
+            // below never lands on a line that hasn't wrapped yet.
+            Text(greeting.line)
               .islandFont(12)
-              .foregroundStyle(.white.opacity(0.82))
               .lineSpacing(3)
               .fixedSize(horizontal: false, vertical: true)
               .frame(minHeight: 17, alignment: .topLeading)
+              .hidden()
+              .overlay(alignment: .topLeading) {
+                (Text(String(greeting.line.prefix(shown))) + Text(caret ? "▏" : "").foregroundColor(Color(hex: 0xB18CFF)))
+                  .islandFont(12)
+                  .foregroundStyle(.white.opacity(0.82))
+                  .lineSpacing(3)
+                  .fixedSize(horizontal: false, vertical: true)
+              }
             if greeting.ai && shown >= greeting.line.count {
               Text("✦ Apple Intelligence")
                 .islandFont(9.5)
@@ -63,9 +75,12 @@ struct GreetingCard: View {
         .contentShape(Rectangle())
       }
     }
-    .buttonStyle(.plain)
+    .onTapGesture(perform: dismiss)
     .padding(.init(top: 4, leading: 0, bottom: 6, trailing: 0))
+    .accessibilityElement(children: .ignore)
     .accessibilityLabel("\(greeting.title). \(greeting.line)")
+    .accessibilityAddTraits(.isButton)
+    .accessibilityAction { dismiss() }
   }
 
   static let pop = CubicBezier(0.34, 1.56, 0.64, 1)

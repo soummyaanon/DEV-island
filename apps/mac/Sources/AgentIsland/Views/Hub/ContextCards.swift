@@ -37,14 +37,16 @@ struct ContextCards: View {
     }
     if model.settings.timers { items += model.timers.timers.map(Item.timer) }
     if let track = model.liveTrack { items.append(.media(track)) }
-    if model.settings.browserControls, let browser = model.browser.front { items.append(.browser(browser)) }
     if model.settings.shelf, !model.shelf.items.isEmpty { items.append(.files) }
     return items
   }
 
   var body: some View {
     let items = items
-    if !items.isEmpty {
+    let browser = model.settings.browserControls && model.browser.front != nil
+    if !items.isEmpty || browser {
+      VStack(alignment: .leading, spacing: 6) {
+      if !items.isEmpty {
       Grid(horizontalSpacing: 6, verticalSpacing: 6) {
         ForEach(Array(stride(from: 0, to: items.count, by: 2)), id: \.self) { start in
           GridRow {
@@ -55,6 +57,10 @@ struct ContextCards: View {
         }
       }
       .frame(width: 412)
+      }
+      // The browser is a small pill, never a whole row.
+      if browser { BrowserTile(model: model) }
+      }
       .padding(.init(top: 4, leading: 8, bottom: 2, trailing: 8))
     }
   }
@@ -94,6 +100,8 @@ struct QuickButton: View {
   let symbol: String
   let label: String
   var size: CGFloat = 12
+  /// The hit box; nil is the card size.
+  var box: CGFloat? = nil
   var tint: Color? = nil
   var prominent = false
   let action: () -> Void
@@ -101,7 +109,7 @@ struct QuickButton: View {
   var body: some View {
     Button(action: action) {
       Glyph(symbol, size: size)
-        .frame(width: prominent ? 30 : 24, height: prominent ? 30 : 24)
+        .frame(width: box ?? (prominent ? 30 : 24), height: box ?? (prominent ? 30 : 24))
     }
     .buttonStyle(QuickButtonStyle(tint: tint, prominent: prominent))
     .help(label)

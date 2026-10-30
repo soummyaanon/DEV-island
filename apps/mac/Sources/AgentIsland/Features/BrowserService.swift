@@ -3,11 +3,12 @@ import Foundation
 import IslandCore
 import Observation
 
-/// The browser in front: its current tab, and back, forward and reload.
+/// The browser you last used: its current tab, and back, forward and reload.
 ///
-/// The island never takes focus, so the browser stays frontmost while you use
-/// it. The tab is read only while the island is open (AppleScript for Safari
-/// and Chromium browsers, the window title for Firefox).
+/// It stays the island's browser after you switch to another app, until you
+/// use a different browser or quit it, so a glance from your terminal still
+/// shows the page you left. The tab is read only while the island is open
+/// (AppleScript for Safari and Chromium browsers, the window title for Firefox).
 @Observable
 final class BrowserService {
   struct Tab: Equatable {
@@ -18,38 +19,84 @@ final class BrowserService {
   private(set) var front: Browser?
   private(set) var tab: Tab?
 
+  /// Reading its tab needs macOS's Automation permission: nil until asked.
+  private(set) var allowed: Bool?
+
+  /// The island is open and showing the tab: only then is a switch worth a read.
+  @ObservationIgnored var live = false
   @ObservationIgnored private var frontPID: pid_t?
-  @ObservationIgnored private var observer: NSObjectProtocol?
+  @ObservationIgnored private var observers: [NSObjectProtocol] = []
   @ObservationIgnored private var reading = false
 
   func start() {
-    guard observer == nil else { return }
-    observer = NSWorkspace.shared.notificationCenter.addObserver(
-      forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
-    ) { [weak self] note in
+    guard observers.isEmpty else { return }
+    let center = NSWorkspace.shared.notificationCenter
+    observers.append(center.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { [weak self] note in
       let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
       let id = app?.bundleIdentifier
       let pid = app?.processIdentifier
       MainActor.assumeIsolated { self?.activated(id, pid: pid) }
-    }
+    })
+    // Quitting the browser is the one thing that forgets it.
+    observers.append(center.addObserver(forName: NSWorkspace.didTerminateApplicationNotification, object: nil, queue: .main) { [weak self] note in
+      let pid = (note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.processIdentifier
+      MainActor.assumeIsolated {
+        guard let self, pid != nil, pid == self.frontPID else { return }
+        self.front = nil
+        self.frontPID = nil
+        self.tab = nil
+      }
+    })
+    // At launch: the browser in front, else the most recently used one still running.
     let app = NSWorkspace.shared.frontmostApplication
-    activated(app?.bundleIdentifier, pid: app?.processIdentifier)
+    if Browser.named(bundleId: app?.bundleIdentifier) != nil {
+      activated(app?.bundleIdentifier, pid: app?.processIdentifier)
+    } else if let running = NSWorkspace.shared.runningApplications.first(where: { Browser.named(bundleId: $0.bundleIdentifier) != nil }) {
+      activated(running.bundleIdentifier, pid: running.processIdentifier)
+    }
   }
 
   func stop() {
-    if let observer { NSWorkspace.shared.notificationCenter.removeObserver(observer) }
-    observer = nil
+    for observer in observers { NSWorkspace.shared.notificationCenter.removeObserver(observer) }
+    observers = []
     front = nil
+    frontPID = nil
     tab = nil
   }
 
   private func activated(_ bundleId: String?, pid: pid_t?) {
-    // The island itself (Settings) coming forward isn't leaving the browser.
-    guard bundleId != Bundle.main.bundleIdentifier else { return }
-    let browser = Browser.named(bundleId: bundleId)
-    if browser != front { tab = nil }
+    // Another app coming forward (the island's Settings, your terminal) isn't
+    // leaving the browser: only a different browser replaces it.
+    guard let browser = Browser.named(bundleId: bundleId) else { return }
+    if browser != front || pid != frontPID { tab = nil }
     front = browser
-    frontPID = browser == nil ? nil : pid
+    frontPID = pid
+    allowed = Automation.isAllowed(browser.bundleId)
+    // Open, the new browser's tab shows now rather than on the next poll.
+    if live { Task { await refresh() } }
+  }
+
+  /// Brings the browser (and the window whose tab the island shows) to the
+  /// front. The first time, macOS asks whether the island may read its tabs.
+  func bringForward() {
+    guard let front else { return }
+    if let pid = frontPID, let app = NSRunningApplication(processIdentifier: pid),
+      let url = app.bundleURL
+    {
+      // Through Launch Services: a background app's own `activate()` is
+      // ignored since macOS 14 unless it's already in front.
+      let configuration = NSWorkspace.OpenConfiguration()
+      configuration.activates = true
+      NSWorkspace.shared.openApplication(at: url, configuration: configuration)
+    }
+    guard allowed != true else { return }
+    let bundleId = front.bundleId
+    Task {
+      let granted = await OffMain.value(timeout: 120) { Automation.ask(bundleId) }
+      guard self.front?.bundleId == bundleId else { return }
+      allowed = granted ?? false
+      await refresh()
+    }
   }
 
   /// Reads the front tab now (the island just opened, or it's open and polling).

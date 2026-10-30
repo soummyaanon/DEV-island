@@ -113,18 +113,36 @@ struct BrowserTile: View {
 
   var body: some View {
     let service = model.browser
-    QuickCard {
-      HStack(spacing: 6) {
-        if let browser = service.front { AppIcon(bundleId: browser.bundleId, size: 18) }
-        Text(service.tab.map { displayHost($0.url) } ?? service.front?.name ?? "")
-          .islandFont(10.5).foregroundStyle(Palette.textDim).lineLimit(1)
-        Spacer(minLength: 2)
-        QuickButton(symbol: "chevron.left", label: "Back") { service.perform(.back) }
-        QuickButton(symbol: "chevron.right", label: "Forward") { service.perform(.forward) }
-        QuickButton(symbol: "arrow.clockwise", label: "Reload") { service.perform(.reload) }
+    HStack(spacing: 2) {
+      // The browser and its page: a click takes you there (and, once, asks
+      // to read its tabs).
+      Button { service.bringForward() } label: {
+        HStack(spacing: 5) {
+          if let browser = service.front { AppIcon(bundleId: browser.bundleId, size: 13) }
+          Text(label(service)).islandFont(10).foregroundStyle(Palette.text.opacity(0.75)).lineLimit(1).truncationMode(.middle)
+            .frame(maxWidth: 150, alignment: .leading)
+        }
+        .padding(.trailing, 4)
+        .contentShape(Rectangle())
       }
+      .buttonStyle(.plain)
+      .help(service.allowed == true ? "Go to \(service.front?.name ?? "the browser")" : "Go to \(service.front?.name ?? "the browser") and allow the island to show its tab")
+      QuickButton(symbol: "chevron.left", label: "Back", size: 9, box: 18) { service.perform(.back) }
+      QuickButton(symbol: "chevron.right", label: "Forward", size: 9, box: 18) { service.perform(.forward) }
+      QuickButton(symbol: "arrow.clockwise", label: "Reload", size: 9, box: 18) { service.perform(.reload) }
     }
-    .help(service.tab?.title ?? "")
+    .padding(.init(top: 2, leading: 7, bottom: 2, trailing: 3))
+    .background(Capsule().fill(.white.opacity(0.06)))
+    .overlay(Capsule().strokeBorder(.white.opacity(0.06)))
+    .fixedSize()
+    .modifier(Entrance(kind: .rowIn, delay: 0.04))
+  }
+
+  /// The page's title when it's known (its host when it has none), else the browser.
+  private func label(_ service: BrowserService) -> String {
+    guard let tab = service.tab else { return service.front?.name ?? "" }
+    let host = displayHost(tab.url)
+    return tab.title.isEmpty ? host : tab.title
   }
 }
 

@@ -36,6 +36,14 @@ final class IslandActions {
     Task { await daemon.resolveApproval(id: approvalId, decision: allow ? "allow" : "deny") }
   }
 
+  /// Allow, and save the rule so this call never asks again.
+  func alwaysAllow(_ approvalId: String) {
+    store.firePulse(.approve)
+    feedback(.approve)
+    feedback(.commit)
+    Task { await daemon.resolveApproval(id: approvalId, decision: "always") }
+  }
+
   /// Claude's questions go back through the daemon's held hook; Codex, or a
   /// hold that has expired, falls back to the terminal: arrow keys for one
   /// pick of one question, a plain jump for anything else.

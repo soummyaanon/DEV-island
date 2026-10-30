@@ -65,20 +65,23 @@ public struct PendingApproval: Codable, Equatable, Sendable {
   public var toolInput: [String: JSONValue]
   /// Plan or markdown to review (ExitPlanMode).
   public var plan: String?
+  /// The "always allow" button's label, when the call can be remembered.
+  public var remember: String?
   public var createdAt: Date
 
   enum CodingKeys: String, CodingKey {
-    case id, plan
+    case id, plan, remember
     case toolName = "tool_name"
     case toolInput = "tool_input"
     case createdAt = "created_at"
   }
 
-  public init(id: String, toolName: String, toolInput: [String: JSONValue] = [:], plan: String? = nil, createdAt: Date) {
+  public init(id: String, toolName: String, toolInput: [String: JSONValue] = [:], plan: String? = nil, remember: String? = nil, createdAt: Date) {
     self.id = id
     self.toolName = toolName
     self.toolInput = toolInput
     self.plan = plan
+    self.remember = remember
     self.createdAt = createdAt
   }
 }

@@ -59,15 +59,37 @@ public struct ZeroConfig: Sendable {
     return try OrderedJSON(parsing: String(decoding: data, as: UTF8.self))
   }
 
-  /// A timestamped backup, then the new contents.
-  private func write(_ json: OrderedJSON, to url: URL, backup: Bool) throws {
+  /// Backups kept per config file: every launch and quit rewrites it, so
+  /// unpruned they piled up by the hundred.
+  public static let backupsKept = 5
+
+  /// A timestamped backup, then the new contents. A symlinked config (a
+  /// dotfiles repo) is written through, not replaced by a plain file.
+  private func write(_ json: OrderedJSON, to link: URL, backup: Bool) throws {
+    let url = link.resolvingSymlinksInPath()
     if backup {
-      let stamp = ISO8601DateFormatter().string(from: .now).replacingOccurrences(of: ":", with: "-").replacingOccurrences(of: ".", with: "-")
+      // To the millisecond: two writes in one second used to share a name,
+      // and the second backup was silently skipped.
+      let format = ISO8601DateFormatter()
+      format.formatOptions.insert(.withFractionalSeconds)
+      let stamp = format.string(from: .now).replacingOccurrences(of: ":", with: "-").replacingOccurrences(of: ".", with: "-")
       try? files.copyItem(at: url, to: URL(filePath: url.path + ".agent-island-bak.\(stamp)"))
+      pruneBackups(of: url)
     } else {
       try files.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
     }
     try Data((json.serialized() + "\n").utf8).write(to: url, options: .atomic)
+  }
+
+  /// Keeps the newest `backupsKept` backups of `url`. The stamps are ISO 8601,
+  /// so name order is age order.
+  func pruneBackups(of url: URL) {
+    let prefix = url.lastPathComponent + ".agent-island-bak."
+    let folder = url.deletingLastPathComponent()
+    guard let names = try? files.contentsOfDirectory(atPath: folder.path) else { return }
+    for name in names.filter({ $0.hasPrefix(prefix) }).sorted().dropLast(Self.backupsKept) {
+      try? files.removeItem(at: folder.appending(path: name))
+    }
   }
 
   // MARK: Claude Code

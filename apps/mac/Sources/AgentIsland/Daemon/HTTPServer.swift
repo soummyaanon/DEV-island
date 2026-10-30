@@ -81,6 +81,9 @@ final class WebSocketPeer {
     }
   }
 
+  /// The largest frame a client may send.
+  static let maxFrame = 64 * 1024
+
   /// Client frames: masked. Close ends it; ping gets a pong; the rest is ignored.
   private func readFrames() {
     while buffer.count >= 2 {
@@ -97,6 +100,12 @@ final class WebSocketPeer {
         guard bytes.count >= 10 else { return }
         length = (2..<10).reduce(0) { $0 << 8 | Int(bytes[$1]) }
         index = 10
+      }
+      // Clients only ever send pings and closes. A huge or wrapped-negative
+      // length would trap below, or grow the buffer without end.
+      guard length >= 0, length <= Self.maxFrame else {
+        close()
+        return
       }
       let total = index + (masked ? 4 : 0) + length
       guard buffer.count >= total else { return }
@@ -207,7 +216,8 @@ final class HTTPServer {
       guard let colon = line.firstIndex(of: ":") else { continue }
       headers[line[..<colon].trimmingCharacters(in: .whitespaces).lowercased()] = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)
     }
-    let length = Int(headers["content-length"] ?? "0") ?? 0
+    // A negative length would slice the buffer backwards and trap.
+    guard let length = Int(headers["content-length"] ?? "0"), length >= 0 else { return .malformed }
     guard length <= maxBody else { return .tooLarge }
     let bodyStart = end.upperBound
     guard buffer.count - (bodyStart - buffer.startIndex) >= length else { return .incomplete }

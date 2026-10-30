@@ -66,10 +66,14 @@ struct AgentsTab: View {
             HStack(spacing: 6) {
               Text(project.name).islandFont(10).foregroundStyle(Palette.text).lineLimit(1).frame(width: 84, alignment: .leading)
               GeometryReader { proxy in
-                Capsule().fill(.white.opacity(0.35)).frame(width: max(3, proxy.size.width * CGFloat(project.tokens) / CGFloat(most)))
+                // A track behind each bar, so short ones still read against the black.
+                ZStack(alignment: .leading) {
+                  Capsule().fill(.white.opacity(0.1))
+                  Capsule().fill(.white.opacity(0.78)).frame(width: max(4, proxy.size.width * CGFloat(project.tokens) / CGFloat(most)))
+                }
               }
-              .frame(height: 4)
-              Text(TokenText.short(project.tokens)).islandFont(9.5).monospacedDigit().foregroundStyle(Palette.textDim).frame(width: 38, alignment: .trailing)
+              .frame(height: 5)
+              Text(TokenText.short(project.tokens)).islandFont(9.5, weight: .medium).monospacedDigit().foregroundStyle(Palette.text.opacity(0.75)).frame(width: 38, alignment: .trailing)
             }
           }
         }
@@ -105,13 +109,24 @@ private struct TokenLines: View {
         let claude = series.enumerated().map { point($0.offset, $0.element.day.claude) }
         let codex = series.enumerated().map { point($0.offset, $0.element.day.codex) }
         ZStack(alignment: .topLeading) {
-          // A faint wash under Claude's line.
+          // Quiet guides at the top, middle and baseline, so a height reads as an amount.
+          ForEach([0.0, 0.5, 1.0], id: \.self) { level in
+            Rectangle().fill(.white.opacity(level == 1 ? 0.18 : 0.08)).frame(width: size.width, height: 1)
+              .offset(y: (size.height - 4) - (size.height - 10) * level)
+          }
+          // A wash under each line: Claude's stronger, Codex's lighter.
+          Self.curve(codex, closingAt: size.height)
+            .fill(LinearGradient(colors: [AgentsTab.color(.codex).opacity(0.22), .clear], startPoint: .top, endPoint: .bottom))
           Self.curve(claude, closingAt: size.height)
-            .fill(LinearGradient(colors: [AgentsTab.color(.claudeCode).opacity(0.22), .clear], startPoint: .top, endPoint: .bottom))
-          Self.curve(codex).stroke(AgentsTab.color(.codex), style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
-          Self.curve(claude).stroke(AgentsTab.color(.claudeCode), style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+            .fill(LinearGradient(colors: [AgentsTab.color(.claudeCode).opacity(0.4), .clear], startPoint: .top, endPoint: .bottom))
+          Self.curve(codex).stroke(AgentsTab.color(.codex), style: StrokeStyle(lineWidth: 2.2, lineCap: .round, lineJoin: .round))
+          Self.curve(claude).stroke(AgentsTab.color(.claudeCode), style: StrokeStyle(lineWidth: 2.6, lineCap: .round, lineJoin: .round))
+          // A small dot on each day, so single days stand out from the curve.
+          ForEach(Array(claude.enumerated()), id: \.offset) { _, point in
+            Circle().fill(AgentsTab.color(.claudeCode)).frame(width: 3.5, height: 3.5).offset(x: point.x - 1.75, y: point.y - 1.75)
+          }
           if let picked, picked < series.count {
-            Rectangle().fill(.white.opacity(0.18)).frame(width: 1, height: size.height).offset(x: claude[picked].x)
+            Rectangle().fill(.white.opacity(0.35)).frame(width: 1, height: size.height).offset(x: claude[picked].x)
             dot(claude[picked], AgentsTab.color(.claudeCode))
             if series[picked].day.codex > 0 { dot(codex[picked], AgentsTab.color(.codex)) }
             let entry = series[picked]
@@ -142,7 +157,7 @@ private struct TokenLines: View {
         ForEach(Array(series.enumerated()), id: \.offset) { index, entry in
           Text(Self.initial(entry.key))
             .islandFont(8.5, weight: index == (picked ?? series.count - 1) ? .bold : .regular)
-            .foregroundStyle(index == (picked ?? series.count - 1) ? Palette.text : Palette.textDim)
+            .foregroundStyle(index == (picked ?? series.count - 1) ? Palette.text : Palette.text.opacity(0.62))
             .frame(maxWidth: .infinity)
         }
       }

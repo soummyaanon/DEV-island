@@ -46,11 +46,35 @@ final class IslandPanel: NSPanel {
     frameRect
   }
 
-  /// Top centre of `screen`, flush with its top edge.
-  func pin(to screen: NSScreen) {
+  /// On top: top centre of `screen`, flush with its top edge. On a side: the
+  /// full height of that edge, flush with it (or with a Dock that sits there).
+  func pin(to screen: NSScreen, placement: IslandPlacement) {
     let frame = screen.frame
-    let origin = CGPoint(x: (frame.midX - Self.size.width / 2).rounded(), y: frame.maxY - Self.size.height)
-    setFrame(CGRect(origin: origin, size: Self.size), display: true)
+    let visible = screen.visibleFrame
+    let target = switch placement {
+    case .top:
+      CGRect(origin: CGPoint(x: (frame.midX - Self.size.width / 2).rounded(), y: frame.maxY - Self.size.height), size: Self.size)
+    case .left:
+      CGRect(x: visible.minX, y: frame.minY, width: EdgeMetrics.canvasWidth, height: frame.height)
+    case .right:
+      CGRect(x: visible.maxX - EdgeMetrics.canvasWidth, y: frame.minY, width: EdgeMetrics.canvasWidth, height: frame.height)
+    }
+    guard target != self.frame else { return }
+    setFrame(target, display: true)
+  }
+}
+
+extension NSScreen {
+  /// The menu bar's height (or the notch's, when the menu bar hides itself)
+  /// and a bottom Dock's: what a side island keeps clear of.
+  var edgeInsets: (top: CGFloat, bottom: CGFloat) {
+    let menuBar = frame.maxY - visibleFrame.maxY
+    return (max(menuBar, safeAreaInsets.top, NSStatusBar.system.thickness), max(0, visibleFrame.minY - frame.minY))
+  }
+
+  /// The built-in display with the notch when it's on, else the one with the menu bar.
+  static var island: NSScreen? {
+    screens.first { $0.safeAreaInsets.top > 0 } ?? screens.first
   }
 }
 

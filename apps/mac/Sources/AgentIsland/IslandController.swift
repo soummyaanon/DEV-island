@@ -39,6 +39,16 @@ final class IslandController {
   fileprivate var sideReset: Task<Void, Never>?
   fileprivate var hintCounted = false
   fileprivate let tokenMilestones = TokenMilestoneWatcher()
+  /// A press on the closed island that may become a drag to another edge.
+  private var grab: (start: CGPoint, moving: Bool)?
+  /// On a side edge, the pointer has to rest a moment before it counts as hovering.
+  private var hoverDwell: Task<Void, Never>?
+  /// The layer a drag carries the island across.
+  private lazy var overlay = DragOverlayPanel(model: model)
+  /// The flight into the slot after a drag lets go.
+  private var landing: Task<Void, Never>?
+  /// The last hit-test shape, rebuilt only when the island changes.
+  private var hitShape: (key: HitKey, inner: CGPath, outer: CGPath)?
 
   init(settings: IslandSettings) {
     let screen = Self.targetScreen
@@ -57,11 +67,11 @@ final class IslandController {
     // The panel is a fixed canvas; the island never resizes the window.
     host.sizingOptions = []
     panel = IslandPanel(contentView: host)
-    if let screen { panel.pin(to: screen) }
     panel.orderFrontRegardless()
     Log.notch.notice("notch \(self.model.notch.width, format: .fixed(precision: 0))×\(self.model.notch.height, format: .fixed(precision: 0)) real=\(self.model.notch.hasNotch)")
 
     model.onLayout = { [weak self] in self?.pointerMoved() }
+    watchPlacement()
     if settings.battery { model.power.start() }
     Task { [server, daemon] in
       // Moving in from 1.x first, so its leftover daemon doesn't hold the port.
@@ -85,6 +95,7 @@ final class IslandController {
     wireAssistant()
     watchSettings()
     watchMeter()
+    watchDev()
     wireQuickAccess()
     if !introducing { Task { await greet(.launch) } }
   }
@@ -109,6 +120,8 @@ final class IslandController {
     }
     observers.append(token)
     #endif
+    // Warmed now, so "run my … shortcut" never waits on `shortcuts list`.
+    if model.settings.assistant { Task { _ = await AssistantTools.listShortcuts() } }
     ask.sessions = { [model] in model.sessions.sessions }
     ask.sendPrompt = { [model] text, session in _ = model.actions.sendPrompt(text, to: session) }
     ask.haptic = { [haptics] in haptics.play($0) }
@@ -284,6 +297,15 @@ final class IslandController {
 
   // MARK: Resource meter
 
+  /// The developer strip's servers and changes: sampled only while the panel
+  /// is open on the sessions page, and never while the Mac is locked or asleep.
+  private func watchDev() {
+    track({ [model] in model.isExpanded && model.hubTab == nil && model.settings.devTools && !model.isPaused }) { [weak self] sampling in
+      guard let self else { return }
+      if sampling { model.dev.start { [model] in model.sessions.sessions } } else { model.dev.stop() }
+    }
+  }
+
   /// One `ps` every two seconds, only while the panel is open, the setting is
   /// on and some session reported its PID. Nothing polls unseen.
   private func watchMeter() {
@@ -450,8 +472,10 @@ final class IslandController {
     min(720, screen.frame.width - 80)
   }
 
-  /// The primary display, like 1.x: the one with the menu bar on it.
-  private static var targetScreen: NSScreen? { NSScreen.screens.first }
+  /// The notched built-in display while it's on, else the one with the menu
+  /// bar. (1.x took the menu bar's, which put the island on an external
+  /// monitor set as main.)
+  private static var targetScreen: NSScreen? { NSScreen.island }
 
   // MARK: Pointer
 
@@ -462,17 +486,30 @@ final class IslandController {
         guard let self else { return }
         switch type {
         case .leftMouseDown: self.dragStarted()
-        case .leftMouseUp: self.dragEnded()
+        case .leftMouseUp:
+          self.dragEnded()
+          self.releaseGrab()
         case .leftMouseDragged:
+          // A drag that started on the island keeps carrying it, wherever the pointer goes.
+          if self.grab != nil { self.carry(); return }
           self.dragMoved()
           self.pointerMoved()
         default: self.pointerMoved()
         }
       }
     }
-    let local = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged, .scrollWheel]) { [weak self] event in
+    let local = NSEvent.addLocalMonitorForEvents(
+      matching: [.mouseMoved, .leftMouseDragged, .leftMouseDown, .leftMouseUp, .scrollWheel]
+    ) { [weak self] event in
       MainActor.assumeIsolated {
-        if event.type == .scrollWheel { self?.scrolled(event) } else { self?.pointerMoved() }
+        guard let self else { return }
+        switch event.type {
+        case .scrollWheel: self.scrolled(event)
+        case .leftMouseDown: if event.window === self.panel { self.pressed() }
+        case .leftMouseUp: self.releaseGrab()
+        case .leftMouseDragged where self.grab != nil: self.carry()
+        default: self.pointerMoved()
+        }
       }
       return event
     }
@@ -482,24 +519,199 @@ final class IslandController {
   /// Hover follows the island's real shape, and so does click-through:
   /// outside it, clicks fall through to the menu bar and the desktop.
   private func pointerMoved() {
+    // While a drag carries the island, the island keeps the mouse.
+    guard grab?.moving != true else { return }
     let inside = islandContains(NSEvent.mouseLocation)
-    if inside != model.isHovering { model.isHovering = inside }
     if panel.ignoresMouseEvents == inside { panel.ignoresMouseEvents = !inside }
-    if !inside { gesture.reset() }
+    guard inside else {
+      hoverDwell?.cancel()
+      hoverDwell = nil
+      if model.isHovering { model.isHovering = false }
+      gesture.reset()
+      return
+    }
+    guard !model.isHovering else { return }
+    // A side edge is where scroll bars and the Dock live: passing over the
+    // island on the way there shouldn't open it.
+    guard model.placement.isSide, !model.isExpanded else {
+      model.isHovering = true
+      return
+    }
+    guard hoverDwell == nil else { return }
+    hoverDwell = Task { [weak self] in
+      do { try await Task.sleep(for: .milliseconds(180)) } catch { return }
+      guard let self else { return }
+      hoverDwell = nil
+      if islandContains(NSEvent.mouseLocation), !model.isHovering { model.isHovering = true }
+    }
+  }
+
+  /// What the hit-test shape depends on.
+  private struct HitKey: Equatable {
+    var placement: IslandPlacement
+    var size: CGSize
+    var corner: CGFloat
   }
 
   private func islandContains(_ point: CGPoint) -> Bool {
-    let size = model.bodySize
-    guard size.width > 0, size.height > 0 else { return false }
-    let outline = IslandOutline(width: size.width, height: size.height, corner: IslandOutline.expandedCorner)
     let frame = panel.frame
-    // Into the island's box: top-left origin, y down. The very top row of the
-    // screen counts, so a pointer pushed against the bezel still hits.
-    let local = CGPoint(x: point.x - (frame.midX - outline.boxWidth / 2), y: max(frame.maxY - point.y, 0.5))
-    let shape = outline.silhouette()
-    if shape.contains(local) { return true }
+    let placement = model.placement
+    let key: HitKey
+    let local: CGPoint
+    if placement.isSide {
+      let box = model.edgeBox
+      key = HitKey(placement: placement, size: box.size, corner: model.isExpanded ? IslandOutline.expandedCorner : EdgeMetrics.depth / 2)
+      // Into the island's box: top-left origin, y down. The pointer pushed
+      // against the screen edge is clamped in, so it still hits.
+      let x = point.x - frame.minX - box.minX
+      local = CGPoint(x: placement == .right ? min(x, box.width - 0.5) : max(x, 0.5), y: frame.maxY - point.y - box.minY)
+    } else {
+      let size = model.bodySize
+      key = HitKey(placement: .top, size: CGSize(width: size.width + 2 * IslandOutline.earRadius, height: size.height), corner: IslandOutline.expandedCorner)
+      // The very top row of the screen counts, so a pointer pushed against the bezel still hits.
+      local = CGPoint(x: point.x - (frame.midX - key.size.width / 2), y: max(frame.maxY - point.y, 0.5))
+    }
+    guard key.size.width > 0, key.size.height > 0 else { return false }
+    if hitShape?.key != key {
+      let ear = placement.isSide ? EdgeMetrics.ear : IslandOutline.earRadius
+      let inner = IslandOutline.silhouette(key.size, on: placement, corner: key.corner, ear: ear)
+      hitShape = (key, inner, inner.copy(strokingWithWidth: 20, lineCap: .round, lineJoin: .round, miterLimit: 1))
+    }
+    guard let shape = hitShape else { return false }
+    if shape.inner.contains(local) { return true }
     // Once in, it takes 10 pt past the edge to leave, so the edge never flickers.
-    return model.isHovering && shape.copy(strokingWithWidth: 20, lineCap: .round, lineJoin: .round, miterLimit: 1).contains(local)
+    return model.isHovering && shape.outer.contains(local)
+  }
+
+  // MARK: Drag and place
+
+  /// A press on the island: the start of a click, or of a drag to another
+  /// edge. Closed, it can be grabbed anywhere; open, only by its bezel side
+  /// (the notch band on top, the strip along the edge on a side), so the
+  /// panel's own buttons, fields and scrolling never pick it up.
+  private func pressed() {
+    let point = NSEvent.mouseLocation
+    guard islandContains(point), !model.isExpanded || inGrip(point) else { return }
+    grab = (point, false)
+  }
+
+  /// How far in from the bezel an open island can be grabbed.
+  private static let grip: CGFloat = 14
+
+  private func inGrip(_ point: CGPoint) -> Bool {
+    let frame = panel.frame
+    switch model.placement {
+    case .top: return frame.maxY - point.y <= model.bandHeight
+    case .left: return point.x - (frame.minX + model.edgeBox.minX) <= Self.grip
+    case .right: return frame.minX + model.edgeBox.maxX - point.x <= Self.grip
+    }
+  }
+
+  /// The island lifts off and follows the pointer; the nearest edge (with a
+  /// little hysteresis) is where it would land.
+  private func carry() {
+    guard var grab, let screen = Self.targetScreen else { return }
+    let point = NSEvent.mouseLocation
+    if !grab.moving {
+      // A few points of wobble is still a click.
+      guard hypot(point.x - grab.start.x, point.y - grab.start.y) >= 6 else { return }
+      grab.moving = true
+      self.grab = grab
+      hoverDwell?.cancel()
+      hoverDwell = nil
+      panel.ignoresMouseEvents = false
+      overlay.show(on: screen)
+      haptics.play(.tick)
+    }
+    NSCursor.closedHand.set()
+    let frame = screen.frame
+    let target = EdgeSnap.placement(at: point, in: frame, current: model.carry?.target ?? model.placement)
+    let anchor = EdgeSnap.anchor(at: point, in: frame)
+    if let previous = model.carry?.target, previous != target { haptics.play(.tick) }
+    model.carry = Carry(
+      point: CGPoint(x: point.x - frame.minX, y: frame.maxY - point.y),
+      target: target,
+      anchor: anchor,
+      slot: slot(target, anchor: anchor, on: screen),
+      zones: zones(on: screen)
+    )
+  }
+
+  /// Let go: a drag flies into its slot and is saved; a press that never moved was a click.
+  private func releaseGrab() {
+    guard let grab else { return }
+    self.grab = nil
+    guard grab.moving, var landed = model.carry else { return }
+    NSCursor.arrow.set()
+    let moved = landed.target != model.settings.placement
+    model.relocatedAt = .now
+    landed.landing = true
+    model.carry = landed
+    // Saved now, while the island is still hidden: its window moves under the flight.
+    model.changeSettings {
+      $0.placement = landed.target
+      if landed.target.isSide { $0.edgeAnchor = (Double(landed.anchor) * 1000).rounded() / 1000 }
+    }
+    Log.notch.notice("moved to \(landed.target.rawValue, privacy: .public) at \(landed.anchor, format: .fixed(precision: 2))")
+    landing?.cancel()
+    landing = Task { [weak self] in
+      try? await Task.sleep(for: .milliseconds(340))
+      guard let self else { return }
+      model.carry = nil
+      // Settling in: a quiet Apple Intelligence sheen runs round its edge.
+      model.sessions.firePulse(.hello)
+      haptics.play(moved ? .success : .tick)
+      pointerMoved()
+      try? await Task.sleep(for: .milliseconds(220))
+      if model.carry == nil { overlay.orderOut(nil) }
+    }
+  }
+
+  /// Where the resting island sits on `placement`'s edge, in the display's
+  /// top-left coordinates: what the overlay's outline and flight aim at.
+  private func slot(_ placement: IslandPlacement, anchor: CGFloat, on screen: NSScreen) -> CGRect {
+    let frame = screen.frame
+    let visible = screen.visibleFrame
+    switch placement {
+    case .top:
+      // Never the bare notch: the outline shows the island with its wings.
+      let width = max(model.collapsedWidth, model.notch.width + 84) + 2 * IslandOutline.earRadius
+      return CGRect(x: (frame.width - width) / 2, y: 0, width: width, height: model.bandHeight)
+    case .left, .right:
+      let box = EdgeMetrics.restingBox
+      let insets = screen.edgeInsets
+      let canvas = CGSize(width: EdgeMetrics.canvasWidth, height: frame.height)
+      let origin = EdgeMetrics.origin(box: box, canvas: canvas, placement: placement, anchor: anchor, top: insets.top, bottom: insets.bottom)
+      let window = placement == .left ? visible.minX - frame.minX : visible.maxX - frame.minX - EdgeMetrics.canvasWidth
+      return CGRect(x: window + origin.x, y: origin.y, width: box.width, height: box.height)
+    }
+  }
+
+  /// Each edge's landing zone, for the glows: the notch, and each side's
+  /// whole length between the menu bar and a bottom Dock.
+  private func zones(on screen: NSScreen) -> [IslandPlacement: CGRect] {
+    let frame = screen.frame
+    let visible = screen.visibleFrame
+    let insets = screen.edgeInsets
+    let height = frame.height - insets.top - insets.bottom
+    return [
+      .top: slot(.top, anchor: 0, on: screen).insetBy(dx: -6, dy: 0),
+      .left: CGRect(x: visible.minX - frame.minX, y: insets.top, width: 18, height: height),
+      .right: CGRect(x: visible.maxX - frame.minX - 18, y: insets.top, width: 18, height: height),
+    ]
+  }
+
+  /// Pins the window to the island's edge, whenever that edge or the display changes.
+  private func watchPlacement() {
+    track({ [model] in model.placement }) { [weak self] _ in self?.place() }
+  }
+
+  private func place() {
+    guard let screen = Self.targetScreen else { return }
+    panel.pin(to: screen, placement: model.placement)
+    let insets = screen.edgeInsets
+    if model.edgeTopInset != insets.top { model.edgeTopInset = insets.top }
+    if model.edgeBottomInset != insets.bottom { model.edgeBottomInset = insets.bottom }
   }
 
   private func scrolled(_ event: NSEvent) {
@@ -540,7 +752,7 @@ final class IslandController {
     let notch = NotchMetrics(screen: screen)
     if notch != model.notch { model.notch = notch }
     model.maxIslandWidth = Self.maxIslandWidth(on: screen)
-    panel.pin(to: screen)
+    place()
     Log.notch.notice("display changed: notch \(notch.width, format: .fixed(precision: 0)) real=\(notch.hasNotch)")
   }
 
@@ -625,7 +837,12 @@ extension IslandController {
     // Reduce Motion), a tap, and a spoken line.
     tokenMilestones.onMilestone = { [weak self] mark in
       guard let self, !model.isPaused else { return }
-      if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion { model.sessions.firePulse(.done) } else { model.celebrate() }
+      // Confetti comes out of the notch; a side island blooms instead.
+      if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion || model.placement.isSide {
+        model.sessions.firePulse(.done)
+      } else {
+        model.celebrate()
+      }
       haptics.play(.success)
       NSAccessibility.post(element: NSApp as Any, notification: .announcementRequested, userInfo: [
         .announcement: "\(mark / TokenMilestones.step) million tokens today", .priority: NSAccessibilityPriorityLevel.medium.rawValue,
@@ -663,6 +880,7 @@ extension IslandController {
       guard let self else { return }
       browserPoll?.cancel()
       browserPoll = nil
+      model.browser.live = open
       if open {
         pageReset?.cancel()
         // Each open spends one of the swipe hints.

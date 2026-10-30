@@ -43,6 +43,14 @@ private func event(_ session: String = "s1", agent: AgentKind = .claudeCode, typ
     #expect(pruned == ["claude-code:old-done"])
   }
 
+  @Test func `drops a working session that's been silent for an hour: it was abandoned`() {
+    var r = SessionRegistry()
+    r.apply(event("gone", agent: .codex, type: .toolUse, minutesAgo: 61))
+    r.apply(event("thinking", agent: .cursor, type: .toolUse, minutesAgo: 50))
+    let pruned = r.prune(isAlive: { _ in false }, now: now, stale: stale)
+    #expect(pruned == ["codex:gone"])
+  }
+
   @Test func `never trusts a Cursor pid`() {
     var r = SessionRegistry()
     r.apply(event(agent: .cursor, minutesAgo: 2, pid: "333"))

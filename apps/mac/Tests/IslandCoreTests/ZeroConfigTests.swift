@@ -171,3 +171,31 @@ private func json(_ url: URL) throws -> OrderedJSON {
     #expect(try json(config.cursorHooks)["hooks"] == .object([("stop", .array([.object([("command", .string("other-tool stop"))])]))]))
   }
 }
+
+@Suite struct ZeroConfigFileSafetyTests {
+  @Test func `keeps only the newest few backups, however many launches`() throws {
+    let (config, root) = try sandbox()
+    defer { try? FileManager.default.removeItem(at: root) }
+    try Data(#"{"theme":"dark"}"#.utf8).write(to: config.claudeSettings)
+    for _ in 0..<8 {
+      #expect(config.setupClaude() != .error)
+      #expect(config.removeClaude() != .error)
+      // Backups are stamped to the millisecond.
+      Thread.sleep(forTimeInterval: 0.01)
+    }
+    let backups = try FileManager.default.contentsOfDirectory(atPath: root.path).filter { $0.hasPrefix("settings.json.agent-island-bak.") }
+    #expect(backups.count == ZeroConfig.backupsKept)
+  }
+
+  @Test func `writes through a symlinked settings file instead of replacing the link`() throws {
+    let (config, root) = try sandbox()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let real = root.appending(path: "dotfiles-settings.json")
+    try Data(#"{"theme":"dark"}"#.utf8).write(to: real)
+    try FileManager.default.createSymbolicLink(at: config.claudeSettings, withDestinationURL: real)
+    #expect(config.setupClaude() == .updated)
+    let type = try FileManager.default.attributesOfItem(atPath: config.claudeSettings.path)[.type] as? FileAttributeType
+    #expect(type == .typeSymbolicLink)
+    #expect(try String(contentsOf: real, encoding: .utf8).contains("hooks"))
+  }
+}

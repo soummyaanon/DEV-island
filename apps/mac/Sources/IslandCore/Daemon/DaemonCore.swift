@@ -177,6 +177,19 @@ public struct SessionRegistry: Sendable {
     return session
   }
 
+  /// Merges values into a session's meta (the status line's context and
+  /// cost, a check's outcome) without counting as activity. Nil when the
+  /// session is unknown or nothing changed.
+  public mutating func mergeMeta(_ agent: AgentKind, _ sessionId: String, _ values: [String: JSONValue]) -> SessionSnapshot? {
+    let key = Self.key(agent, sessionId)
+    guard var session = sessions[key] else { return nil }
+    let merged = session.meta.merging(values) { _, new in new }
+    guard merged != session.meta else { return nil }
+    session.meta = merged
+    sessions[key] = session
+    return session
+  }
+
   public mutating func setPendingApproval(_ agent: AgentKind, _ sessionId: String, _ approval: PendingApproval?, at now: Date) -> SessionSnapshot? {
     let key = Self.key(agent, sessionId)
     guard var session = sessions[key] else { return nil }
@@ -195,7 +208,11 @@ public struct SessionRegistry: Sendable {
   /// Drops sessions that are gone: a Claude session whose process exited (a
   /// closed terminal fires no hook), or a finished one quiet for `stale` with
   /// no process to vouch for it. Anything holding an approval or question stays.
-  public mutating func prune(isAlive: (Int) -> Bool, now: Date, stale: TimeInterval) -> [String] {
+  /// A session that says nothing for this long was abandoned mid-turn (a
+  /// killed Codex or Cursor, a Claude with no PID): it stops "working" forever.
+  public static let abandonedAfter: TimeInterval = 60 * 60
+
+  public mutating func prune(isAlive: (Int) -> Bool, now: Date, stale: TimeInterval, abandoned: TimeInterval = abandonedAfter) -> [String] {
     var removed: [String] = []
     for key in order {
       guard let s = sessions[key], s.pendingApproval == nil, s.pendingQuestion == nil else { continue }
@@ -204,7 +221,8 @@ public struct SessionRegistry: Sendable {
         continue
       }
       let resting = s.state == .done || s.state == .idle || s.state == .failed
-      if resting && now.timeIntervalSince(s.updatedAt) > stale { removed.append(key) }
+      let quiet = now.timeIntervalSince(s.updatedAt)
+      if resting ? quiet > stale : quiet > abandoned { removed.append(key) }
     }
     for key in removed { remove(key) }
     return removed

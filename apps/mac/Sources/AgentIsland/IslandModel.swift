@@ -56,6 +56,27 @@ final class IslandModel {
     didSet { if bodySize != oldValue { onLayout?() } }
   }
 
+  // MARK: Placement
+
+  /// A drag is carrying the island (see `DragOverlay`): the island itself
+  /// hides while it's in hand, and the drop is saved on release.
+  var carry: Carry?
+  /// When the last drag let go: the click that ends a drag isn't a click.
+  @ObservationIgnored var relocatedAt = Date.distantPast
+
+  var placement: IslandPlacement { settings.placement }
+  var edgeAnchor: CGFloat { CGFloat(settings.edgeAnchor) }
+
+  /// The menu bar's height and a bottom Dock's: a side island stays between them.
+  var edgeTopInset: CGFloat = 24
+  var edgeBottomInset: CGFloat = 0
+
+  /// The side island as last laid out, in the window (top-left origin, ears
+  /// included), for hit-testing.
+  var edgeBox: CGRect = .zero {
+    didSet { if edgeBox != oldValue { onLayout?() } }
+  }
+
   /// The pointer may now be inside or outside a different shape.
   @ObservationIgnored var onLayout: (() -> Void)?
 
@@ -76,6 +97,8 @@ final class IslandModel {
   let system = SystemControls()
   let prompter = TeleprompterState()
   let agentStats = AgentStatsService()
+  /// Dev servers and uncommitted changes, for the developer strip.
+  let dev = DevWatch()
   @ObservationIgnored private(set) lazy var ask = AssistantState(engine: assistant)
 
   init(notch: NotchMetrics, settings: IslandSettings, power: PowerMonitor, sessions: SessionStore, actions: IslandActions) {
@@ -269,7 +292,7 @@ final class IslandModel {
 
   /// Hover opens it in hover mode; swipe mode also needs a swipe down or a click.
   var hoverExpands: Bool {
-    isHovering && !dismissed && (settings.openWith == .hover || gestureOpen)
+    isHovering && !dismissed && carry == nil && (settings.openWith == .hover || gestureOpen)
   }
 
   /// Anything waiting on the human forces the panel open.
@@ -277,9 +300,10 @@ final class IslandModel {
     sessions.sessions.contains { $0.pendingApproval != nil || $0.pendingQuestion != nil || $0.state == .waitingForApproval }
   }
 
+  /// A drag carries the island small, whatever was holding it open.
   var isExpanded: Bool {
-    hoverExpands || pinned || promptFocused || a11yFocused || ask.focused || greeting != nil || isForcedOpen
-      || shelfDropping || prompterLive || hubTyping
+    carry == nil && (hoverExpands || pinned || promptFocused || a11yFocused || ask.focused || greeting != nil || isForcedOpen
+      || shelfDropping || prompterLive || hubTyping)
   }
 
   // MARK: Quick access
@@ -380,9 +404,21 @@ final class IslandModel {
     dismissed = false
   }
 
+  /// The side island has no swipe to speak of: a click opens it in either
+  /// mode, without waiting out the hover delay.
+  func clickEdge() {
+    guard !justRelocated, !isExpanded else { return }
+    isHovering = true
+    gestureOpen = true
+    dismissed = false
+  }
+
+  /// A drag let go a moment ago: its mouse-up isn't a click.
+  private var justRelocated: Bool { Date.now.timeIntervalSince(relocatedAt) < 0.4 }
+
   /// Swipe mode only: a click on the wings toggles, mirroring the gesture.
   func clickWings() {
-    guard settings.openWith == .swipe else { return }
+    guard settings.openWith == .swipe, !justRelocated else { return }
     if isExpanded && hoverExpands {
       dismissed = true
     } else if !isExpanded {

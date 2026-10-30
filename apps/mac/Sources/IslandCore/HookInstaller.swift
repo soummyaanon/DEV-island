@@ -24,6 +24,8 @@ public enum HookInstaller {
     .init(event: "SessionStart", slug: "session-start", matcher: false, timeout: 5),
     .init(event: "PreToolUse", slug: "pre-tool", matcher: true, timeout: 5),
     .init(event: "PostToolUse", slug: "post-tool", matcher: true, timeout: 5),
+    // A tool that failed (a test run exiting non-zero): the check chip turns red.
+    .init(event: "PostToolUseFailure", slug: "post-tool-failure", matcher: true, timeout: 5),
     // Held open for notch approvals: the long timeout.
     .init(event: "PermissionRequest", slug: "permission-request", matcher: true, timeout: 120),
     .init(event: "Notification", slug: "notification", matcher: false, timeout: 5),

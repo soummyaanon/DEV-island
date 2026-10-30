@@ -305,6 +305,14 @@ enum Automation {
     let status = AEDeterminePermissionToAutomateTarget(desc, typeWildCard, typeWildCard, false)
     return status == noErr
   }
+
+  /// Asks macOS (its one-time prompt) whether we may automate `bundleId`.
+  /// Blocks until answered: call it off the main thread.
+  nonisolated static func ask(_ bundleId: String) -> Bool {
+    let target = NSAppleEventDescriptor(bundleIdentifier: bundleId)
+    guard let desc = target.aeDesc else { return false }
+    return AEDeterminePermissionToAutomateTarget(desc, typeWildCard, typeWildCard, true) == noErr
+  }
 }
 
 /// macOS 15.4+ asks before an app reads the clipboard in the background,

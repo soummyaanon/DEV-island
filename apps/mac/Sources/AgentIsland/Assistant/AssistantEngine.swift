@@ -177,11 +177,22 @@ nonisolated enum AssistantTools {
     return fuzzy
   }
 
-  @MainActor private static var shortcutNames: [String]?
+  @MainActor private(set) static var shortcutNames: [String]?
 
-  /// `shortcuts list`, cached for the run.
-  @MainActor static func listShortcuts() -> [String] {
+  /// `shortcuts list`, cached for the run. It can take seconds (or hang on a
+  /// broken Shortcuts database), so it runs off the main thread, gives up
+  /// after a few seconds, and is warmed at launch.
+  @MainActor static func listShortcuts() async -> [String] {
     if let cached = shortcutNames { return cached }
+    guard let names = await OffMain.value(timeout: 6, { readShortcuts() }) else { return [] }
+    shortcutNames = names
+    return names
+  }
+
+  /// The cached names, for the synchronous command matcher; empty until warmed.
+  @MainActor static var knownShortcuts: [String] { shortcutNames ?? [] }
+
+  nonisolated private static func readShortcuts() -> [String] {
     let process = Process()
     process.executableURL = URL(filePath: "/usr/bin/shortcuts")
     process.arguments = ["list"]
@@ -191,9 +202,7 @@ nonisolated enum AssistantTools {
     guard (try? process.run()) != nil else { return [] }
     let data = pipe.fileHandleForReading.readDataToEndOfFile()
     process.waitUntilExit()
-    let names = String(decoding: data, as: UTF8.self).split(separator: "\n").map(String.init).filter { !$0.isEmpty }
-    shortcutNames = names
-    return names
+    return String(decoding: data, as: UTF8.self).split(separator: "\n").map(String.init).filter { !$0.isEmpty }
   }
 
   /// Standard Additions; no Automation permission needed.
@@ -342,7 +351,7 @@ enum CommandReader {
       return true
     }
     if let m = match(#"^run (?:the |my )?(?:shortcut )?(.+?)(?: shortcut)?$"#) {
-      let names = AssistantTools.listShortcuts()
+      let names = AssistantTools.knownShortcuts
       if let name = names.first(where: { $0.lowercased() == m[1] }) ?? names.first(where: { $0.lowercased().contains(m[1]) }) {
         emit.tool("runShortcut", "Finding the “\(name)” shortcut")
         emit.action(["kind": "shortcut", "name": name])

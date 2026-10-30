@@ -196,6 +196,10 @@ final class DaemonClient {
     var request = URLRequest(url: URL(string: "ws://127.0.0.1:\(Self.port)/stream")!)
     if let token = Self.token { request.setValue(token, forHTTPHeaderField: "X-Agent-Island-Token") }
     let socket = URLSession.shared.webSocketTask(with: request)
+    // Snapshots carry each tool's full input: a big Write or Edit is well
+    // over the default 1 MiB, which dropped the connection (and, held for
+    // approval, dropped it again on every reconnect).
+    socket.maximumMessageSize = 32 << 20
     socket.resume()
     defer { socket.cancel(with: .goingAway, reason: nil) }
 

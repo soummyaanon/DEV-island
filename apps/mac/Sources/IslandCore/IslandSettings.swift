@@ -114,6 +114,12 @@ public struct IslandSettings: Equatable, Sendable {
   public var menuBarClock = true
   /// A Shortcut the Focus control runs; blank opens Focus settings.
   public var focusShortcut = ""
+  /// Under the sessions: context, cost, changes, checks and dev servers.
+  public var devTools = true
+  /// The edge the island lives on.
+  public var placement: IslandPlacement = .top
+  /// On a side edge, where along it (0 top … 1 bottom).
+  public var edgeAnchor: Double = Double(EdgeMetrics.defaultAnchor)
 
   /// Keys this build doesn't know, kept so saving never drops them.
   var unknown: [String: JSONValue] = [:]
@@ -145,6 +151,7 @@ public struct IslandSettings: Equatable, Sendable {
     "speakReplies", "edgeGlow", "greeting",
     "agentStats", "tokenConfetti", "quickControls", "shelf", "clipboardHistory", "nowPlaying", "meetings", "browserControls", "agenda", "timers",
     "widgets", "stocks", "stockSymbols", "teleprompter", "menuBarClock", "focusShortcut",
+    "placement", "edgeAnchor", "devTools",
   ]
 
   /// Merges a stored file over the defaults with 1.x's rules: bad values fall
@@ -215,6 +222,12 @@ public struct IslandSettings: Equatable, Sendable {
     bool("teleprompter", &teleprompter)
     bool("menuBarClock", &menuBarClock)
     if let shortcut = stored["focusShortcut"]?.string { focusShortcut = shortcut }
+    pick("placement", &placement)
+    bool("devTools", &devTools)
+    if let anchor = stored["edgeAnchor"]?.number, anchor.isFinite {
+      let range = EdgeMetrics.anchorRange
+      edgeAnchor = min(max(anchor, Double(range.lowerBound)), Double(range.upperBound))
+    }
   }
 
   /// The quick-access keys that differ from their defaults, in a fixed order.
@@ -243,6 +256,9 @@ public struct IslandSettings: Equatable, Sendable {
     bool("teleprompter", \.teleprompter)
     bool("menuBarClock", \.menuBarClock)
     string("focusShortcut", \.focusShortcut)
+    bool("devTools", \.devTools)
+    if placement != defaults.placement { out.append(("placement", .string(placement.rawValue))) }
+    if edgeAnchor != defaults.edgeAnchor { out.append(("edgeAnchor", .number(String(edgeAnchor)))) }
     return out
   }
 

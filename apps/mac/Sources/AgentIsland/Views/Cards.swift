@@ -27,6 +27,17 @@ struct ApprovalCard: View {
           .accessibilityLabel("Allow")
       }
       .padding(.top, 2)
+      // Claude's "don't ask again", from the notch.
+      if let remember = approval.remember {
+        Button { model.actions.alwaysAllow(approval.id) } label: {
+          HStack(spacing: 5) {
+            Image(systemName: "checkmark.seal")
+            Text(remember).lineLimit(1).truncationMode(.middle)
+          }
+        }
+        .buttonStyle(QuietLink())
+        .help("Allows this now and saves the rule, so it won't ask again")
+      }
     }
     .frame(maxWidth: .infinity)
     .padding(.init(top: 10, leading: 18, bottom: 14, trailing: 18))
@@ -47,6 +58,19 @@ private struct CardTop: View {
     }
     .islandFont(11, weight: .medium)
     .lineLimit(1)
+  }
+}
+
+/// A line of small text that brightens under the pointer.
+private struct QuietLink: ButtonStyle {
+  func makeBody(configuration: Configuration) -> some View {
+    Hovering { hovered in
+      configuration.label
+        .islandFont(11, weight: .medium)
+        .foregroundStyle(Palette.text.opacity(hovered || configuration.isPressed ? 0.95 : 0.55))
+        .contentShape(Rectangle())
+        .animation(.easeInOut(duration: 0.12), value: hovered)
+    }
   }
 }
 

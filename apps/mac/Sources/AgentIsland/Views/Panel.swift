@@ -81,6 +81,7 @@ struct Panel: View {
           }
           .padding(.init(top: 3, leading: 6, bottom: 7, trailing: 6))
         }
+        if model.settings.devTools { DevStrip(model: model) }
         StatusFooter(model: model, now: now)
         }
         }

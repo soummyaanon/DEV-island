@@ -6,7 +6,7 @@ import Foundation
 /// Tolerant: every field but `session_id` is optional and unknown ones pass.
 public enum ClaudeAdapter {
   static let slugs: [String: String] = [
-    "session-start": "SessionStart", "pre-tool": "PreToolUse", "post-tool": "PostToolUse",
+    "session-start": "SessionStart", "pre-tool": "PreToolUse", "post-tool": "PostToolUse", "post-tool-failure": "PostToolUseFailure",
     "permission-request": "PermissionRequest", "notification": "Notification", "stop": "Stop", "session-end": "SessionEnd",
   ]
 

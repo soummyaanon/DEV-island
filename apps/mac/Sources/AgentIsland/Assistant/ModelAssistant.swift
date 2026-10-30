@@ -279,7 +279,7 @@ nonisolated private struct RunShortcutTool: Tool {
   func call(arguments: GeneratedContent) async throws -> String {
     let wanted = arg(arguments, "name")
     box.tool("runShortcut", "Finding the “\(wanted)” shortcut")
-    let names = await MainActor.run { AssistantTools.listShortcuts() }
+    let names = await AssistantTools.listShortcuts()
     let match = names.first { $0.lowercased() == wanted.lowercased() } ?? names.first { $0.lowercased().contains(wanted.lowercased()) }
     guard let match else {
       return names.isEmpty ? "The user has no Shortcuts." : "No shortcut called \(wanted). Some of theirs: \(names.prefix(12).joined(separator: ", "))."
@@ -297,7 +297,7 @@ nonisolated private struct ListShortcutsTool: Tool {
   var parameters: GenerationSchema { schema([]) }
   func call(arguments: GeneratedContent) async throws -> String {
     box.tool("listShortcuts", "Looking through your Shortcuts")
-    let names = await MainActor.run { AssistantTools.listShortcuts() }
+    let names = await AssistantTools.listShortcuts()
     return names.isEmpty ? "The user has no Shortcuts." : names.prefix(60).joined(separator: "\n")
   }
 }
