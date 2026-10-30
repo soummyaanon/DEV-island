@@ -316,9 +316,6 @@ final class IslandModel {
   var hubTyping = false
   /// Which way the last page change went (+1 forward, −1 back): pages slide that way.
   var pageStep = 1
-  /// The page area's size while open: it grows to the biggest page shown and
-  /// never shrinks back, so paging doesn't resize the island. Cleared on close.
-  var pageFloor = CGSize.zero
   /// −1…1 while a sideways swipe builds: the page leans and the next one's icon shows.
   var sideRubber: Double = 0
   /// Opens so far that showed the swipe hint; it stops after a few, or after a swipe.

@@ -164,8 +164,10 @@ private struct ControlsTab: View {
     }
   }
 
+  /// Opens or closes a section; the island grows and shrinks with it on its spring.
   private func toggle(_ detail: SystemControls.Detail) {
-    model.system.detail = model.system.detail == detail ? nil : detail
+    let next = model.system.detail == detail ? nil : detail
+    withAnimation(NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? nil : Motion.settle) { model.system.detail = next }
   }
 }
 

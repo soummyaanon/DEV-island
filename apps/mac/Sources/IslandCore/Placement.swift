@@ -46,16 +46,18 @@ public enum EdgeMetrics {
   /// The resting box (ears included), across × along the edge.
   public static var restingBox: CGSize { CGSize(width: depth, height: length + 2 * ear) }
 
-  /// Where a box of `size` sits in its canvas (top-left origin, y down): flush
-  /// with the edge, centred on `anchor` (0 top … 1 bottom), and never under
-  /// the menu bar (`top`) or a bottom Dock (`bottom`).
+  /// Where a box of `size` sits in its canvas (top-left origin, y down):
+  /// flush with the edge, its top where the resting notch's top is (the notch
+  /// is centred on `anchor`, 0 top … 1 bottom), so an open panel grows down
+  /// from the notch and a section opening never moves what's under the
+  /// pointer. Never under the menu bar (`top`) or a bottom Dock (`bottom`).
   public static func origin(
     box size: CGSize, canvas: CGSize, placement: IslandPlacement, anchor: CGFloat, top: CGFloat, bottom: CGFloat
   ) -> CGPoint {
     let x = placement == .left ? 0 : canvas.width - size.width
     let lowest = top + margin
     let highest = max(lowest, canvas.height - bottom - margin - size.height)
-    let y = min(max(anchor * canvas.height - size.height / 2, lowest), highest)
+    let y = min(max(anchor * canvas.height - restingBox.height / 2, lowest), highest)
     return CGPoint(x: x.rounded(), y: y.rounded())
   }
 

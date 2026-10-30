@@ -18,13 +18,16 @@ struct IntelligenceSheen: View {
   var placement: IslandPlacement = .top
   var ear: CGFloat = IslandOutline.earRadius
   var paused = false
+  /// The pastels by default; the charger moment runs its own colour round.
+  var colors: [Color] = Self.colors
+  var period: Double = Self.period
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   var body: some View {
     TimelineView(.animation(minimumInterval: 1.0 / 30, paused: paused || reduceMotion)) { timeline in
-      let turn = timeline.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: Self.period) / Self.period
-      let gradient = AngularGradient(colors: Self.colors + [Self.colors[0]], center: .center, angle: .degrees(turn * 360))
+      let turn = timeline.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: period) / period
+      let gradient = AngularGradient(colors: colors + colors.prefix(1), center: .center, angle: .degrees(turn * 360))
       let edge = IslandEdge(corner: corner, placement: placement, ear: ear)
       ZStack {
         edge.stroke(gradient, lineWidth: 5).blur(radius: 5).opacity(0.3)

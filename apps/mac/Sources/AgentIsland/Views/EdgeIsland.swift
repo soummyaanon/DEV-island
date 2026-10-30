@@ -33,8 +33,12 @@ struct EdgeIsland: View {
     }
   }
 
+  /// One container, so the black body is a single shape that grows out of
+  /// the notch (a `Group` would give the resting and open contents a shape
+  /// each, cross-fading instead of growing). Pinned to the edge and the
+  /// notch's top while the contents swap inside it.
   private var island: some View {
-    Group {
+    ZStack(alignment: placement == .left ? .topLeading : .topTrailing) {
       if model.isExpanded {
         IslandWidth(fixed: nil, range: model.expandedWidthRange) {
           Panel(model: model)
@@ -66,6 +70,19 @@ struct EdgeIsland: View {
       }
     }
     .clipShape(shape)
+    .overlay {
+      // Plugged in or out: a current runs round the edge in the Energy Mode's
+      // colour (green, amber in Low Power, cyan in High Power; white unplugged).
+      if let activity = model.power.activity, activity.isCharger, model.reading != nil, !model.isPaused {
+        let tint = Palette.charge(activity)
+        IntelligenceSheen(
+          corner: corner, placement: placement, ear: EdgeMetrics.ear, paused: model.isPaused,
+          colors: [tint, tint.opacity(0.15), .white, tint.opacity(0.15)], period: 1.4
+        )
+        .transition(.opacity.animation(.easeOut(duration: 0.3)))
+        .id(activity.id)
+      }
+    }
     .overlay {
       if model.settings.edgeGlow && model.ask.isOpen && model.isExpanded && !model.isPaused {
         IslandGlow(corner: corner, placement: placement, ear: EdgeMetrics.ear, bright: model.ask.live != nil, paused: model.isPaused)
@@ -105,7 +122,19 @@ private struct EdgeResting: View {
   var body: some View {
     let states = EdgeMetrics.dots(model.sessions.sessions.filter { $0.isActive || $0.needsAction || $0.pendingQuestion != nil })
     Group {
-      if idle {
+      if let activity = model.power.activity, activity.isCharger, let reading = model.reading {
+        // The charger moment takes the notch for a few seconds: a bolt and the level.
+        VStack(spacing: 2) {
+          Image(systemName: activity.kind == .plugged ? "bolt.fill" : "bolt.slash.fill")
+            .font(.system(size: 11, weight: .semibold))
+          Text(verbatim: "\(reading.percent)")
+            .islandFont(8, weight: .bold)
+            .monospacedDigit()
+        }
+        .foregroundStyle(Palette.charge(activity))
+        .pop()
+        .id(activity.id)
+      } else if idle {
         BotAvatar(
           look: BotLook.crew[0].look, state: .idle, size: EdgeMetrics.mascot, seed: 0.12, paused: model.ambientStill,
           style: BotPose.Style(jumpEvery: 0), interactive: false

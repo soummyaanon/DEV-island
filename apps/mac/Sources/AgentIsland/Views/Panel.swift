@@ -88,17 +88,10 @@ struct Panel: View {
         .id(model.hubTab)
         .transition(reduceMotion ? AnyTransition.opacity : PageTurn.transition(model))
         }
-        .onGeometryChange(for: CGSize.self) { $0.size } action: { size in
-          // Only once paging starts: the sessions page alone keeps its own size.
-          guard model.hubTab != nil || model.pageFloor != .zero else { return }
-          let floor = CGSize(
-            width: max(model.pageFloor.width, size.width.rounded(.up)),
-            height: max(model.pageFloor.height, size.height.rounded(.up), PageTurn.minHeight)
-          )
-          guard floor != model.pageFloor else { return }
-          withAnimation(reduceMotion ? nil : Motion.settle) { model.pageFloor = floor }
-        }
-        .frame(minWidth: model.pageFloor.width, minHeight: model.pageFloor.height, alignment: .top)
+        // Each page is its own size: the island grows for a long page (or an
+        // open Bluetooth list) and shrinks back the moment it's gone. During a
+        // page turn both pages overlap, so it settles from one to the other.
+        .frame(minHeight: model.hubTab == nil ? 0 : PageTurn.minHeight, alignment: .top)
         .animation(reduceMotion ? .easeOut(duration: 0.15) : Motion.settle, value: model.hubTab)
         if model.ask.isOpen {
           AssistantPanel(state: model.ask)
@@ -139,7 +132,6 @@ struct Panel: View {
       }
       .animation(reduceMotion ? nil : model.sideRubber == 0 ? Motion.settle : .easeOut(duration: 0.08), value: model.sideRubber)
     }
-    .onDisappear { model.pageFloor = .zero }
   }
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -158,7 +150,7 @@ private struct PageTurn: Transition {
   let model: IslandModel
   let leaving: Bool
 
-  /// The page area is never shorter than this once paging starts.
+  /// A tool page is never shorter than this, so a short one isn't cramped.
   static let minHeight: CGFloat = 150
 
   static func transition(_ model: IslandModel) -> AnyTransition {

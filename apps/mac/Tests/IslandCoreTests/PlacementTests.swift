@@ -47,17 +47,24 @@ import Testing
 @Suite struct EdgeOriginTests {
   let canvas = CGSize(width: 760, height: 982)
 
-  @Test func `sits flush with its edge, centred on the anchor`() {
-    let box = CGSize(width: 14, height: 56)
+  @Test func `the resting notch sits flush with its edge, centred on the anchor`() {
+    let box = EdgeMetrics.restingBox
     let right = EdgeMetrics.origin(box: box, canvas: canvas, placement: .right, anchor: 0.5, top: 37, bottom: 0)
-    #expect(right == CGPoint(x: 746, y: 463))
+    #expect(right == CGPoint(x: 760 - box.width, y: (491 - box.height / 2).rounded()))
     let left = EdgeMetrics.origin(box: box, canvas: canvas, placement: .left, anchor: 0.5, top: 37, bottom: 0)
-    #expect(left == CGPoint(x: 0, y: 463))
+    #expect(left == CGPoint(x: 0, y: right.y))
+  }
+
+  @Test func `an open panel grows down from the notch, so its top never moves`() {
+    let resting = EdgeMetrics.origin(box: EdgeMetrics.restingBox, canvas: canvas, placement: .right, anchor: 0.3, top: 37, bottom: 0)
+    let small = EdgeMetrics.origin(box: CGSize(width: 400, height: 200), canvas: canvas, placement: .right, anchor: 0.3, top: 37, bottom: 0)
+    let large = EdgeMetrics.origin(box: CGSize(width: 400, height: 320), canvas: canvas, placement: .right, anchor: 0.3, top: 37, bottom: 0)
+    #expect(small.y == resting.y && large.y == resting.y)
   }
 
   @Test func `keeps clear of the menu bar and a bottom Dock`() {
     let tall = CGSize(width: 400, height: 500)
-    let high = EdgeMetrics.origin(box: tall, canvas: canvas, placement: .right, anchor: 0.08, top: 37, bottom: 70)
+    let high = EdgeMetrics.origin(box: tall, canvas: canvas, placement: .right, anchor: 0.01, top: 37, bottom: 70)
     #expect(high.y == 37 + EdgeMetrics.margin)
     let low = EdgeMetrics.origin(box: tall, canvas: canvas, placement: .right, anchor: 0.92, top: 37, bottom: 70)
     #expect(low.y == 982 - 70 - EdgeMetrics.margin - 500)
