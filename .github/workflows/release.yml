@@ -1,8 +1,9 @@
 name: Release
 
 # Tag a version (git tag v0.2.0 && git push origin v0.2.0) and this builds the
-# DMG on an Apple Silicon runner and publishes it to the PUBLIC downloads repo
-# (soummyaanon/DEV-island-releases) — source stays here in the private repo.
+# DMG on an Apple Silicon runner and publishes it to the downloads repo
+# (soummyaanon/DEV-island-releases), which the app's update check reads, and
+# to this repo's own Releases.
 #
 # Requires a repo secret RELEASES_TOKEN: a token with `contents: write` on the
 # public releases repo (the default GITHUB_TOKEN can't write across repos).
@@ -96,6 +97,17 @@ jobs:
         with:
           repository: ${{ env.RELEASES_REPO }}
           token: ${{ secrets.RELEASES_TOKEN }}
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          body: ${{ steps.notes.outputs.body }}
+          files: apps/mac/build/Agent-Island.dmg
+
+      # The same release on this (open-source) repo, so its page shows the
+      # latest version too. The releases repo stays the one the app's update
+      # check reads.
+      - name: Publish DMG to this repo
+        uses: softprops/action-gh-release@v3
+        with:
           tag_name: ${{ github.ref_name }}
           name: ${{ github.ref_name }}
           body: ${{ steps.notes.outputs.body }}
