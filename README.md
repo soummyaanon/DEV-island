@@ -1,169 +1,141 @@
 <p align="center">
-  <img src="docs/assets/icon.png" width="128" alt="Agent Island icon" />
+  <img src="docs/assets/icon.png" width="112" alt="Agent Island icon" />
 </p>
 
 <h1 align="center">Agent Island</h1>
 
 <p align="center">
-  <b>The Dynamic Island for your coding agents.</b><br/>
-  Claude Code, Codex, and Cursor sessions — live around your MacBook's notch.
+  <b>Watch and approve Claude Code, Codex & Cursor from your MacBook's notch.</b><br/>
+  Native Swift. On-device Apple Intelligence. 100% local, no telemetry.
 </p>
 
 <p align="center">
-  <a href="https://github.com/soummyaanon/DEV-island-releases/releases/latest/download/Agent-Island.dmg"><img src="https://img.shields.io/github/v/release/soummyaanon/DEV-island-releases?label=download&color=74b7ff" alt="Latest release"/></a>
-  <a href="https://github.com/soummyaanon/DEV-island/actions/workflows/ci.yml"><img src="https://github.com/soummyaanon/DEV-island/actions/workflows/ci.yml/badge.svg" alt="CI"/></a>
-  <img src="https://img.shields.io/badge/macOS-Apple%20Silicon-black" alt="macOS Apple Silicon"/>
-  <img src="https://img.shields.io/badge/privacy-100%25%20local-4ecb8d" alt="100% local"/>
+  <a href="https://github.com/soummyaanon/DEV-island-releases/releases/latest"><img src="https://img.shields.io/github/v/release/soummyaanon/DEV-island-releases?label=release&color=74b7ff" alt="Latest release"/></a>
+  <a href="https://github.com/soummyaanon/DEV-island-releases/releases"><img src="https://img.shields.io/github/downloads/soummyaanon/DEV-island-releases/total?color=4ecb8d" alt="Downloads"/></a>
+  <img src="https://img.shields.io/badge/macOS-14%2B%20·%20Apple%20Silicon-black" alt="macOS 14+ on Apple Silicon"/>
+  <img src="https://img.shields.io/badge/Swift-SwiftUI-F05138" alt="Swift and SwiftUI"/>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/soummyaanon/DEV-island?color=lightgrey" alt="MIT license"/></a>
 </p>
 
 <p align="center">
-  <img src="docs/assets/onboarding.png" width="560" alt="Agent Island onboarding" />
+  <img src="docs/assets/demo.gif" width="720" alt="Agent Island: agents arrive in the notch, an approval card with a diff, confetti, and orbs on the side edge" />
+</p>
+
+<p align="center">
+  <a href="https://github.com/soummyaanon/DEV-island-releases/releases/latest/download/Agent-Island.dmg"><b>⬇ Download for macOS</b></a>
+  &nbsp;·&nbsp; <a href="#features">Features</a>
+  &nbsp;·&nbsp; <a href="#privacy">Privacy</a>
+  &nbsp;·&nbsp; <a href="#build-from-source">Build from source</a>
+  &nbsp;·&nbsp; <a href="CONTRIBUTING.md">Contribute</a>
 </p>
 
 ---
 
 Run agents in parallel across terminals and IDEs, and the island wraps your
-MacBook's notch to tell you — at a glance — who's working, who's done, and who
-needs you. Hover to expand; click a session to jump straight back to its
-terminal.
+notch to tell you, at a glance, who's working, who's done and who needs you.
+Approve a command or answer an agent's question without leaving what you're
+doing; click a session to jump straight back to its terminal.
+
+## Why Agent Island
+
+- **It acts, on-device.** An Ask bar backed by Apple's on-device model answers
+  questions, knows what your agents are doing ("what is Claude doing?"), opens
+  apps and sessions, sets timers and runs your Shortcuts. Nothing leaves the Mac.
+- **Private by design.** No accounts, no API keys, no telemetry. The local
+  server binds to `127.0.0.1` only. [Exactly two optional requests](#privacy)
+  ever leave your machine, both listed below.
+- **Native and light.** A Swift/SwiftUI app with no Dock icon and no menu-bar
+  icon: the island *is* the app. It samples only while open and backs off in
+  Low Power Mode.
+- **More than agents.** Quick tools a swipe away: controls, a file shelf,
+  clipboard, today's calendar, timers, widgets, a teleprompter and settings.
+
+## Install
+
+1. **[Download the DMG](https://github.com/soummyaanon/DEV-island-releases/releases/latest/download/Agent-Island.dmg)** (always the latest release).
+2. Drag **Agent Island** into **Applications** and open it.
+3. The first launch wires up Claude Code and Cursor hooks for you (existing
+   hooks are kept, with backups). Codex needs nothing. Restart any agent
+   sessions that were already running.
+
+> [!IMPORTANT]
+> This build isn't notarised yet. The first time you open it, macOS may say it
+> "could not verify" the app: click **Done**, then **System Settings → Privacy &
+> Security → Open Anyway**. Only needed once.
+> Terminal alternative: `xattr -cr "/Applications/Agent Island.app"`
+
+**Requirements:** macOS 14 or later on Apple Silicon. Works on any MacBook
+notch size, and on Macs without a notch. The Ask bar's answers need Apple
+Intelligence on macOS 26; everything else works without it.
 
 ## Agents
 
 | Agent | How it connects | Setup |
 | --- | --- | --- |
-| **Claude Code** | HTTP hooks (all six lifecycle events) | automatic on first launch |
+| **Claude Code** | HTTP hooks, all lifecycle events | automatic on first launch |
 | **Codex** | read-only tail of its local rollout logs | none at all |
-| **Cursor** | hooks + a fire-and-forget bridge script | automatic on first launch |
+| **Cursor** | hooks plus a fire-and-forget bridge script | automatic on first launch |
 
 Every session is a little robot: Claude Code is a clay-orange mech, Codex a
-green droid, Cursor a blue hexagon ([bot-avatars](https://libraries.dev/bots.html)).
-They hop while they work, look around while they wait on you, and doze off
-after ten quiet minutes. While an agent thinks, the wing shows a dotted
-[thinking orb](https://libraries.dev/orbs.html) in its colour, one per working
-agent, and its animation follows what the agent is doing: a scanning globe
-for search, a flowing sash for edits, orbiting particles for commands. The island measures your hardware notch at startup and adapts to any
-MacBook (Pro 14"/16", Air 13"/15", or no notch at all).
+green droid, Cursor a blue hexagon. While an agent works, its dotted thinking
+orb follows what it's doing: a scanning globe for search, a flowing sash for
+edits, orbiting particles for commands.
 
 ## Features
 
-- **Live session rows** — project, elapsed time, current activity ("Running
-  pnpm test", "Editing index.ts"), agent, host app, and permission mode. Color-
-  coded states: working, waiting on you, done, failed.
-- **Ask Apple Intelligence** — with nothing running, three little bots sit in
-  the footer's left corner and offer to help; once an agent is working they
-  step aside for a ✦ button on the right. Click either for a Siri-style bar
-  backed by Apple's on-device model (macOS 26, Apple Intelligence on). It's a
-  general assistant — questions, explanations, drafts, rewrites, quick maths,
-  with a copy button on each answer — that also knows your agents: ask "what
-  is Claude doing?", say "open the api project" to jump there, or "tell
-  website to run the tests" to get a draft you confirm with **Send** before
-  anything is typed.
-  Only one line per session (project, state, activity) goes to the model, and
-  nothing leaves the Mac.
-- **It acts, not just answers** — like the new Siri, the Ask bar is an agent.
-  It can open apps and websites, search the web, read or fill the clipboard,
-  set the volume, start timers (the island chimes when they end), list your
-  Shortcuts and jump to sessions, and it chains steps for one request, showing
-  each step as it goes. Anything that does real work for you, like running
-  one of your Shortcuts or messaging an agent, waits for your **Run** or
-  **Send**. The orb shows each phase: connecting, solving, searching or
-  working while a tool runs, composing as it writes, shaping while it waits
-  on you.
-- **Talk to it** — the mic in the Ask bar hears your question on-device
-  (nothing is recorded or sent anywhere), sends it when you pause, and reads
-  the answer back in a voice matched to your Siri (same gender, language and
-  region). Settings → Intelligence turns voice, spoken answers, the assistant,
-  Apple Intelligence and the edge glow on or off.
-- **Every Apple Silicon Mac** — without Apple Intelligence (macOS 12–15, or the
-  feature off) the Ask bar still opens apps, sites and sessions, searches,
-  sets timers and the volume, and runs your Shortcuts; answers need Apple
-  Intelligence on macOS 26.
-- **Closed sessions leave** — quitting Claude (or closing its terminal) removes
-  the session from the island within seconds; finished sessions with no
-  process behind them age out after 30 quiet minutes.
-- **Agents take a bow** — when a session finishes or fails, its avatar pops
-  into the wing for a few seconds; approval and question cards carry the
-  asking agent's avatar.
-- **Approve from the notch** — Claude permission requests appear as a card with
-  the full command or diff. <kbd>⌘Y</kbd> / <kbd>⌘N</kbd> decide from anywhere;
-  if you don't answer, Claude's own prompt takes over untouched.
-- **Answer questions from the notch** — when an agent asks a multiple-choice
-  question, the island auto-expands and <kbd>⌘1–9</kbd> (or a click) answers it.
-  Claude questions are answered directly through the hook — no terminal focus,
-  no extra permissions, works in any terminal. Codex answers are typed into the
-  terminal (iTerm2 out of the box; other terminals after granting Accessibility
-  in onboarding).
-- **Jump back** — click a session and the app that hosts it comes forward: the
-  exact iTerm2 tab, Cursor itself when Claude runs in Cursor's terminal (the
-  island reads the process's real host app — no guessing), Terminal, Warp,
-  Ghostty, WezTerm, VS Code.
-- **Sound themes** — pick 8-bit chiptunes, Arcade, Soft chimes, or the Anime
-  pack in Settings, with per-event overrides and previews: distinct sounds for
-  done, needs-you, question-asked, and a confirm chime when you allow something.
-  Quick toggle in the panel footer.
-- **Usage limits** — Claude Code's and Codex's 5-hour and weekly limits as
-  small rings in the footer (green, then amber past 70%, red past 90%; hover
-  for when each resets). Codex's come from its own logs. Claude's come from
-  the JSON Claude Code already hands its status line: Agent Island installs a
-  status line that forwards it and prints nothing (or runs your own status
-  line, if you had one), and puts your setting back on quit. No token, no
-  network.
-- **Compact sessions** — by default each session is just its robot (a
-  small dot on its shoulder carries the state) with the project name underneath; hover for what it's doing,
-  click to jump. Settings → Appearance → Sessions → Detailed brings back the
-  full rows.
-- **Weather in the quiet moments** — with nothing running, the island becomes a
-  small live weather scene: drifting clouds, falling rain, lightning in a
-  thunderstorm, a crescent and stars at night, sunrise and sunset, a rainbow
-  after the rain clears. Agents always take priority, so it never competes with
-  work. Off by default; see [Privacy](#privacy).
-- **One solid body, moving like a real object** — the island is a single
-  deep-black shape: the notch band and the panel below it are the same `#000`,
-  so opening is one shape growing on a damped spring (sampled once into a CSS
-  `linear()` curve — no frame loop, no hand-tuned bezier) with barely a hint of
-  overshoot. Nothing inside slides against it: the contents fade in behind the
-  shape, rows and cards in a quiet cascade; a new agent's logo pops into the
-  wing and the count rolls like a counter. Reduce Motion makes it instant.
-- **Liquid Glass, opt-in** — Settings → Appearance can swap the solid body for
-  a translucent panel: on macOS 26 a native `NSGlassEffectView` sheet (a dark
-  tint over your wallpaper's light), owned by the Swift sidecar and ordered
-  directly beneath the island; older macOS gets true see-through blur. The
-  notch band stays pure black either way. The native sheet trails the open
-  animation by a frame, which is why solid black is the default. Reduce
-  Transparency and Increase Contrast switch glass off automatically.
-- **Gestures** — two-finger swipe down over the notch opens the island (or
-  click a wing); swipe up closes it; a grazing pointer no longer pops it open.
-  The wings stretch under your fingers before it springs open. Natural-scrolling
-  aware, so "down" means your fingers moved down. Prefer the old hover-to-open?
-  Settings → Appearance → Open with: *Hover*.
-- **Battery live activity** — plug in and the wings show a small ring gauge
-  with a bolt for a few seconds, then yield; under 20% on battery a red ring
-  stays while idle. The ring also lives in the panel footer.
-- **What your agents cost** — each row shows the CPU and memory of that agent's
-  whole process tree (the agent, its shells, the test run it started), summed
-  from one `ps` every two seconds *only while the panel is open*. Warms toward
-  amber past a core and a half, red past three.
-- **Quiet during Focus** — macOS keeps Focus state private, so a two-link
-  Shortcuts automation (`agent-island://focus/on`, `…/off`) tells the island
-  when a Focus starts and ends. Sounds and notification taps go quiet;
-  approvals and questions still open the island. `agent-island://toggle` and
-  `agent-island://settings` work from Shortcuts too.
-- **Sized to what it's showing** — the expanded panel measures its content and
-  grows to fit, up to 720px, so a long diff is readable instead of scrolled.
-- **Accessible on purpose** — <kbd>⌃⌥⌘I</kbd> hands the island keyboard focus
-  for VoiceOver (Escape gives it back), every row is a real button, and Reduce
-  Motion, Increase Contrast, and Reduce Transparency are all followed. Text size
-  is adjustable in Settings. On a Force Touch trackpad, each kind of event has
-  its own haptic rhythm.
-- **Feels like a system app** — no Dock icon, no menu-bar icon; the island
-  *is* the app. Sounds, quit, and everything else live in the expanded panel.
-  A one-time onboarding sets up Accessibility and open-at-login.
+- **Approve from the notch.** Permission requests appear as a card with the
+  full command or diff. <kbd>⌘Y</kbd> / <kbd>⌘N</kbd> decide from anywhere;
+  "Always allow" saves the same rule as Claude Code's own "don't ask again".
+- **Answer questions from the notch.** Multiple-choice questions open the
+  island; <kbd>⌘1</kbd>–<kbd>⌘9</kbd> or a click answers them.
+- **Live sessions.** Project, elapsed time, current activity ("Running pnpm
+  test"), host app and permission mode, colour-coded: working, waiting on you,
+  done, failed. A developer strip adds context use, cost, uncommitted changes,
+  the last test or build result, and running dev servers.
+- **Jump back.** Click a session and its exact terminal comes forward: iTerm2
+  tabs, Cursor, Terminal, Warp, Ghostty, WezTerm, VS Code.
+- **Any edge.** Keep it on the notch, or drag it to the left or right edge,
+  where it's a small notch of its own: the time at rest, each agent's orb at work.
+- **Usage limits.** Claude Code's and Codex's 5-hour and weekly limits as small
+  rings, read from their own local data. No token, no network.
+- **Little delights.** Agents take a bow when they finish, confetti bursts out
+  of the notch every million tokens, the notch glows when you plug in, and a
+  live weather scene fills quiet moments (off by default).
+- **Talk to it.** On-device speech in the Ask bar, with answers read back in a
+  voice matched to your Siri.
+- **Moves like a real object.** One black shape that grows on a damped spring;
+  Reduce Motion, Increase Contrast and Reduce Transparency are all respected,
+  and <kbd>⌃⌥⌘I</kbd> hands the island to VoiceOver.
+- **Sound themes.** 8-bit, Arcade, Soft chimes or Anime, with per-event
+  overrides. Quiet during Focus.
+
+<details>
+<summary><b>Quick tools in the swipe menu</b></summary>
+
+Swipe sideways with two fingers (or click the dots in the open island):
+
+| Page | What's there |
+| --- | --- |
+| Agents | Claude Code and Codex tokens today, sessions, limits, a 7-day chart, top projects |
+| Controls | volume and output, brightness, Wi-Fi, Bluetooth, AirDrop, Focus, displays, battery |
+| Files | a shelf: drop files on the notch, drag them back out, AirDrop them or hand them to an agent |
+| Clipboard | text, links, images and files (password managers skipped; memory only) |
+| Today | a month calendar beside the day's events, reminders and to-dos |
+| Timers | countdowns and Pomodoro, with the time in the wings |
+| Widgets | weather, stocks, a unit converter |
+| Prompter | a teleprompter under the camera |
+| Settings | position, how it opens, and the everyday switches |
+
+Links for Shortcuts or launchers: `agent-island://tools/<page>`,
+`agent-island://timer?minutes=10&label=Tea`, `agent-island://pomodoro`,
+`agent-island://toggle`.
+</details>
 
 ## Privacy
 
-Everything about your sessions stays on your Mac. The daemon binds to
+Everything about your sessions stays on your Mac. The local server binds to
 `127.0.0.1` only, requests are token-authenticated, and there are **no
-accounts, no API keys, no telemetry**. Codex integration never writes a single
+accounts, no API keys, no telemetry**. The Codex integration never writes a
 byte to Codex's files, and the Cursor bridge returns instantly so Cursor never
 waits on Agent Island.
 
@@ -172,81 +144,94 @@ Exactly two things ever leave your machine, both listed here in full:
 | | What is sent | When | Turn it off |
 | --- | --- | --- | --- |
 | **Update check** | Nothing but the request itself, to the public GitHub Releases API | On launch, then hourly | Settings → General, or `AGENT_ISLAND_NO_UPDATE_CHECK=1` |
-| **Weather** (off by default) | A latitude and longitude rounded to 2 decimals (~1km), to `open-meteo.com`. No account, no API key, no identifier | Every 15 minutes while enabled | Settings → Weather (it ships off) |
+| **Weather** (off by default) | A latitude and longitude rounded to 2 decimals (~1 km), to `open-meteo.com`. No account, no key, no identifier | Every 15 minutes while enabled | Settings → Weather |
 
-**Nothing about your sessions, prompts, projects, or agents is ever
-transmitted**, to either endpoint.
+**Nothing about your sessions, prompts, projects or agents is ever
+transmitted.** The Ask bar runs on Apple's on-device model; only one line per
+session (project, state, activity) is given to it.
 
-Battery level, per-agent CPU/memory, Focus state, and the glass panel are all
-read and drawn locally — none of it is transmitted anywhere.
-
-On weather specifically: it is off until you switch it on, and while it's off
-no weather request is made at all. Your location is resolved locally, in this
-order — whatever you typed in Settings, then a device location fix if you've
-granted one, then a guess from your Mac's time zone (read from the tz database
-already on your disk: no permission, no network, accurate to the nearest large
-city). The coordinates are rounded before the request, so even with a precise
-device fix, what's transmitted is city-scale.
-
-## Install
-
-1. [Download the DMG](https://github.com/soummyaanon/DEV-island-releases/releases/latest/download/Agent-Island.dmg) (always the latest release).
-2. Drag **Agent Island** into **Applications** and open it.
-3. Because this release is ad-hoc signed, macOS may say it “could not verify”
-   the app. Click **Done**, then open **System Settings → Privacy & Security**
-   and click **Open Anyway**. This is required only once.
-
-   Terminal alternative: `xattr -cr "/Applications/Agent Island.app"`
-
-On first launch the onboarding wires everything up: Claude Code hooks are
-safe-merged into `~/.claude/settings.json`, the Cursor bridge into
-`~/.cursor/hooks.json` (existing hooks from other tools are preserved, with
-timestamped backups), and Codex needs nothing. Restart any already-running
-agent sessions so they pick up the hooks.
-
-## Architecture
+## How it works
 
 ```
 Claude Code ──HTTP hooks──▶
-Cursor ───bridge script───▶   agentislandd (127.0.0.1:7433)   ──WebSocket──▶  notch overlay
-Codex rollout logs ◀──tail──  canonical events → session state                (Electron panel)
+Cursor ───bridge script───▶   local daemon (127.0.0.1:7433)   ──stream──▶   the island (SwiftUI)
+Codex rollout logs ◀──tail──  canonical events → session state
 ```
 
-- **`packages/daemon`** — `agentislandd`: Fastify server that normalizes every
-  agent's raw signals into one canonical event vocabulary, folds them into
-  per-session state, and streams snapshots over WebSocket. Adapters:
-  `claude` (hook routes), `codex` (rollout tailer), `cursor` (hook routes).
-- **`packages/app`** — the Electron overlay: a click-through panel window that
-  truly hugs the notch (`type: "panel"` + `enableLargerThanScreen`), measures
-  the real notch width via AppKit, and renders the island.
-- **`packages/shared`** — the zod schemas both sides trust. The only place the
-  contract lives.
+The app hosts a small daemon that normalises each agent's signals into one
+event vocabulary, folds them into per-session state and streams snapshots to
+the island. Hooks are safe-merged into `~/.claude/settings.json` and
+`~/.cursor/hooks.json`; if the app isn't running, the hook scripts exit
+quietly so your agents never see an error.
 
-## Development
+## Build from source
 
-```bash
-pnpm install
-pnpm dev          # daemon (tsx watch) + app (electron-vite dev)
-pnpm test         # vitest — adapter mappers & the rollout tailer
-pnpm typecheck    # all packages
-pnpm package      # signed DMG in packages/app/release/
+```sh
+cd apps/mac
+./scripts/test.sh                 # Swift Testing suites
+./scripts/bundle.sh debug --open  # build and launch build/Agent Island Next.app
 ```
 
-Useful env vars: `AGENT_ISLAND_PORT` (default 7433), `AGENT_ISLAND_TRAY=1`
-(restore the menu-bar icon), `AGENT_ISLAND_STRICT=1` (reject unauthenticated
-requests even in dev), `CODEX_HOME`, `AGENT_ISLAND_HOME`,
-`AGENT_ISLAND_WEATHER=<condition>` (force a weather scene without waiting for
-the real sky — `clear-day`, `clear-night`, `cloudy`, `fog`, `rain`, `snow`,
-`thunder`, `sunrise`, `sunset`, `rainbow`; skips the network entirely).
+It builds with the Xcode Command Line Tools alone. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for the layout, debug helpers and how to
+add an agent. (`packages/` holds the 1.x Electron app, kept for reference; the
+shipping app is `apps/mac`.)
 
-The native sidecar (`native/AgentIslandNative.swift`, haptics + CoreLocation) is
-built by `scripts/build-native.sh` as part of `pnpm build`. It needs `swiftc`;
-without Xcode Command Line Tools the script skips it and the app runs with
-haptics inert and weather on its time-zone fallback.
+## FAQ
 
-## Roadmap
+<details>
+<summary><b>macOS says it can't verify the app</b></summary>
 
-- Silent in-app auto-updates.
-- Homebrew cask.
-- Precise tab jump for more terminals.
-- More agents.
+The build isn't notarised yet. Open it once from System Settings → Privacy &
+Security → Open Anyway, or run `xattr -cr "/Applications/Agent Island.app"`.
+</details>
+
+<details>
+<summary><b>How do I uninstall it and remove the hooks?</b></summary>
+
+Quit the app and delete it from Applications. Then remove the entries that
+point to `~/.agent-island/bin/` from `~/.claude/settings.json` and
+`~/.cursor/hooks.json` (timestamped backups sit next to them), and delete
+`~/.agent-island`.
+</details>
+
+<details>
+<summary><b>Does it work without a notch, or with an external display?</b></summary>
+
+Yes. It measures the hardware notch at startup and falls back to a notch-sized
+island on Macs without one. With an external display as main, it still goes on
+your notched screen.
+</details>
+
+<details>
+<summary><b>Does it need Apple Intelligence?</b></summary>
+
+Only for the Ask bar's free-form answers (macOS 26 with Apple Intelligence on).
+Without it, the Ask bar still opens apps, sites and sessions, searches, sets
+timers and the volume, and runs your Shortcuts.
+</details>
+
+## Contributing
+
+Bug reports, ideas and pull requests are welcome: start with
+[CONTRIBUTING.md](CONTRIBUTING.md), and see the
+[good first issues](https://github.com/soummyaanon/DEV-island/labels/good%20first%20issue).
+Questions go to [Discussions](https://github.com/soummyaanon/DEV-island/discussions).
+
+## Acknowledgements
+
+Bot avatars and thinking orbs are native ports of
+[bot-avatars](https://libraries.dev/bots.html) and
+[thinking-orbs](https://libraries.dev/orbs.html) from libraries.dev.
+
+## License
+
+[MIT](LICENSE) © Soumyaranjan Panda
+
+<p align="center">
+  <a href="https://star-history.com/#soummyaanon/DEV-island&Date">
+    <img src="https://api.star-history.com/svg?repos=soummyaanon/DEV-island&type=Date" width="560" alt="Star history" />
+  </a>
+  <br/>
+  <sub>If Agent Island saves you a context switch, a ⭐ helps other developers find it.</sub>
+</p>

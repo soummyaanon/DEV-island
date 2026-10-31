@@ -19,3 +19,10 @@ packages/shared/dist/
 # Compiled native sidecar (rebuilt by scripts/build-native.sh).
 packages/app/native/AgentIslandNative
 packages/app/native/window-pin.node
+
+# AI agent skills and tooling: personal to each contributor's setup, not the project.
+.agents/
+.claude/
+skills-lock.json
+/SKILL.md
+.impeccable.md

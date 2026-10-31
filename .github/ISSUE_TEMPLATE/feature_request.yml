@@ -1,0 +1,34 @@
+name: Feature request
+description: An idea for the island, a new agent, or a quick tool
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What would you like to do?
+      description: The problem or moment this is for ("when three agents finish at once, I can't tell which…").
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What could the island do?
+      description: Your idea of how it might look or behave. Sketches welcome.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Agents and sessions
+        - A new agent integration
+        - Approvals and questions
+        - Quick tools (swipe menu)
+        - Ask bar / Apple Intelligence
+        - Look and motion
+        - Something else
+  - type: checkboxes
+    id: help
+    attributes:
+      label: Contributing
+      options:
+        - label: I'd like to help build this
