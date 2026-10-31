@@ -528,6 +528,12 @@ struct IslandMenu: View {
     )) {
       ForEach(IslandPlacement.allCases, id: \.self) { Text($0.label).tag($0) }
     }
+    if model.placement.isSide {
+      Toggle("Show Clock", isOn: Binding(
+        get: { model.settings.edgeClock },
+        set: { on in model.changeSettings { $0.edgeClock = on } }
+      ))
+    }
     Button("Settings…") { model.openSettings() }
     #if DEBUG
     Button("Play Charger Moment") { model.power.simulateMoment() }

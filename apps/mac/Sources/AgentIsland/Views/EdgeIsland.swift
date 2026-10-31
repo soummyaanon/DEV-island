@@ -2,8 +2,9 @@ import IslandCore
 import SwiftUI
 
 /// The island on a side edge: a mini notch, the hardware notch's outline
-/// shrunk and turned on its side. At rest one mascot keeps it company; while
-/// agents work it shows a dot per session.
+/// shrunk and turned on its side. At rest it shows the time (with the clock
+/// off, one mascot keeps it company); while agents work, each agent's
+/// thinking orb, as the top island's wing does.
 /// Opening grows the same black body out from the edge into the full panel,
 /// so everything the top island offers is here too; only the wings' ambient
 /// extras (battery, music, timers) wait inside the panel instead.
@@ -111,8 +112,9 @@ struct EdgeIsland: View {
   }
 }
 
-/// At rest, a single mascot. While agents work or wait, one dot per session,
-/// most urgent first. A dim red dot while the island can't reach its daemon.
+/// At rest, the time, or a single mascot with the clock off. While agents
+/// work or wait, one thinking orb per agent, whichever needs you first. A dim
+/// red dot while the island can't reach its daemon.
 private struct EdgeResting: View {
   let model: IslandModel
 
@@ -120,7 +122,7 @@ private struct EdgeResting: View {
   private var idle: Bool { model.active.isEmpty && model.needsYou.isEmpty && model.sessions.connected }
 
   var body: some View {
-    let states = EdgeMetrics.dots(model.sessions.sessions.filter { $0.isActive || $0.needsAction || $0.pendingQuestion != nil })
+    let orbs = EdgeMetrics.orbs(model.sessions.sessions)
     Group {
       if let activity = model.power.activity, activity.isCharger, let reading = model.reading {
         // The charger moment takes the notch for a few seconds: a bolt and the level.
@@ -134,6 +136,8 @@ private struct EdgeResting: View {
         .foregroundStyle(Palette.charge(activity))
         .pop()
         .id(activity.id)
+      } else if idle && model.settings.edgeClock {
+        EdgeClock().pop()
       } else if idle {
         BotAvatar(
           look: BotLook.crew[0].look, state: .idle, size: EdgeMetrics.mascot, seed: 0.12, paused: model.ambientStill,
@@ -141,18 +145,25 @@ private struct EdgeResting: View {
         )
         .pop()
       } else {
-        VStack(spacing: 5) {
-          if states.isEmpty {
+        VStack(spacing: 3) {
+          if orbs.isEmpty {
             dot(Palette.failed.opacity(0.7))
           }
-          ForEach(Array(states.enumerated()), id: \.offset) { _, state in
-            dot(Palette.state(state))
+          ForEach(orbs, id: \.agent) { orb in
+            ThinkingOrb(
+              state: orb.state,
+              tint: orb.waiting ? Palette.waiting : Color(hex: BotLook.agent(orb.agent).color),
+              size: EdgeMetrics.orbSize(orbs.count),
+              bold: true,
+              paused: model.wingStill
+            )
+            .pop()
           }
         }
         .transition(.opacity)
       }
     }
-    .animation(.easeOut(duration: 0.2), value: states)
+    .animation(.easeOut(duration: 0.2), value: orbs)
     .animation(.spring(response: 0.3, dampingFraction: 0.7), value: idle)
     .accessibilityElement(children: .ignore)
     .accessibilityLabel(WingText.label(model))
@@ -161,6 +172,24 @@ private struct EdgeResting: View {
 
   private func dot(_ color: Color) -> some View {
     Circle().fill(color).frame(width: 5, height: 5)
+  }
+}
+
+/// The time on the side island: hours over minutes, since the edge is too
+/// narrow for both on one line. No AM/PM, as in the top island's wing.
+private struct EdgeClock: View {
+  var body: some View {
+    TimelineView(.everyMinute) { timeline in
+      VStack(spacing: -1) {
+        Text(timeline.date, format: .dateTime.hour(.defaultDigits(amPM: .omitted)))
+        Text(timeline.date, format: .dateTime.minute(.twoDigits))
+      }
+      .islandFont(10, weight: .bold)
+      .monospacedDigit()
+      .foregroundStyle(.white)
+      .lineLimit(1)
+      .fixedSize()
+    }
   }
 }
 

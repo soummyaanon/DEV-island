@@ -4,7 +4,7 @@ import Foundation
 /// The first page stays what it always was (sessions), plus whatever is
 /// happening right now (a call, a timer, music, the browser in front).
 public enum HubTab: String, Sendable, CaseIterable, Identifiable {
-  case agents, controls, shelf, clipboard, agenda, timers, widgets, prompter, ask
+  case agents, controls, shelf, clipboard, agenda, timers, widgets, prompter, settings, ask
 
   public var id: String { rawValue }
 
@@ -18,6 +18,7 @@ public enum HubTab: String, Sendable, CaseIterable, Identifiable {
     case .timers: "Timers"
     case .widgets: "Widgets"
     case .prompter: "Prompter"
+    case .settings: "Settings"
     case .ask: "Ask"
     }
   }
@@ -32,6 +33,7 @@ public enum HubTab: String, Sendable, CaseIterable, Identifiable {
     case .timers: "timer"
     case .widgets: "square.grid.2x2"
     case .prompter: "text.alignleft"
+    case .settings: "gearshape.fill"
     case .ask: "sparkles"
     }
   }
@@ -48,6 +50,8 @@ public enum HubTab: String, Sendable, CaseIterable, Identifiable {
       case .timers: settings.timers
       case .widgets: settings.widgets
       case .prompter: settings.teleprompter
+      // The island's own settings are always a swipe away.
+      case .settings: true
       case .ask: settings.assistant
       }
     }

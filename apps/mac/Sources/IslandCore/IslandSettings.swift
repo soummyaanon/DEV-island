@@ -112,6 +112,8 @@ public struct IslandSettings: Equatable, Sendable {
   public var teleprompter = true
   /// The time in the wings while the menu bar is hidden.
   public var menuBarClock = true
+  /// The time on the resting side island, in place of the mascot.
+  public var edgeClock = true
   /// A Shortcut the Focus control runs; blank opens Focus settings.
   public var focusShortcut = ""
   /// Under the sessions: context, cost, changes, checks and dev servers.
@@ -150,7 +152,7 @@ public struct IslandSettings: Equatable, Sendable {
     "sessionView", "glass", "battery", "procStats", "respectFocus", "assistant", "assistantModel", "voice",
     "speakReplies", "edgeGlow", "greeting",
     "agentStats", "tokenConfetti", "quickControls", "shelf", "clipboardHistory", "nowPlaying", "meetings", "browserControls", "agenda", "timers",
-    "widgets", "stocks", "stockSymbols", "teleprompter", "menuBarClock", "focusShortcut",
+    "widgets", "stocks", "stockSymbols", "teleprompter", "menuBarClock", "edgeClock", "focusShortcut",
     "placement", "edgeAnchor", "devTools",
   ]
 
@@ -221,6 +223,7 @@ public struct IslandSettings: Equatable, Sendable {
     if let symbols = stored["stockSymbols"]?.string { stockSymbols = symbols }
     bool("teleprompter", &teleprompter)
     bool("menuBarClock", &menuBarClock)
+    bool("edgeClock", &edgeClock)
     if let shortcut = stored["focusShortcut"]?.string { focusShortcut = shortcut }
     pick("placement", &placement)
     bool("devTools", &devTools)
@@ -255,6 +258,7 @@ public struct IslandSettings: Equatable, Sendable {
     string("stockSymbols", \.stockSymbols)
     bool("teleprompter", \.teleprompter)
     bool("menuBarClock", \.menuBarClock)
+    bool("edgeClock", \.edgeClock)
     string("focusShortcut", \.focusShortcut)
     bool("devTools", \.devTools)
     if placement != defaults.placement { out.append(("placement", .string(placement.rawValue))) }

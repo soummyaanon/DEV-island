@@ -21,7 +21,7 @@ public enum IslandPlacement: String, Sendable, CaseIterable {
 }
 
 /// The side island: the notch's own outline shrunk and turned on its side.
-/// At rest it holds one mascot; while agents work, a dot per session.
+/// At rest it holds one mascot; while agents work, a thinking orb per agent.
 public enum EdgeMetrics {
   /// Concave ear radius where the side island meets the bezel.
   public static let ear: CGFloat = 6
@@ -31,7 +31,7 @@ public enum EdgeMetrics {
   public static let length: CGFloat = 42
   /// The resting mascot's size.
   public static let mascot: CGFloat = 17
-  /// Most dots the resting island shows.
+  /// Most orbs the resting island shows.
   public static let maxDots = 3
   /// Where on the edge it sits by default: a third of the way down, clear of
   /// the Dock's middle and the hot corners.
@@ -61,19 +61,33 @@ public enum EdgeMetrics {
     return CGPoint(x: x.rounded(), y: y.rounded())
   }
 
-  /// The states the resting dots show, most urgent first: waiting on you,
-  /// then working, then the rest.
-  public static func dots(_ sessions: [SessionSnapshot]) -> [SessionState] {
-    func rank(_ session: SessionSnapshot) -> Int {
-      if session.state == .waitingForApproval || session.needsAction || session.pendingQuestion != nil { return 0 }
-      if session.isActive { return 1 }
-      return 2
+  /// The resting island's orbs while agents work: one per agent, as the top
+  /// island's wing draws them, whichever needs you first. Only sessions that
+  /// work or wait count; an agent waiting on you takes the waiting colour.
+  public static func orbs(_ sessions: [SessionSnapshot]) -> [WingOrb] {
+    func waits(_ session: SessionSnapshot) -> Bool {
+      session.state == .waitingForApproval || session.needsAction || session.pendingQuestion != nil
     }
-    let ordered = sessions.enumerated().sorted { a, b in
-      let (ra, rb) = (rank(a.element), rank(b.element))
-      return ra != rb ? ra < rb : a.offset < b.offset
+    let live = sessions.filter { $0.isActive || waits($0) }
+    let orbs = AgentKind.allCases.compactMap { kind -> WingOrb? in
+      let mine = live.filter { $0.agent == kind }
+      guard let lead = mine.first(where: waits) ?? mine.first else { return nil }
+      return WingOrb(agent: kind, state: lead.orbState, waiting: waits(lead))
     }
-    return ordered.prefix(maxDots).map { rank($0.element) == 0 ? .waitingForApproval : $0.element.state }
+    let ordered = orbs.enumerated().sorted { a, b in
+      a.element.waiting != b.element.waiting ? a.element.waiting : a.offset < b.offset
+    }
+    return ordered.prefix(maxDots).map(\.element)
+  }
+
+  /// An orb's size for how many share the resting island's length: they
+  /// shrink a little so three still fit without growing the island.
+  public static func orbSize(_ count: Int) -> CGFloat {
+    switch count {
+    case ...1: 16
+    case 2: 15
+    default: 12
+    }
   }
 }
 

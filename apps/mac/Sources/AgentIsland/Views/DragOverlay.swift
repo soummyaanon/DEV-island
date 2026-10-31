@@ -163,7 +163,7 @@ private struct Carried: View {
 
   var body: some View {
     let pill = RoundedRectangle(cornerRadius: min(size.width, size.height) / 2, style: .continuous)
-    let along: AnyLayout = carry.target.isSide ? AnyLayout(VStackLayout(spacing: 5)) : AnyLayout(HStackLayout(spacing: 6))
+    let along: AnyLayout = carry.target.isSide ? AnyLayout(VStackLayout(spacing: 3)) : AnyLayout(HStackLayout(spacing: 6))
     ZStack {
       pill.fill(.black)
       // A hairline of Apple Intelligence's pastels: picked up, not lit up.
@@ -178,9 +178,17 @@ private struct Carried: View {
           style: BotPose.Style(jumpEvery: 0), interactive: false
         )
       } else {
+        // The orbs it shows at rest, so the island in hand is the one you picked up.
+        let orbs = EdgeMetrics.orbs(model.sessions.sessions)
         along {
-          ForEach(Array(EdgeMetrics.dots(model.sessions.sessions).enumerated()), id: \.offset) { _, state in
-            Circle().fill(Palette.state(state)).frame(width: 5, height: 5)
+          ForEach(orbs, id: \.agent) { orb in
+            ThinkingOrb(
+              state: orb.state,
+              tint: orb.waiting ? Palette.waiting : Color(hex: BotLook.agent(orb.agent).color),
+              size: carry.target.isSide ? EdgeMetrics.orbSize(orbs.count) : 16,
+              bold: true,
+              paused: model.wingStill
+            )
           }
         }
       }

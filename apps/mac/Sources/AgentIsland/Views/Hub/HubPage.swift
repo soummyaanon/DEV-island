@@ -20,6 +20,7 @@ struct HubPage: View {
         case .timers: TimersTab(model: model, now: now)
         case .widgets: WidgetsTab(model: model)
         case .prompter: PrompterTab(model: model)
+        case .settings: SettingsTab(model: model)
         case .ask: EmptyView()
         }
       }

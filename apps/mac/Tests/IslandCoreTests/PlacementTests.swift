@@ -77,29 +77,53 @@ import Testing
   }
 }
 
-@Suite struct EdgeDotsTests {
-  func session(_ key: String, _ state: SessionState, approval: Bool = false) -> SessionSnapshot {
+@Suite struct EdgeClockSettingTests {
+  @Test func `the side clock is on by default, stays out of a default file, and turns off`() {
+    var settings = IslandSettings()
+    #expect(settings.edgeClock)
+    #expect(!String(decoding: settings.json(), as: UTF8.self).contains("edgeClock"))
+    settings.edgeClock = false
+    #expect(IslandSettings(json: settings.json()).edgeClock == false)
+  }
+}
+
+@Suite struct EdgeOrbsTests {
+  func session(_ key: String, _ agent: AgentKind, _ state: SessionState, title: String = "", approval: Bool = false) -> SessionSnapshot {
     SessionSnapshot(
-      key: key, agent: .claudeCode, sessionId: key, cwd: "/tmp/\(key)", state: state, title: "",
+      key: key, agent: agent, sessionId: key, cwd: "/tmp/\(key)", state: state, title: title,
       startedAt: .now, updatedAt: .now,
       pendingApproval: approval ? PendingApproval(id: key, toolName: "Bash", createdAt: .now) : nil
     )
   }
 
-  @Test func `puts whatever needs you first, then work, then the rest, at most three`() {
-    let dots = EdgeMetrics.dots([
-      session("a", .done), session("b", .working), session("c", .idle),
-      session("d", .waitingForApproval), session("e", .starting),
+  @Test func `one orb per working agent, in the wing's order`() {
+    let orbs = EdgeMetrics.orbs([
+      session("a", .cursor, .working, title: "Searching for useAuth"),
+      session("b", .claudeCode, .working, title: "Running pnpm test"),
+      session("c", .claudeCode, .working, title: "Editing index.ts"),
+      session("d", .codex, .done),
     ])
-    #expect(dots == [.waitingForApproval, .working, .starting])
+    #expect(orbs.map(\.agent) == [.claudeCode, .cursor])
+    #expect(orbs.map(\.state) == [.working, .searching])
+    #expect(orbs.allSatisfy { !$0.waiting })
   }
 
-  @Test func `a held approval reads as waiting even before the state says so`() {
-    #expect(EdgeMetrics.dots([session("a", .working, approval: true)]) == [.waitingForApproval])
+  @Test func `an agent waiting on you comes first, in the waiting colour`() {
+    let orbs = EdgeMetrics.orbs([
+      session("a", .claudeCode, .working, title: "Running pnpm test"),
+      session("b", .codex, .working, approval: true),
+    ])
+    #expect(orbs.map(\.agent) == [.codex, .claudeCode])
+    #expect(orbs.map(\.waiting) == [true, false])
   }
 
-  @Test func `no sessions, no dots`() {
-    #expect(EdgeMetrics.dots([]).isEmpty)
+  @Test func `nothing working or waiting, no orbs`() {
+    #expect(EdgeMetrics.orbs([session("a", .claudeCode, .done), session("b", .codex, .idle)]).isEmpty)
+  }
+
+  @Test func `orbs shrink so three fit the resting length`() {
+    #expect(EdgeMetrics.orbSize(1) == 16)
+    #expect(EdgeMetrics.orbSize(3) * 3 + 2 * 3 <= EdgeMetrics.length)
   }
 }
 

@@ -236,6 +236,8 @@ import Testing
     settings.quickControls = false
     settings.assistant = false
     #expect(!HubTab.enabled(settings).contains(.controls) && !HubTab.enabled(settings).contains(.ask))
+    // Settings is the last page, and can't be switched off.
+    #expect(HubTab.enabled(settings).last == .settings)
   }
 
   @Test func `stepping walks sessions then tabs, clamped`() {
